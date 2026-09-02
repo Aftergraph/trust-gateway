@@ -46,6 +46,7 @@ class Gateway {
     approvals = null,
     now = () => Date.now(),
     auditFile = null,     // path -> durable append-only JSONL audit
+    approvalsFile = null, // path -> durable approvals (pending survive restart)
   } = {}) {
     this.bots = bots;
     this.dispatch = dispatch;
@@ -57,9 +58,8 @@ class Gateway {
     } else {
       this.chain = chain ?? new HashChain();
     }
-    this.approvals = approvals ?? new ApprovalStore({ now });
+    this.approvals = approvals ?? new ApprovalStore({ now, file: approvalsFile });
     this.now = now;
-    this._pendingDecisions = new Map(); // approvalId -> {bot, tool, args, cls}
   }
 
   _auth(req) {
@@ -104,6 +104,13 @@ class Gateway {
     }
     if (req.method === 'POST' && /^\/v1\/approvals\/[^/]+\/(approve|deny)$/.test(path)) {
       return this._postApproval(req, res, bot, path);
+    }
+    if (req.method === 'GET' && path === '/v1/approvals') {
+      const pending = this.approvals.listPending().map((r) => ({
+        id: r.id, bot: r.bot, tool: r.tool, reason: r.reason,
+        createdAt: r.createdAt, expiresAt: r.expiresAt,
+      }));
+      return send(res, 200, { pending });
     }
     if (req.method === 'GET' && path === '/v1/audit') {
       const since = Number(url.searchParams.get('since') || 0);
@@ -208,7 +215,6 @@ class Gateway {
         args,
         reason: verdict.reason,
       });
-      this._pendingDecisions.set(approval.id, { botName: bot.name, tool, args, cls });
       this._audit({ type: 'approval_requested', approvalId: approval.id, bot: bot.name, tool, class: cls });
       return send(res, 202, { decision: 'needs_approval', approvalId: approval.id, reason: verdict.reason });
     }
@@ -229,6 +235,9 @@ class Gateway {
     const m = path.match(/^\/v1\/approvals\/([^/]+)\/(approve|deny)$/);
     const [, id, verb] = m;
     const approver = bot.name; // in v1, any authenticated bot may approve (operator role expected)
+    // Capture the parked action BEFORE resolve scrubs args from the record.
+    const parked = this.approvals.get(id);
+    const parkedAction = parked && parked.status === 'pending' ? { tool: parked.tool, args: parked.args } : null;
     const result = this.approvals.resolve(id, verb, approver);
     this._audit({
       type: 'approval_resolved',
@@ -244,17 +253,15 @@ class Gateway {
     }
     if (verb === 'deny') return send(res, 200, { id, status: 'denied' });
 
-    // Approved → execute the parked decision.
-    const parked = this._pendingDecisions.get(id);
-    if (!parked) return send(res, 500, { error: 'parked_action_missing' });
-    this._pendingDecisions.delete(id);
+    // Approved → execute the parked decision (survives restart via durable store).
+    if (!parkedAction) return send(res, 500, { error: 'parked_action_missing' });
     if (!this.dispatch) return send(res, 500, { error: 'no_dispatcher' });
     try {
-      const out2 = await this.dispatch(parked.tool, parked.args);
-      this._audit({ type: 'action_executed_after_approval', approvalId: id, tool: parked.tool, ok: true });
+      const out2 = await this.dispatch(parkedAction.tool, parkedAction.args);
+      this._audit({ type: 'action_executed_after_approval', approvalId: id, tool: parkedAction.tool, ok: true });
       return send(res, 200, { id, status: 'approved', result: out2 });
     } catch (e) {
-      this._audit({ type: 'action_executed_after_approval', approvalId: id, tool: parked.tool, ok: false });
+      this._audit({ type: 'action_executed_after_approval', approvalId: id, tool: parkedAction.tool, ok: false });
       return send(res, 502, { id, status: 'approved', error: 'dispatch_failed' });
     }
   }

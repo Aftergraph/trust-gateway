@@ -33,10 +33,12 @@ if (Object.keys(bots).length === 0) {
 
 const PORT = Number(process.env.PORT || 8800);
 const AUDIT_FILE = process.env.AUDIT_FILE || path.join(__dirname, '..', 'data', 'audit.jsonl');
+const APPROVALS_FILE = process.env.APPROVALS_FILE || path.join(__dirname, '..', 'data', 'approvals.json');
 const DISPATCH = process.argv.includes('--dispatch');
 const gw = new Gateway({
   bots,
   auditFile: AUDIT_FILE,
+  approvalsFile: APPROVALS_FILE,
   dispatch: DISPATCH
     ? async (tool, args) => {
         // v1 demo dispatcher: safe in-memory filesystem + echo shell.
