@@ -4,7 +4,7 @@ const assert = require('node:assert');
 const { Gateway } = require('../src/gateway/server');
 const { HashChain } = require('../src/gateway/hash-chain');
 
-function makeGateway(dispatch = async (tool) => ({ ok: true, tool })) {
+function makeGateway(dispatch = async (bot, tool) => ({ ok: true, tool })) {
   return new Gateway({
     bots: {
       forge: { token: 'tok-forge', role: 'worker', capabilities: ['fs.write:*', 'fs.read'] },
@@ -89,7 +89,7 @@ test('destructive tool NEVER auto-executes (even with capability)', async () => 
 
 test('approval flow: request → approve → dispatched', async () => {
   let executed = null;
-  const gw = makeGateway(async (tool, args) => { executed = { tool, args }; return { ran: true }; });
+  const gw = makeGateway(async (bot, tool, args) => { executed = { tool, args }; return { ran: true }; });
   // 1. propose destructive
   const r1 = mockReqRes('POST', '/v1/actions', JSON.stringify({ tool: 'shell.run', args: { cmd: 'deploy.sh' } }), 'tok-forge');
   await gw.handle(r1.req, r1.res);
