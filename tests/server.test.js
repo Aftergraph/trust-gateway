@@ -7,8 +7,9 @@ const { HashChain } = require('../src/gateway/hash-chain');
 function makeGateway(dispatch = async (tool) => ({ ok: true, tool })) {
   return new Gateway({
     bots: {
-      forge: { token: 'tok-forge', capabilities: ['fs.write:*', 'fs.read'] },
-      auditor: { token: 'tok-auditor', capabilities: [] },
+      forge: { token: 'tok-forge', role: 'worker', capabilities: ['fs.write:*', 'fs.read'] },
+      auditor: { token: 'tok-auditor', role: 'auditor', capabilities: [] },
+      atlas: { token: 'tok-atlas', role: 'operator', capabilities: [] },
     },
     dispatch,
   });
@@ -95,8 +96,8 @@ test('approval flow: request → approve → dispatched', async () => {
   const approvalId = r1.getBody().approvalId;
   assert.ok(approvalId);
   assert.equal(executed, null);
-  // 2. approve (auditor is an authenticated principal; in production = operator)
-  const r2 = mockReqRes('POST', `/v1/approvals/${approvalId}/approve`, '{}', 'tok-auditor');
+  // 2. approve (operator atlas; workers like forge/auditor are now 403'd)
+  const r2 = mockReqRes('POST', `/v1/approvals/${approvalId}/approve`, '{}', 'tok-atlas');
   await gw.handle(r2.req, r2.res);
   assert.equal(r2.getStatus(), 200);
   assert.deepEqual(executed, { tool: 'shell.run', args: { cmd: 'deploy.sh' } });
@@ -109,7 +110,7 @@ test('approval deny → never dispatched', async () => {
   const r1 = mockReqRes('POST', '/v1/actions', JSON.stringify({ tool: 'fs.delete:data' }), 'tok-forge');
   await gw.handle(r1.req, r1.res);
   const id = r1.getBody().approvalId;
-  const r2 = mockReqRes('POST', `/v1/approvals/${id}/deny`, '{}', 'tok-auditor');
+  const r2 = mockReqRes('POST', `/v1/approvals/${id}/deny`, '{}', 'tok-atlas');
   await gw.handle(r2.req, r2.res);
   assert.equal(executed, false);
   assert.equal(gw.approvals.get(id).status, 'denied');

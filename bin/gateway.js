@@ -20,7 +20,14 @@ function parseBots() {
     if (idx <= 0) continue;
     const name = pair.slice(0, idx);
     const token = pair.slice(idx + 1);
-    bots[name] = { token, role: 'worker', capabilities: caps[name] || ['fs.read', 'web.get'] };
+    // RBAC: 'atlas' is the operator (may approve/deny). 'forge' (and anything
+    // else) is a worker — fails closed on approval endpoints. Override with
+    // BOT_ROLES (JSON map) for custom deployments.
+    let roles = {};
+    try { roles = JSON.parse(process.env.BOT_ROLES || '{}'); } catch { /* default roles */ }
+    const defaultRole = name === 'atlas' ? 'operator' : 'worker';
+    const role = roles[name] ?? defaultRole;
+    bots[name] = { token, role, capabilities: caps[name] || ['fs.read', 'web.get'] };
   }
   return bots;
 }
