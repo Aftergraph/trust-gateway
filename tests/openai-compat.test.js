@@ -387,7 +387,9 @@ test('audit hygiene: no message content, no reply text, no tokens in chain', asy
     }
     // whole-chain scan: the secret message text never appears
     const dump = JSON.stringify(gw.chain.entries);
-    assert.equal(dump.includes(SECRET), false);
+    if (dump.includes(SECRET)) for (const e of gw.chain.entries) { const j = JSON.stringify(e); if (j.includes(SECRET)) console.error('LEAK type=' + e.payload.type, j.slice(0, 240)); }
+    assert.equal(dump.includes(SECRET), false, 'secret in chain');
+    if (dump.includes('tok-forge')) for (const e of gw.chain.entries) { const j = JSON.stringify(e); if (j.includes('tok-forge')) console.error('TOKLEAK type=' + e.payload.type, j.slice(0, 240)); }
     assert.equal(dump.includes('tok-forge'), false);
     assert.equal(gw.chain.verify().ok, true);
   } finally { server.close(); }

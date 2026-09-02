@@ -224,7 +224,7 @@ below is missing one.
 
 ## Full audit-event table
 
-65 event types emitted from `src/gateway/**`. Extraction rule: every string
+66 event types emitted from `src/gateway/**`. Extraction rule: every string
 matched by `{type: '…'}` (including the `enabled ? 'a' : 'b'` ternary in
 plugins.js) across all files under `src/gateway/`.
 
@@ -295,10 +295,7 @@ plugins.js) across all files under `src/gateway/`.
 | 63 | `adapter_tested` | mounts/70-adapters.js (payload: id+kind+result only — no URL, no secret value) |
 | 64 | `adapter_secret_set` | mounts/70-adapters.js (payload: id+name+length only — value is NEVER stored or logged) |
 | 65 | `deploy_artifact` | mounts/75-deploy.js (wave C: rendered service/launcher downloads) |
-=======
-| 54 | `playground_run` | mounts/80-playground.js |
-| 55 | `worktree_snapshot` | mounts/55-harness.js |
-| 56 | `worktree_remove` | mounts/55-harness.js |
+| 66 | `openai_request` | mounts/85-openai.js (counts only: model, bot, msgCount, charsIn/Out, streaming — no message content) |
 ## Documented exceptions
 
 The test compares the table above against a programmatic extraction over

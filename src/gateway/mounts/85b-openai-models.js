@@ -18,6 +18,7 @@ module.exports = {
   handle: async (gw, req, res) => {
     const bot = gw._auth(req);
     if (!bot) return unauthorized(res, '/v1/models', gw);
+    gw._audit({ type: 'openai_request', model: null, bot: bot.name, msgCount: 0, charsIn: 0, charsOut: 0, streaming: false });
     const data = [];
     for (const name of Object.keys(gw.bots)) {
       data.push({ id: 'tg/' + name, object: 'model', owned_by: 'trust-gateway' });
