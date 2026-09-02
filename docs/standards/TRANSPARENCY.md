@@ -196,6 +196,18 @@ below is missing one.
 - **Storage:** `data/quarantine-<ts>.json` (snapshot of suspect tail, atomic 0600).
 - **Inspect:** the endpoint; quarantined snapshots are plain JSON you can diff.
 
+### `playground.js` + mount `80-playground.js` — safe in-app code lab (C6)
+- **Endpoints:** `POST /v2/playground/run` (bearer). JS runs in jailed scratch;
+  HTML returns `{preview:'sandboxed'}` only.
+- **Audit events:** `playground_run` ({bot, lang, bytes, exitCode, timedOut} —
+  never code content or stdout bodies).
+- **Storage:** scratch files under `data/bots/<bot>/playground/` (ephemeral,
+  cleaned by timeout/exit).
+- **Containment:** jail-resolved paths, scrubbed env (PATH/HOME/NODE_ENV only),
+  hard timeout → SIGKILL. Residual: same-user process can access fs/network;
+  hardened container is the real boundary (later slice).
+- **Inspect:** audit search `q=playground_run`; no artifact store integration.
+
 ### `rbac.js` — approval/operator gate
 - **Endpoints:** none (library). `canApprove(bot)` used by every write surface.
 - **Audit events:** refusals appear as `approval_forbidden` /
@@ -271,16 +283,23 @@ plugins.js) across all files under `src/gateway/`.
 | 51 | `slash_run` | continuity.js |
 | 52 | `harness_build` | mounts/55-harness.js (wave B executors, merged after doc extraction) |
 | 53 | `harness_result` | mounts/55-harness.js |
-| 54 | `worktree_snapshot` | mounts/55-harness.js |
-| 55 | `worktree_remove` | mounts/55-harness.js |
-<<<<<<< HEAD
-| 56 | `web_fetch` | mounts/65-web.js, src/gateway/webtools.js |
-| 57 | `voice_stt` | mounts/60-voice.js (wave C) |
-| 58 | `voice_tts` | mounts/60-voice.js (wave C) |
-| 59 | `adapter_registered` | mounts/70-adapters.js (wave C integration adapters) |
-| 60 | `adapter_updated` | mounts/70-adapters.js |
-| 61 | `adapter_deleted` | mounts/70-adapters.js |
-| 64 | `deploy_artifact` | mounts/75-deploy.js (wave C: rendered service/launcher downloads) |
+| 54 | `playground_run` | mounts/80-playground.js (wave C) |
+| 55 | `worktree_snapshot` | mounts/55-harness.js |
+| 56 | `worktree_remove` | mounts/55-harness.js |
+| 57 | `web_fetch` | mounts/65-web.js, src/gateway/webtools.js |
+| 58 | `voice_stt` | mounts/60-voice.js (wave C) |
+| 59 | `voice_tts` | mounts/60-voice.js (wave C) |
+| 60 | `adapter_registered` | mounts/70-adapters.js (wave C integration adapters) |
+| 61 | `adapter_updated` | mounts/70-adapters.js |
+| 62 | `adapter_deleted` | mounts/70-adapters.js |
+| 63 | `adapter_tested` | mounts/70-adapters.js (payload: id+kind+result only — no URL, no secret value) |
+| 64 | `adapter_secret_set` | mounts/70-adapters.js (payload: id+name+length only — value is NEVER stored or logged) |
+| 65 | `deploy_artifact` | mounts/75-deploy.js (wave C: rendered service/launcher downloads) |
+=======
+| 54 | `playground_run` | mounts/80-playground.js |
+| 55 | `worktree_snapshot` | mounts/55-harness.js |
+| 56 | `worktree_remove` | mounts/55-harness.js |
+>>>>>>> v2c/playground
 
 ## Documented exceptions
 
