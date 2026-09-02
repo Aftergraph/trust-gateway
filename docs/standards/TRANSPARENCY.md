@@ -212,7 +212,7 @@ below is missing one.
 
 ## Full audit-event table
 
-51 event types emitted from `src/gateway/**`. Extraction rule: every string
+55 event types emitted from `src/gateway/**`. Extraction rule: every string
 matched by `{type: '…'}` (including the `enabled ? 'a' : 'b'` ternary in
 plugins.js) across all files under `src/gateway/`.
 
@@ -269,6 +269,10 @@ plugins.js) across all files under `src/gateway/`.
 | 49 | `secret_removed` | plugins.js |
 | 50 | `selfrepair_diagnosed` | selfrepair.js |
 | 51 | `slash_run` | continuity.js |
+| 52 | `harness_build` | mounts/55-harness.js (wave B executors, merged after doc extraction) |
+| 53 | `harness_result` | mounts/55-harness.js |
+| 54 | `worktree_snapshot` | mounts/55-harness.js |
+| 55 | `worktree_remove` | mounts/55-harness.js |
 
 ## Documented exceptions
 
