@@ -273,6 +273,7 @@ plugins.js) across all files under `src/gateway/`.
 | 53 | `harness_result` | mounts/55-harness.js |
 | 54 | `worktree_snapshot` | mounts/55-harness.js |
 | 55 | `worktree_remove` | mounts/55-harness.js |
+| 56 | `web_fetch` | mounts/65-web.js, src/gateway/webtools.js |
 
 ## Documented exceptions
 
