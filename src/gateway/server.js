@@ -71,6 +71,29 @@ class Gateway extends EventEmitter {
     this.now = now;
     this.mounts = mountFiles ? loadMounts() : [];
     this.staticDir = staticDir ?? null;
+    this._executors = []; // v2 wave B: {re, fn(bot,tool,args)} for synthetic tools
+  }
+
+  // Register a handler for a synthetic tool namespace (e.g. /^harness\.run:/).
+  // Unknown tools classify as destructive → approval → executor runs AFTER
+  // approval; executor results reuse the action_executed audit vocabulary.
+  registerExecutor(re, fn) {
+    if (!(re instanceof RegExp) || typeof fn !== 'function') throw new Error('registerExecutor(re,fn)');
+    this._executors.push({ re, fn });
+  }
+
+  _findExecutor(tool) {
+    for (const e of this._executors) if (e.re.test(tool)) return e.fn;
+    return null;
+  }
+
+  // Resolution order: registered executor wins (synthetic v2 tools), else the
+  // configured dispatcher (jailed fs/shell). Errors propagate to call sites.
+  async _run(botName, tool, args) {
+    const exec = this._findExecutor(tool);
+    if (exec) return exec(botName, tool, args);
+    if (!this.dispatch) throw new Error('no_dispatcher');
+    return this.dispatch(botName, tool, args);
   }
 
   _auth(req) {
@@ -96,11 +119,12 @@ class Gateway extends EventEmitter {
     const url = new URL(req.url, 'http://localhost');
     const pathname = url.pathname;
 
-    // ── v2 static SPA (dashboard) + PWA assets ──
+    // ── v2 static SPA (dashboard) + PWA assets + panels ──
     if (this.staticDir && req.method === 'GET') {
       const rel = pathname === '/' ? 'index.html'
         : /^\/(app\.js|style\.css|index\.html|sw\.js|offline\.html|pwa-head\.html|manifest\.webmanifest|responsive\.css|desktop\.css|favicon\.svg)$/.test(pathname) ? pathname.slice(1)
         : /^\/icons\/[\w.-]+\.svg$/.test(pathname) ? pathname.slice(1)
+        : /^\/panels\/[\w.-]+\.js$/.test(pathname) ? pathname.slice(1)
         : null;
       if (rel) return this._serveStatic(res, rel);
     }
@@ -293,10 +317,10 @@ class Gateway extends EventEmitter {
       return send(res, 202, { decision: 'needs_approval', approvalId: approval.id, reason: verdict.reason });
     }
 
-    // allow → dispatch
-    if (!this.dispatch) return send(res, 500, { error: 'no_dispatcher' });
+    // allow → execute (executor wins for synthetic tools, else jailed dispatch)
+    if (!this.dispatch && !this._findExecutor(tool)) return send(res, 500, { error: 'no_dispatcher' });
     try {
-      const result = await this.dispatch(bot.name, tool, args);
+      const result = await this._run(bot.name, tool, args);
       this._audit({ type: 'action_executed', bot: bot.name, tool, ok: true });
       return send(res, 200, { decision: 'allow', result });
     } catch (e) {
@@ -343,9 +367,9 @@ class Gateway extends EventEmitter {
 
     // Approved → execute the parked decision (survives restart via durable store).
     if (!parkedAction) return send(res, 500, { error: 'parked_action_missing' });
-    if (!this.dispatch) return send(res, 500, { error: 'no_dispatcher' });
+    if (!this.dispatch && !this._findExecutor(parkedAction.tool)) return send(res, 500, { error: 'no_dispatcher' });
     try {
-      const out2 = await this.dispatch(bot.name, parkedAction.tool, parkedAction.args);
+      const out2 = await this._run(bot.name, parkedAction.tool, parkedAction.args);
       this._audit({ type: 'action_executed_after_approval', approvalId: id, tool: parkedAction.tool, ok: true });
       return send(res, 200, { id, status: 'approved', result: out2 });
     } catch (e) {

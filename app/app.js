@@ -181,6 +181,7 @@
         $('entryCount').textContent = e.seq + 1;
         $('headHash').textContent = String(e.hash).slice(0, 12);
         if (e.payload && (e.payload.type === 'approval_requested' || e.payload.type === 'approval_resolved')) refreshPending();
+        window.dispatchEvent(new CustomEvent('tg-audit', { detail: e })); // fan-out to panels
       } catch { /* malformed frame — ignore */ }
     });
     es.onerror = () => { $('liveDot').className = 'dot off'; };
@@ -190,4 +191,13 @@
   $('connectBtn').addEventListener('click', () => { token = tokenEl.value.replace(/•/g, '') || token; connect(); });
   tokenEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { token = tokenEl.value.replace(/•/g, '') || token; connect(); } });
   if (authed()) connect(); else $('stream').appendChild(el('div', 'empty', 'enter a token to connect'));
+
+  // shared surface for /panels/*.js (wave B UI modules)
+  window.TG = {
+    api, el,
+    token: () => token,
+    authed,
+    refresh: () => { refreshPending(); refreshBots(); },
+    onAudit: (fn) => { window.addEventListener('tg-audit', (ev) => fn(ev.detail)); },
+  };
 })();
