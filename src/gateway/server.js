@@ -27,7 +27,11 @@ function readBody(req) {
   });
 }
 
-function send(res, status, obj) {
+function send(res, status, obj, extra = {}) {
+  if (extra.html !== undefined) {
+    res.writeHead(status, { 'content-type': 'text/html; charset=utf-8' });
+    return res.end(extra.html);
+  }
   const body = JSON.stringify(obj);
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' });
   res.end(body);
@@ -68,6 +72,10 @@ class Gateway {
     const url = new URL(req.url, 'http://localhost');
     const path = url.pathname;
 
+    if (req.method === 'GET' && (path === '/' || path === '/dashboard')) {
+      return send(res, 200, null, { html: this.dashboardHtml() });
+    }
+
     if (req.method === 'GET' && path === '/healthz') {
       return send(res, 200, { ok: true, chain: this.chain.verify() });
     }
@@ -94,6 +102,63 @@ class Gateway {
       return send(res, 200, this.chain.verify());
     }
     return send(res, 404, { error: 'not_found' });
+  }
+
+  dashboardHtml() {
+    const v = this.chain.verify();
+    const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const rows = this.chain.entries.slice().reverse().slice(0, 50).map((e) => {
+      const p = e.payload;
+      const cls = { action_decision: 'decision', action_executed: 'exec', approval_requested: 'approval', approval_resolved: 'approval', auth_rejected: 'deny', action_executed_after_approval: 'exec' }[p.type] || 'other';
+      const detail = p.tool ? `${esc(p.tool)}` : esc(p.type);
+      const who = p.bot || p.approver || '';
+      const dec = p.decision || (p.type === 'approval_resolved' ? p.verb : '');
+      return `<tr><td>${e.seq}</td><td><span class="tag ${cls}">${esc(p.type)}</span></td><td>${esc(who)}</td><td>${detail}</td><td>${esc(dec)}</td><td class="hash" title="${e.hash}">${e.hash.slice(0, 12)}…</td></tr>`;
+    }).join('');
+    const bots = Object.entries(this.bots).map(([n, b]) =>
+      `<div class="bot"><b>${esc(n)}</b><span class="muted">caps: ${esc((b.capabilities || []).join(', ') || 'none')}</span></div>`).join('');
+    return `<!doctype html><html><head><meta charset="utf-8"><title>Trust Gateway</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.5 ui-monospace,Menlo,Consolas,monospace; background:#0b0e14; color:#c9d1d9; padding:24px; }
+  h1 { font-size:18px; margin:0 0 4px; color:#e6edf3; }
+  .sub { color:#8b949e; margin-bottom:20px; }
+  .cards { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:20px; }
+  .card { background:#11151f; border:1px solid #21262d; border-radius:8px; padding:12px 16px; min-width:180px; }
+  .card .k { color:#8b949e; font-size:11px; text-transform:uppercase; letter-spacing:.08em; }
+  .card .v { font-size:20px; color:#58d68d; margin-top:2px; }
+  .card.warn .v { color:#e3b341; }
+  .bot { background:#11151f; border:1px solid #21262d; border-radius:8px; padding:10px 14px; margin:0 12px 8px 0; display:inline-block; }
+  .bot .muted { display:block; color:#8b949e; font-size:11px; margin-top:2px; }
+  table { width:100%; border-collapse:collapse; background:#11151f; border:1px solid #21262d; border-radius:8px; overflow:hidden; }
+  th,td { text-align:left; padding:7px 10px; border-bottom:1px solid #21262d; }
+  th { color:#8b949e; font-size:11px; text-transform:uppercase; letter-spacing:.08em; }
+  .tag { padding:2px 8px; border-radius:10px; font-size:11px; }
+  .tag.decision { background:#1c2a3a; color:#79c0ff; }
+  .tag.exec { background:#12331f; color:#58d68d; }
+  .tag.approval { background:#332a12; color:#e3b341; }
+  .tag.deny { background:#3a1c1c; color:#f85149; }
+  .muted { color:#8b949e; }
+  .hashcell, td.hash { color:#8b949e; font-size:11px; }
+  .foot { margin-top:14px; color:#8b949e; font-size:11px; }
+  .ok { color:#58d68d; } .bad { color:#f85149; }
+</style></head><body>
+<h1>▲ Trust Gateway</h1>
+<div class="sub">Governed AI workforce — every action decided before it happens, sealed after.</div>
+<div class="cards">
+  <div class="card"><div class="k">Audit chain</div><div class="v ${v.ok ? 'ok' : 'bad'}">${v.ok ? 'SEALED ✓' : 'TAMPERED'}</div></div>
+  <div class="card"><div class="k">Entries</div><div class="v">${v.length}</div></div>
+  <div class="card warn"><div class="k">Bots</div><div class="v">${Object.keys(this.bots).length}</div></div>
+  <div class="card"><div class="k">Chain ID</div><div class="v" style="font-size:11px">${esc(v.chainId)}</div></div>
+</div>
+<div style="margin-bottom:16px">${bots}</div>
+<table><thead><tr><th>#</th><th>Event</th><th>Bot</th><th>Tool</th><th>Decision</th><th>Seal</th></tr></thead>
+<tbody>${rows || '<tr><td colspan="6" class="muted">no entries yet</td></tr>'}</tbody></table>
+<div class="foot">Head ${esc(v.head)} — chain verified at page load. API: <a style="color:#79c0ff" href="/healthz">/healthz</a> · <a style="color:#79c0ff" href="/v1/audit/verify">/v1/audit/verify</a></div>
+<script>setTimeout(()=>location.reload(), 15000);</script>
+</body></html>`;
   }
 
   async _postAction(req, res, bot) {
