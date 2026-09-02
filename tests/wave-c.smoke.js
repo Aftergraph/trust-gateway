@@ -26,9 +26,10 @@ async function main() {
   r = await api('POST', '/v2/web/fetch', { url: 'https://example.com/' }, FORGE);
   check('C3 web.fetch mounted', r.status === 200 || r.status === 202, r.status);
   // C4 adapters
-  r = await api('POST', '/v2/adapters', { id: 'w1', kind: 'webhook', name: 'test', config: { url: 'https://example.com/hook' } }, ATLAS);
+  r = await api('POST', '/v2/adapters', { kind: 'webhook', name: 'test', config: { url: 'https://example.com/hook' } }, ATLAS);
   check('C4 adapter created', (r.status === 200 || r.status === 201), r.status);
-  r = await api('POST', '/v2/adapters/w1/secret', { name: 'signing', value: 'swordfish' }, ATLAS);
+  const adpId = (r.body && r.body.adapter && r.body.adapter.id) || null;
+  r = await api('POST', '/v2/adapters/' + adpId + '/secret', { name: 'signing', value: 'swordfish' }, ATLAS);
   check('C4 secret set (no leak in response)', r.status === 200 && !JSON.stringify(r.body).includes('swordfish'));
   r = await api('GET', '/v2/adapters', null, ATLAS);
   check('C4 secret value absent from list response', !JSON.stringify(r.body).includes('swordfish'));
