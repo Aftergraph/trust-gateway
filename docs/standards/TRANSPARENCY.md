@@ -273,6 +273,8 @@ plugins.js) across all files under `src/gateway/`.
 | 53 | `harness_result` | mounts/55-harness.js |
 | 54 | `worktree_snapshot` | mounts/55-harness.js |
 | 55 | `worktree_remove` | mounts/55-harness.js |
+| 56 | `voice_stt` | mounts/60-voice.js (wave C, merged after doc extraction) |
+| 57 | `voice_tts` | mounts/60-voice.js (wave C, merged after doc extraction) |
 
 ## Documented exceptions
 
