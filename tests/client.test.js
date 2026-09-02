@@ -36,10 +36,10 @@ function listen(server) {
 function makeGateway() {
   return new Gateway({
     bots: {
-      forge: { name: 'forge', token: 'tok-forge', capabilities: ['fs.write:*', 'fs.read'] },
-      auditor: { name: 'auditor', token: 'tok-auditor', capabilities: [] },
+      forge: { name: 'forge', token: 'tok-forge', role: 'worker', capabilities: ['fs.write:*', 'fs.read'] },
+      atlas: { name: 'atlas', token: 'tok-atlas', role: 'operator', capabilities: ['*'] },
     },
-    dispatch: async (tool, args) => {
+    dispatch: async (_bot, tool, args) => {
       if (tool.startsWith('fs.read')) return { content: 'hello', tool, args: args ?? null };
       if (tool.startsWith('fs.write')) return { wrote: 'ok', path: String(args?.path ?? '') };
       if (tool === 'shell.run') return { ran: true, cmd: String(args?.cmd ?? '') };
@@ -85,7 +85,7 @@ test('pending() lists the pending approval', async () => {
 });
 
 test('approve() executes the parked action and returns its result', async () => {
-  const gw = new GatewayClient({ baseUrl: ctx.baseUrl, token: 'tok-auditor' });
+  const gw = new GatewayClient({ baseUrl: ctx.baseUrl, token: 'tok-atlas' });
   const r = await gw.approve(ctx.shellApprovalId);
   assert.equal(r.id, ctx.shellApprovalId);
   assert.equal(r.status, 'approved');
@@ -132,10 +132,11 @@ test('network down: server closed before call -> throws Error', async () => {
 });
 
 test('deny() on a fresh pending approval returns status:"denied"', async () => {
-  const gw = new GatewayClient({ baseUrl: ctx.baseUrl, token: 'tok-forge' });
-  const prop = await gw.action('shell.run', { cmd: 'rm -rf /' });
+  const forge = new GatewayClient({ baseUrl: ctx.baseUrl, token: 'tok-forge' });
+  const prop = await forge.action('shell.run', { cmd: 'rm -rf /' });
   assert.equal(prop.decision, 'needs_approval');
-  const r = await gw.deny(prop.approvalId);
+  const atlas = new GatewayClient({ baseUrl: ctx.baseUrl, token: 'tok-atlas' });
+  const r = await atlas.deny(prop.approvalId);
   assert.equal(r.id, prop.approvalId);
   assert.equal(r.status, 'denied');
 });
