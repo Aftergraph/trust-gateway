@@ -54,6 +54,7 @@ class Gateway extends EventEmitter {
     mountFiles = true,    // v2: load src/gateway/mounts/*.js plugin routes
     staticDir = null,     // v2: serve SPA from this dir at /
     marketingDir = null,  // v2: serve public site from this dir at /home
+    botsDir = null,       // wave C: jails root, available to mount-declared executors
   } = {}) {
     super();
     this.bots = bots;
@@ -71,7 +72,19 @@ class Gateway extends EventEmitter {
     this.now = now;
     this.mounts = mountFiles ? loadMounts() : [];
     this.staticDir = staticDir ?? null;
+    this.botsDir = botsDir;
     this._executors = []; // v2 wave B: {re, fn(bot,tool,args)} for synthetic tools
+    // wave C convention: a mount file may ALSO export executors:[{re, make(gw)}]
+    // so new tool namespaces never touch bin/gateway.js (single-writer rule).
+    for (const m of this.mounts) {
+      if (Array.isArray(m.executors)) {
+        for (const e of m.executors) {
+          if (e.re instanceof RegExp && typeof e.make === 'function') {
+            this.registerExecutor(e.re, e.make(this));
+          }
+        }
+      }
+    }
   }
 
   // Register a handler for a synthetic tool namespace (e.g. /^harness\.run:/).

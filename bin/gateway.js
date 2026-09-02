@@ -65,6 +65,7 @@ const gw = new Gateway({
   approvalsFile: APPROVALS_FILE,
   staticDir: process.env.STATIC_DIR || path.join(__dirname, '..', 'app'),
   marketingDir: fs.existsSync(path.join(__dirname, '..', 'site')) ? path.join(__dirname, '..', 'site') : null,
+  botsDir: path.join(__dirname, '..', 'data', 'bots'),
   dispatch: DISPATCH
     ? makeDispatcher({ botsDir: process.env.BOTS_DIR || path.join(__dirname, '..', 'data', 'bots') })
     : null,
