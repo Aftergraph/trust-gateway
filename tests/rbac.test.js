@@ -76,7 +76,7 @@ test('canApprove: null bot false', () => {
 
 test('operator can approve → 200, dispatched, chain verified', async () => {
   let executed = null;
-  const gw = makeGateway(async (tool, args) => { executed = { tool, args }; return { ran: true }; });
+  const gw = makeGateway(async (_bot, tool, args) => { executed = { tool, args }; return { ran: true }; });
   const id = await createPending(gw);
 
   const r = mockReqRes('POST', `/v1/approvals/${id}/approve`, '{}', 'tok-atlas');
@@ -119,7 +119,7 @@ test('worker cannot approve → 403 + audit entry + chain still verifies', async
 
 test('wildcard (*) capability can approve', async () => {
   let executed = null;
-  const gw = makeGateway(async (tool, args) => { executed = { tool, args }; return { ran: true }; });
+  const gw = makeGateway(async (_bot, tool, args) => { executed = { tool, args }; return { ran: true }; });
   const id = await createPending(gw);
 
   const r = mockReqRes('POST', `/v1/approvals/${id}/approve`, '{}', 'tok-admin');
@@ -165,7 +165,7 @@ test('no-role no-wildcard bot is denied (fail closed)', async () => {
 
 test('approval.decide capability bot can approve', async () => {
   let executed = null;
-  const gw = makeGateway(async (tool, args) => { executed = { tool, args }; return { ran: true }; });
+  const gw = makeGateway(async (_bot, tool, args) => { executed = { tool, args }; return { ran: true }; });
   const id = await createPending(gw);
 
   const r = mockReqRes('POST', `/v1/approvals/${id}/approve`, '{}', 'tok-capop');
