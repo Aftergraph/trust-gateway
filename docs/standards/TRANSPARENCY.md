@@ -273,6 +273,11 @@ plugins.js) across all files under `src/gateway/`.
 | 53 | `harness_result` | mounts/55-harness.js |
 | 54 | `worktree_snapshot` | mounts/55-harness.js |
 | 55 | `worktree_remove` | mounts/55-harness.js |
+| 56 | `adapter_registered` | mounts/70-adapters.js (wave C integration adapters) |
+| 57 | `adapter_updated` | mounts/70-adapters.js |
+| 58 | `adapter_deleted` | mounts/70-adapters.js |
+| 59 | `adapter_tested` | mounts/70-adapters.js (payload: id+kind+result only — no URL, no secret value) |
+| 60 | `adapter_secret_set` | mounts/70-adapters.js (payload: id+name+length only — value is NEVER stored or logged) |
 
 ## Documented exceptions
 
