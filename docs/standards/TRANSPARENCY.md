@@ -196,6 +196,18 @@ below is missing one.
 - **Storage:** `data/quarantine-<ts>.json` (snapshot of suspect tail, atomic 0600).
 - **Inspect:** the endpoint; quarantined snapshots are plain JSON you can diff.
 
+### `playground.js` + mount `80-playground.js` — safe in-app code lab (C6)
+- **Endpoints:** `POST /v2/playground/run` (bearer). JS runs in jailed scratch;
+  HTML returns `{preview:'sandboxed'}` only.
+- **Audit events:** `playground_run` ({bot, lang, bytes, exitCode, timedOut} —
+  never code content or stdout bodies).
+- **Storage:** scratch files under `data/bots/<bot>/playground/` (ephemeral,
+  cleaned by timeout/exit).
+- **Containment:** jail-resolved paths, scrubbed env (PATH/HOME/NODE_ENV only),
+  hard timeout → SIGKILL. Residual: same-user process can access fs/network;
+  hardened container is the real boundary (later slice).
+- **Inspect:** audit search `q=playground_run`; no artifact store integration.
+
 ### `rbac.js` — approval/operator gate
 - **Endpoints:** none (library). `canApprove(bot)` used by every write surface.
 - **Audit events:** refusals appear as `approval_forbidden` /
@@ -271,8 +283,9 @@ plugins.js) across all files under `src/gateway/`.
 | 51 | `slash_run` | continuity.js |
 | 52 | `harness_build` | mounts/55-harness.js (wave B executors, merged after doc extraction) |
 | 53 | `harness_result` | mounts/55-harness.js |
-| 54 | `worktree_snapshot` | mounts/55-harness.js |
-| 55 | `worktree_remove` | mounts/55-harness.js |
+| 54 | `playground_run` | mounts/80-playground.js |
+| 55 | `worktree_snapshot` | mounts/55-harness.js |
+| 56 | `worktree_remove` | mounts/55-harness.js |
 
 ## Documented exceptions
 
