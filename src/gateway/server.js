@@ -3,10 +3,14 @@
 // BEFORE any dispatcher runs, so refusals and crashes are on the record too.
 
 const http = require('node:http');
+const fs = require('node:fs');
+const path = require('node:path');
+const { EventEmitter } = require('node:events');
 const { HashChain } = require('./hash-chain');
 const { classify, decide } = require('./policy');
 const { ApprovalStore } = require('./approvals');
 const disk = require('./disk-audit');
+const { loadMounts, match } = require('./http-mounts');
 
 const MAX_BODY = 256 * 1024;
 
@@ -38,7 +42,7 @@ function send(res, status, obj, extra = {}) {
   res.end(body);
 }
 
-class Gateway {
+class Gateway extends EventEmitter {
   constructor({
     bots = {},            // name -> { token, capabilities, role }
     dispatch = null,      // async (bot, tool, args) -> result object
@@ -47,7 +51,10 @@ class Gateway {
     now = () => Date.now(),
     auditFile = null,     // path -> durable append-only JSONL audit
     approvalsFile = null, // path -> durable approvals (pending survive restart)
+    mountFiles = true,    // v2: load src/gateway/mounts/*.js plugin routes
+    staticDir = null,     // v2: serve SPA from this dir at /
   } = {}) {
+    super();
     this.bots = bots;
     this.dispatch = dispatch;
     this.auditFd = null;
@@ -60,6 +67,8 @@ class Gateway {
     }
     this.approvals = approvals ?? new ApprovalStore({ now, file: approvalsFile });
     this.now = now;
+    this.mounts = mountFiles ? loadMounts() : [];
+    this.staticDir = staticDir ?? null;
   }
 
   _auth(req) {
@@ -77,27 +86,53 @@ class Gateway {
     const entry = this.chain.append(payload, this.now());
     // Durable write-ahead: the seal hits disk before we ever dispatch.
     if (this.auditFd !== null) disk.appendTo(this.auditFd, entry);
+    this.emit('audit', entry); // v2: SSE hub listens
     return entry;
   }
 
   async handle(req, res) {
     const url = new URL(req.url, 'http://localhost');
-    const path = url.pathname;
+    const pathname = url.pathname;
 
-    if (req.method === 'GET' && (path === '/' || path === '/dashboard')) {
+    // ── v2 static SPA (dashboard) ──
+    if (this.staticDir && req.method === 'GET') {
+      const rel = pathname === '/' ? 'index.html'
+        : /^\/(app\.js|style\.css|index\.html)$/.test(pathname) ? pathname.slice(1)
+        : null;
+      if (rel) return this._serveStatic(res, rel);
+    }
+
+    // ── v2 plugin mounts (before v1 auth; each mount declares its auth mode) ──
+    for (const mount of this.mounts) {
+      const params = match(mount, req.method, pathname);
+      if (!params) continue;
+      let bot = null;
+      if (mount.auth === 'bearer') {
+        bot = this._auth(req);
+        if (!bot) { this._audit({ type: 'auth_rejected', path: pathname }); return send(res, 401, { error: 'unauthorized' }); }
+      } else if (mount.auth === 'query') {
+        const token = url.searchParams.get('token') || '';
+        bot = this._auth({ headers: { authorization: token ? `Bearer ${token}` : '' } });
+        if (!bot) { this._audit({ type: 'auth_rejected', path: pathname }); return send(res, 401, { error: 'unauthorized' }); }
+      }
+      return mount.handle(this, req, res, { url, params, bot });
+    }
+
+    if (req.method === 'GET' && !this.staticDir && (pathname === '/' || pathname === '/dashboard')) {
       return send(res, 200, null, { html: this.dashboardHtml() });
     }
 
-    if (req.method === 'GET' && path === '/healthz') {
+    if (req.method === 'GET' && pathname === '/healthz') {
       return send(res, 200, { ok: true, chain: this.chain.verify() });
     }
 
     // Everything else requires auth.
     const bot = this._auth(req);
     if (!bot) {
-      this._audit({ type: 'auth_rejected', path });
+      this._audit({ type: 'auth_rejected', path: pathname });
       return send(res, 401, { error: 'unauthorized' });
     }
+    const path = pathname; // legacy handlers below use `path`
 
     if (req.method === 'POST' && path === '/v1/actions') {
       return this._postAction(req, res, bot);
@@ -178,6 +213,22 @@ class Gateway {
 <div class="foot">Head ${esc(v.head)} — chain verified at page load. API: <a style="color:#79c0ff" href="/healthz">/healthz</a> · <a style="color:#79c0ff" href="/v1/audit/verify">/v1/audit/verify</a></div>
 <script>setTimeout(()=>location.reload(), 15000);</script>
 </body></html>`;
+  }
+
+  _serveStatic(res, rel) {
+    const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
+    const file = path.join(this.staticDir, rel);
+    if (!file.startsWith(path.resolve(this.staticDir) + path.sep) && file !== path.resolve(this.staticDir)) {
+      return send(res, 400, { error: 'bad_path' });
+    }
+    try {
+      const data = fs.readFileSync(file);
+      res.writeHead(200, { 'content-type': MIME[path.extname(file)] || 'application/octet-stream' });
+      res.end(data);
+    } catch {
+      if (rel === 'index.html') return send(res, 200, null, { html: this.dashboardHtml() }); // v1 fallback until SPA lands
+      send(res, 404, { error: 'not_found' });
+    }
   }
 
   async _postAction(req, res, bot) {

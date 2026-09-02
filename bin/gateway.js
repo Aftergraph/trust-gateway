@@ -49,6 +49,7 @@ const gw = new Gateway({
   bots,
   auditFile: AUDIT_FILE,
   approvalsFile: APPROVALS_FILE,
+  staticDir: process.env.STATIC_DIR || path.join(__dirname, '..', 'app'),
   dispatch: DISPATCH
     ? makeDispatcher({ botsDir: process.env.BOTS_DIR || path.join(__dirname, '..', 'data', 'bots') })
     : null,
