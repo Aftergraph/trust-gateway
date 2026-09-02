@@ -1,0 +1,20 @@
+<!-- W9 fragment: PWA head tags for app/index.html (orchestrator wires these in wave B).
+     Insert into <head> after the existing stylesheet links. -->
+<meta name="theme-color" content="#0d1117">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="/icons/icon-192.svg">
+<link rel="apple-touch-icon" href="/icons/icon-192.svg">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="/responsive.css">
+<link rel="stylesheet" href="/desktop.css">
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/sw.js').catch(function () {
+        /* registration is best-effort; console works without it */
+      });
+    });
+  }
+</script>
