@@ -234,9 +234,23 @@ class Gateway {
   async _postApproval(req, res, bot, path) {
     const m = path.match(/^\/v1\/approvals\/([^/]+)\/(approve|deny)$/);
     const [, id, verb] = m;
-    const approver = bot.name; // in v1, any authenticated bot may approve (operator role expected)
-    // Capture the parked action BEFORE resolve scrubs args from the record.
+
+    // RBAC: only operators may approve/deny. Capture the tool for the audit
+    // entry BEFORE the failure response, so we can record what was denied
+    // without leaking args.
     const parked = this.approvals.get(id);
+    const parkedTool = parked && parked.status === 'pending' ? parked.tool : null;
+    if (!canApprove(bot)) {
+      this._audit({
+        type: 'approval_forbidden',
+        approvalId: id,
+        bot: bot.name,
+        tool: parkedTool,
+      });
+      return send(res, 403, { error: 'operator_required' });
+    }
+
+    const approver = bot.name;
     const parkedAction = parked && parked.status === 'pending' ? { tool: parked.tool, args: parked.args } : null;
     const result = this.approvals.resolve(id, verb, approver);
     this._audit({
@@ -276,4 +290,20 @@ function cryptoSafeEqual(a, b) {
 }
 const crypto = require('node:crypto');
 
-module.exports = { Gateway, send, readBody };
+// Operator gate for /v1/approvals/:id/approve|deny. A bot may approve if:
+//   - it has role === 'operator', OR
+//   - it has capability 'approval.decide', OR
+//   - it has the wildcard capability '*' (backward-compat admin).
+// Everyone else is denied with 403 + an audit entry.
+// Args are NEVER read for the denied path — the tool is read from the
+// parked record before denial, but args stay on the pending record.
+function canApprove(bot) {
+  if (!bot) return false;
+  if (bot.role === 'operator') return true;
+  const caps = Array.isArray(bot.capabilities) ? bot.capabilities : [];
+  if (caps.includes('approval.decide')) return true;
+  if (caps.includes('*')) return true;
+  return false;
+}
+
+module.exports = { Gateway, send, readBody, canApprove };
