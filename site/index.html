@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Trust Gateway — a governed AI workforce you can actually let near your systems</title>
+<meta name="description" content="Specialist bots with persistent memory, each with its own isolated computer, behind one governing gateway: every action decided before it happens, sealed after.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="site-header">
+  <span class="mark">▲ Trust Gateway</span>
+  <nav>
+    <a href="#workforce">Workforce</a>
+    <a href="#features">Guarantees</a>
+    <a href="#comparison">Compare</a>
+  </nav>
+</header>
+
+<main>
+  <section class="hero" id="workforce">
+    <p class="kicker">Governed · Audited · Hosted</p>
+    <h1>An AI workforce you can actually let near your systems.</h1>
+    <p class="sub">Specialist bots with persistent memory and their own computers,
+    behind one governing gateway: every action is <strong>decided before</strong> it
+    happens and <strong>sealed after</strong> in a tamper-evident audit chain —
+    so you can hand real work to real software without handing over the keys.</p>
+    <ul class="hero-points">
+      <li>Every bot has its own computer, tools, and memory — nothing shared, nothing leaked.</li>
+      <li>A fail-closed policy engine decides each action: allow, deny, or ask a human.</li>
+      <li>Model routing with provider fallback — swap the brain, keep the authority.</li>
+    </ul>
+    <p class="hero-cta"><a href="#features">See the guarantees</a></p>
+  </section>
+
+  <section id="features">
+    <h2>Three guarantees, not vibes</h2>
+
+    <article class="feature">
+      <h3><span class="idx">01</span> Decided before. Recorded after.</h3>
+      <p>Nothing a bot does is implicit. Each action passes a fail-closed policy
+      engine first — allow, deny, or park it for human approval. The decision is
+      written to a tamper-evident, hash-chained audit log <em>before</em> anything
+      executes, so refusals and crashes are on the record too. Secrets never land
+      in the log — only their length.</p>
+    </article>
+
+    <article class="feature">
+      <h3><span class="idx">02</span> A computer per bot. Not one for all.</h3>
+      <p>Bots don't share a desktop or your sign-ins. Each bot works in its own
+      isolated computer session — its own browser profile, its own file space,
+      its own tool access. What one bot does can't contaminate another, and your
+      own sign-ins stay yours.</p>
+    </article>
+
+    <article class="feature">
+      <h3><span class="idx">03</span> Model routing with fallback.</h3>
+      <p>Each bot's brain is configuration, not identity. Route different bots to
+      different model providers, and when a provider degrades, a verified fallback
+      chain keeps the workforce running. You change the model — never the
+      authority, the memory, or the audit trail.</p>
+    </article>
+  </section>
+
+  <section id="comparison">
+    <h2>How we compare</h2>
+    <p class="muted">Facts below are from our 2026-09-02 comparison notes — public
+    documentation for Grok Bot and OpenBot, and our own running system.</p>
+    <table>
+      <thead>
+        <tr><th scope="col">Capability</th><th scope="col">Grok Bot</th><th scope="col">OpenBot</th><th scope="col">Trust Gateway</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th scope="row">Persistent bots with name, role &amp; memory</th>
+          <td>Yes</td><td>Yes (profiles)</td><td class="good">Yes</td>
+        </tr>
+        <tr>
+          <th scope="row">A computer per bot</th>
+          <td>Shared across bots</td><td>Isolated per bot</td><td class="good">Isolated per bot</td>
+        </tr>
+        <tr>
+          <th scope="row">Actions gated before + audited after</th>
+          <td>No</td><td>Yes</td><td class="good">Yes</td>
+        </tr>
+        <tr>
+          <th scope="row">Fail-closed policy engine</th>
+          <td>No</td><td>Yes</td><td class="good">Yes</td>
+        </tr>
+        <tr>
+          <th scope="row">Tamper-evident audit chain</th>
+          <td>No</td><td>Audit rows (Postgres)</td><td class="good">Yes — hash-chained</td>
+        </tr>
+        <tr>
+          <th scope="row">Write-only secrets</th>
+          <td>No</td><td>Yes</td><td class="good">Yes</td>
+        </tr>
+        <tr>
+          <th scope="row">Multi-model routing + fallback</th>
+          <td>Grok models only</td><td>Per agent</td><td class="good">Provider fallback chain</td>
+        </tr>
+        <tr>
+          <th scope="row">Self-host / data ownership</th>
+          <td>No</td><td>Yes</td><td class="good">Hosted, tenant-isolated</td>
+        </tr>
+        <tr>
+          <th scope="row">Ops burden</th>
+          <td>None (black box)</td><td>Docker, Postgres, Bun</td><td class="good">None — we run it</td>
+        </tr>
+        <tr>
+          <th scope="row">Bot-to-bot groups &amp; handoffs</th>
+          <td>Yes</td><td>No</td><td class="good">Yes</td>
+        </tr>
+        <tr>
+          <th scope="row">Routines / scheduling</th>
+          <td>Yes</td><td>No</td><td class="good">Yes</td>
+        </tr>
+        <tr>
+          <th scope="row">Open agent protocol</th>
+          <td>No</td><td>AG-UI (their protocol)</td><td>OpenAI-compatible + A2A</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="foot">The gap we occupy: OpenBot's guarantees without the self-host
+    ops, Grok Bot's polish without the black box. Hosted workforce, governing
+    gateway included.</p>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <span>▲ Trust Gateway</span>
+  <span class="muted">Every action decided before it happens. Sealed after.</span>
+</footer>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,132 @@
+/* Trust Gateway — dark GitHub-mono aesthetic. No external fonts, no CDN. */
+:root {
+  color-scheme: dark;
+  --bg: #0b0e14;
+  --panel: #11151f;
+  --border: #21262d;
+  --fg: #c9d1d9;
+  --bright: #e6edf3;
+  --muted: #8b949e;
+  --green: #58d68d;
+  --blue: #79c0ff;
+  --yellow: #e3b341;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.65 var(--mono);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+h1, h2, h3 { color: var(--bright); line-height: 1.3; }
+h1 { font-size: clamp(26px, 4.5vw, 40px); margin: 0 0 16px; }
+h2 { font-size: 22px; margin: 0 0 12px; }
+h3 { font-size: 17px; margin: 0 0 10px; }
+strong { color: var(--bright); }
+
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: rgba(11, 14, 20, 0.92);
+  backdrop-filter: blur(4px);
+}
+.mark { color: var(--green); font-weight: 700; }
+.site-header nav { display: flex; gap: 18px; font-size: 13px; }
+
+main { max-width: 880px; margin: 0 auto; padding: 0 24px; }
+
+.hero { padding: 72px 0 56px; }
+.kicker {
+  color: var(--yellow);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin: 0 0 12px;
+}
+.hero .sub { max-width: 640px; color: var(--fg); }
+.hero-points {
+  list-style: none;
+  padding: 0;
+  margin: 24px 0 0;
+  max-width: 640px;
+}
+.hero-points li {
+  padding: 8px 0 8px 22px;
+  position: relative;
+  border-bottom: 1px solid var(--border);
+}
+.hero-points li::before {
+  content: "▸";
+  color: var(--green);
+  position: absolute;
+  left: 0;
+}
+.hero-cta { margin-top: 28px; font-size: 14px; }
+
+#features { padding: 48px 0; }
+.feature {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px 22px;
+  margin: 0 0 16px;
+}
+.feature .idx { color: var(--muted); font-size: 13px; margin-right: 8px; }
+.feature p { margin: 0; max-width: 70ch; }
+
+#comparison { padding: 48px 0 64px; }
+.muted { color: var(--muted); font-size: 13px; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  margin: 16px 0 0;
+  font-size: 13.5px;
+}
+th, td {
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+thead th {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-bottom: 2px solid var(--border);
+}
+tbody th { font-weight: 600; color: var(--bright); width: 32%; }
+td.good { color: var(--green); }
+tbody tr:last-child th, tbody tr:last-child td { border-bottom: none; }
+.foot { margin-top: 18px; color: var(--muted); font-size: 13px; max-width: 70ch; }
+
+.site-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 18px 24px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.site-footer span:first-child { color: var(--green); font-weight: 700; }
+
+@media (max-width: 640px) {
+  .site-header { flex-direction: column; align-items: flex-start; }
+  table { font-size: 12.5px; display: block; overflow-x: auto; }
+  thead th, tbody th { width: auto; }
+}
