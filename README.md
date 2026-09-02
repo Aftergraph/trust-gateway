@@ -68,6 +68,39 @@ Metoder: `action(tool, args?)`, `pending()`, `approve(id)`, `deny(id)`, `verify(
 `audit(since=0)`. Se `example/bot.js` for en komplet read → write → needs_approval →
 human-in-the-loop workflow.
 
+## v2 — Search, Operator Console, Plugin Mounts
+
+v2 tilføjer et plugin-mount system (`src/gateway/mounts/*.js`) og en audit-søgeendpoint,
+uden at ændre `server.js`. Hver mount-fil erklærer sin egen auth-mode og route.
+
+### Audit Search (`GET /v2/search`)
+
+Fuldtekst-søgning over audit-loggen. Returnerer matches newest-first.
+
+```
+GET /v2/search?q=shell&token=<operator-token>
+→ { hits: [{ seq, ts, hash, payload }, ...], query, total }
+```
+
+Auth: query-param `?token=` (browser EventSource kan ikke sætte headers).
+Implementering: `src/gateway/search.js` (in-memory substring; FTS5 når SqlChain lander).
+Mount: `src/gateway/mounts/10-search.js`.
+
+### Operator Console Demo
+
+`example/console.js` viser den styrede løkke: propose → approve → seal.
+Bruger GatewayClient SDK + raw fetch for `/v2/search`.
+
+```bash
+GATEWAY_URL=http://127.0.0.1:8800 GATEWAY_TOKEN=tok-atlas node example/console.js
+```
+
+### Plugin Mount System
+
+Nye endpoints tilføjes som filer i `src/gateway/mounts/` — server.js rører du ikke.
+Hver fil eksporterer `{ name, method, path, auth, handle }`. Auth-modes:
+`bearer` (Authorization header), `query` (?token=), `none`.
+
 ## Vejen videre (ikke committed, kun vision)
 
 - v2: container-isolation pr. bot (gVisor), persistence af approvals, TLS
