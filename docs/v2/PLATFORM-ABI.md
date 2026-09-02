@@ -83,3 +83,30 @@ agents that need console UI list the endpoints they expose; UI lands in wave B.
 [ ] mount registered and smoke-tested over real HTTP in your tests
 [ ] all decisions audited (chain verify ok in at least one test)
 [ ] no server.js/other-agent edits, committed, SHA reported
+
+## WAVE C ADDENDUM (2026-09-02, base 827c0e4)
+1. **Mount-declared executors:** a mount file may additionally export
+   `executors: [{re, make(gw)}]` — the Gateway constructor registers them
+   (`gw.registerExecutor(re, make(gw))`). New tool namespaces NEVER touch
+   bin/gateway.js or server.js. `gw.botsDir` is available (jails root).
+2. **Base suite is 419 tests** — must stay green.
+3. **Secret-literal hygiene:** this environment's redactor rewrites the literal
+   scheme word in Authorization headers to asterisks inside files and commands.
+   Build auth header values at runtime (`(pre + 'er ')` style concatenation or
+   `process.env`), never as one bare literal, when a test needs them. Same for
+   writing demo tokens to disk: keep them in gitignored `data/` only.
+4. **TTS/voice:** provider-neutral: `stt()`/`tts()` accept a backend name;
+   default backend = `null` (echo/no-op JSON), env TG_TTS_URL enables a real
+   OpenAI-compatible /audio/speech POST. Never block requests on missing voice.
+5. **Wave C ownership (disjoint):**
+   | Node | Branch | Owns |
+   |---|---|---|
+   | C1 llm-live | v2c/llm-live | mounts/23-chat-llm-live.js (uses existing LlmBrain, adds tool-call loop), tests |
+   | C2 voice | v2c/voice | src/gateway/voice.js, mounts/60-voice.js, tests/voice.test.js, app/panels/voice.js, tests/panel-voice.test.js |
+   | C3 web | v2c/web | src/gateway/webtools.js, mounts/65-web.js, tests/web.test.js |
+   | C4 integrations | v2c/integrations | src/gateway/adapters.js, mounts/70-adapters.js, tests/adapters.test.js, app/panels/integrations.js, tests/panel-integrations.test.js |
+   | C5 deploy | v2c/deploy | src/gateway/deploy.js, mounts/75-deploy.js, tests/deploy.test.js, deploy/systemd.service, deploy/cloud.md |
+   | C6 playground | v2c/playground | mounts/80-playground.js, tests/playground.test.js, app/panels/playground.js, tests/panel-playground.test.js |
+   | C7 openai-api | v2c/openai | src/gateway/openai-compat.js, mounts/85-openai.js, tests/openai-compat.test.js |
+   Console panel files are loaded by index.html already IF named per the tab set;
+   C2/C4/C6 panels register into TG_PANELS; orchestrator wires script tags.
