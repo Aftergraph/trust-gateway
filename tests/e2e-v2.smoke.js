@@ -6,8 +6,8 @@ const http = require('node:http');
 const { GatewayClient } = require('../src/gateway/client');
 
 const BASE = process.env.GATEWAY_URL || 'http://127.0.0.1:8800';
-const FORGE = process.env.FORGE_TOKEN || 'fw-tok';
-const ATLAS = process.env.ATLAS_TOKEN || 'at-tok';
+const FORGE = process.env.FORGE_TOKEN || '';
+const ATLAS = process.env.ATLAS_TOKEN || '';
 
 const forge = new GatewayClient({ baseUrl: BASE, token: FORGE });
 const atlas = new GatewayClient({ baseUrl: BASE, token: ATLAS });
