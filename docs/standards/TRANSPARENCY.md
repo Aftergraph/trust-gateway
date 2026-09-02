@@ -212,7 +212,7 @@ below is missing one.
 
 ## Full audit-event table
 
-64 event types emitted from `src/gateway/**`. Extraction rule: every string
+65 event types emitted from `src/gateway/**`. Extraction rule: every string
 matched by `{type: '…'}` (including the `enabled ? 'a' : 'b'` ternary in
 plugins.js) across all files under `src/gateway/`.
 
@@ -273,14 +273,14 @@ plugins.js) across all files under `src/gateway/`.
 | 53 | `harness_result` | mounts/55-harness.js |
 | 54 | `worktree_snapshot` | mounts/55-harness.js |
 | 55 | `worktree_remove` | mounts/55-harness.js |
+<<<<<<< HEAD
 | 56 | `web_fetch` | mounts/65-web.js, src/gateway/webtools.js |
 | 57 | `voice_stt` | mounts/60-voice.js (wave C) |
 | 58 | `voice_tts` | mounts/60-voice.js (wave C) |
 | 59 | `adapter_registered` | mounts/70-adapters.js (wave C integration adapters) |
 | 60 | `adapter_updated` | mounts/70-adapters.js |
 | 61 | `adapter_deleted` | mounts/70-adapters.js |
-| 62 | `adapter_tested` | mounts/70-adapters.js (payload: id+kind+result only — no URL, no secret value) |
-| 63 | `adapter_secret_set` | mounts/70-adapters.js (payload: id+name+length only — value is NEVER stored or logged) |
+| 64 | `deploy_artifact` | mounts/75-deploy.js (wave C: rendered service/launcher downloads) |
 
 ## Documented exceptions
 

@@ -1,0 +1,45 @@
+# systemd user-level unit template — Trust Gateway
+#
+# STATIC TEMPLATE with token-free placeholders. Do not put real secrets here:
+# every operator-editable spot ends in __SET_ME so `grep -r __SET_ME` finds
+# them all. The committed file is a template; use GET /v2/deploy/artifact?kind=service
+# (bearer) to have the gateway render a copy with your PORT baked in.
+#
+# Install (as your normal user — NEVER with sudo / system-level):
+#   mkdir -p ~/.config/systemd/user
+#   cp deploy/systemd.service ~/.config/systemd/user/trust-gateway.service
+#   # edit EnvironmentFile path + PORT to taste, then:
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now trust-gateway.service
+#   journalctl --user -u trust-gateway.service -f
+#
+# For `systemctl --user` to keep the service alive after you log out:
+#   loginctl enable-linger $USER
+
+[Unit]
+Description=Trust Gateway (user-level)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/node bin/gateway.js
+WorkingDirectory=%h/trust-gateway
+Environment=PORT=8787
+# EnvironmentFile holds secrets (bot tokens, TG_LLM_KEY). data/ is gitignored,
+# so data/gateway.env never enters git. It must contain ONLY real values you
+# set yourself — never copy this template's placeholders into it.
+EnvironmentFile=%h/trust-gateway/data/gateway.env
+Restart=on-failure
+RestartSec=5
+
+# ── Hardening (uncomment to tighten; verified against this app layout) ──
+# NoNewPrivileges=yes
+# ProtectSystem=strict
+# ProtectHome=read-only
+# ReadWritePaths=%h/trust-gateway/data
+# PrivateTmp=yes
+# RestrictSUIDSGID=yes
+# CapabilityBoundingSet=
+
+[Install]
+WantedBy=default.target
