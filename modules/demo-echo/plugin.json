@@ -1,0 +1,10 @@
+{
+  "id": "demo-echo",
+  "name": "Demo Echo",
+  "version": "1.0.0",
+  "entry": "index.js",
+  "description": "Minimal tracked module proving the install/enable/audit round-trip.",
+  "capabilities": ["echo.speak"],
+  "secrets": [{ "name": "API_KEY", "required": false }],
+  "mcp": [{ "name": "demo-echo-mcp", "transport": "stdio", "command": "node", "args": ["mcp/index.js"] }]
+}
