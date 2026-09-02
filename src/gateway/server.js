@@ -3,9 +3,10 @@
 // BEFORE any dispatcher runs, so refusals and crashes are on the record too.
 
 const http = require('node:http');
-const { HashChain, canonical } = require('./hash-chain');
+const { HashChain } = require('./hash-chain');
 const { classify, decide } = require('./policy');
 const { ApprovalStore } = require('./approvals');
+const disk = require('./disk-audit');
 
 const MAX_BODY = 256 * 1024;
 
@@ -44,10 +45,18 @@ class Gateway {
     chain = null,
     approvals = null,
     now = () => Date.now(),
+    auditFile = null,     // path -> durable append-only JSONL audit
   } = {}) {
     this.bots = bots;
     this.dispatch = dispatch;
-    this.chain = chain ?? new HashChain();
+    this.auditFd = null;
+    if (auditFile) {
+      const { chain: loaded } = disk.loadChain(auditFile);
+      this.chain = chain ?? loaded;
+      this.auditFd = disk.openAppendFd(auditFile);
+    } else {
+      this.chain = chain ?? new HashChain();
+    }
     this.approvals = approvals ?? new ApprovalStore({ now });
     this.now = now;
     this._pendingDecisions = new Map(); // approvalId -> {bot, tool, args, cls}
@@ -65,7 +74,10 @@ class Gateway {
   }
 
   _audit(payload) {
-    return this.chain.append(payload, this.now());
+    const entry = this.chain.append(payload, this.now());
+    // Durable write-ahead: the seal hits disk before we ever dispatch.
+    if (this.auditFd !== null) disk.appendTo(this.auditFd, entry);
+    return entry;
   }
 
   async handle(req, res) {
@@ -257,4 +269,4 @@ function cryptoSafeEqual(a, b) {
 }
 const crypto = require('node:crypto');
 
-module.exports = { Gateway, send, readBody, canonical };
+module.exports = { Gateway, send, readBody };

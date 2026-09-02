@@ -7,6 +7,7 @@
 //   BOT_CAPS      optional per-bot caps JSON: {"forge":["fs.read","fs.write:*"]}
 
 const http = require('node:http');
+const path = require('node:path');
 const { Gateway } = require('../src/gateway/server');
 
 function parseBots() {
@@ -31,9 +32,11 @@ if (Object.keys(bots).length === 0) {
 }
 
 const PORT = Number(process.env.PORT || 8800);
+const AUDIT_FILE = process.env.AUDIT_FILE || path.join(__dirname, '..', 'data', 'audit.jsonl');
 const DISPATCH = process.argv.includes('--dispatch');
 const gw = new Gateway({
   bots,
+  auditFile: AUDIT_FILE,
   dispatch: DISPATCH
     ? async (tool, args) => {
         // v1 demo dispatcher: safe in-memory filesystem + echo shell.

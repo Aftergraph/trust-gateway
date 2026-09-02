@@ -68,6 +68,19 @@ class HashChain {
   since(seq) {
     return this.entries.filter((e) => e.seq > seq);
   }
+  // Rebuild from persisted entries; verifies the whole chain. Throws on any
+  // tampering, gap, or missing genesis (fail closed).
+  static fromEntries(parsed) {
+    if (!Array.isArray(parsed) || parsed.length === 0) throw new Error('fromEntries: empty entries');
+    const g = parsed[0];
+    if (!g || g.seq !== 0 || !g.payload || g.payload.type !== 'genesis')
+      throw new Error('fromEntries: invalid genesis entry');
+    const c = new HashChain({ chainId: g.payload.chainId, genesisTs: g.ts });
+    c.entries = parsed;
+    const v = c.verify();
+    if (!v.ok) throw new Error(`fromEntries: audit chain invalid at seq ${v.at} (${v.reason}) — refusing to load`);
+    return c;
+  }
 }
 
 module.exports = { HashChain, entryHash, canonical, sha256 };
