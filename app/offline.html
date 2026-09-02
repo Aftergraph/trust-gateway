@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0d1117">
+  <title>Trust Gateway — Offline</title>
+  <link rel="stylesheet" href="/responsive.css">
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 32px 20px;
+      font: 14px/1.6 ui-monospace, Menlo, Consolas, monospace;
+      background: #0b0e14; color: #c9d1d9;
+      min-height: 100dvh;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center;
+    }
+    .glyph { font-size: 44px; margin-bottom: 10px; }
+    h1 { font-size: 18px; color: #e6edf3; margin: 0 0 8px; }
+    p { max-width: 420px; color: #8b949e; margin: 0 0 6px; }
+    .hint { font-size: 12px; }
+    button {
+      margin-top: 18px; min-height: 44px; min-width: 44px; padding: 10px 22px;
+      font: inherit; cursor: pointer;
+      background: #1c2a3a; border: 1px solid #2f4a6b; color: #79c0ff;
+      border-radius: 8px;
+    }
+    code { color: #79c0ff; }
+  </style>
+</head>
+<body>
+  <div class="glyph">▲</div>
+  <h1>Trust Gateway is offline</h1>
+  <p>The operator console could not reach the gateway. The audit chain, approvals, and live stream all require a connection.</p>
+  <p class="hint">Reconnect and <button type="button" onclick="location.reload()">retry</button></p>
+  <p class="hint">API status: <code>/healthz</code> · chain verify: <code>/v1/audit/verify</code></p>
+</body>
+</html>

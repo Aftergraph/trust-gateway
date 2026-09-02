@@ -1,0 +1,104 @@
+/* Trust Gateway v2 — responsive / mobile shell (W9)
+   Loaded after style.css; overrides the 3-pane grid for narrow screens.
+   Uses dvh units + safe-area insets; all tap targets ≥ 44px. */
+
+:root { color-scheme: dark; }
+
+/* ── Mobile & tablet: single column, panes stack vertically ── */
+@media (max-width: 800px) {
+  html, body {
+    /* dynamic viewport height: correct for collapsed mobile browser chrome */
+    height: 100dvh;
+  }
+
+  body {
+    /* safe-area insets for notches / home-indicator devices */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    -webkit-text-size-adjust: 100%;
+  }
+
+  header {
+    padding: 10px 14px;
+    gap: 10px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .statusbar { flex-wrap: wrap; row-gap: 4px; }
+  .tokenbox { flex: 1; min-width: 0; }
+  .tokenbox input { flex: 1; min-width: 0; width: auto; }
+
+  /* single-column pane stack */
+  .panes {
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+
+  .pane {
+    min-height: 320px;
+    max-height: none;
+  }
+
+  /* tap targets: every interactive control ≥ 44×44 px */
+  button,
+  .btn,
+  .pill,
+  a.footlink,
+  input[type="password"],
+  input[type="text"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .tokenbox button,
+  .btn,
+  #chatForm button {
+    min-height: 44px;
+    padding: 10px 16px;
+    font-size: 14px;
+  }
+
+  #chatInput,
+  .tokenbox input {
+    min-height: 44px;
+    font-size: 16px; /* ≥16px prevents iOS zoom-on-focus */
+  }
+
+  #chatForm button { flex-shrink: 0; }
+
+  /* roomier rows for touch scrolling */
+  .row { padding: 8px 6px; }
+  .botrow { padding: 10px 6px; }
+  .pane-body { padding: 10px 12px; }
+
+  /* chat dock flows with the page instead of fixed height */
+  .chatdock {
+    height: auto;
+    max-height: 40dvh;
+  }
+
+  .foot {
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+
+  /* landscape phones: keep two compact columns instead of one long scroll */
+  @media (orientation: landscape) and (max-height: 500px) {
+    .panes {
+      grid-template-columns: 1fr 1fr;
+      grid-auto-rows: minmax(220px, auto);
+    }
+  }
+}
+
+/* reduced motion: drop the row flash animation */
+@media (prefers-reduced-motion: reduce) {
+  .row { animation: none; }
+}

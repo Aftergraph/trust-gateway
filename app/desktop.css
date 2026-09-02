@@ -1,0 +1,77 @@
+/* Trust Gateway v2 — desktop / wide-screen shell (W9)
+   Loaded after style.css; enhances large displays. Never narrows the
+   3-pane grid — the base contract in style.css stays authoritative. */
+
+/* ── Wide screens (≥1400px): roomier 4-column shell.
+   Stream keeps its wide lead column; approvals / workforce / chat dock
+   each get a full column. The chat dock is promoted out of the
+   workforce pane into the grid via display:contents on its parent. */
+@media (min-width: 1400px) {
+  .panes {
+    grid-template-columns: 1.4fr 1fr 1fr 1fr;
+    grid-template-rows: minmax(0, 1fr);
+    gap: 14px;
+    padding: 14px 20px;
+  }
+
+  /* workforce pane carries the chat dock; split it into its own column */
+  #paneWorkforce {
+    display: contents;
+  }
+  #paneWorkforce > .pane-body,
+  #paneWorkforce > .chatdock {
+    background: #11151f;
+    border: 1px solid #21262d;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  #paneWorkforce > .pane-body { overflow-y: auto; }
+  #paneWorkforce > .chatdock {
+    border-top: 0;
+    height: auto;
+  }
+}
+
+/* ── Ultra-wide (≥1900px): cap content width, center the console ── */
+@media (min-width: 1900px) {
+  .panes { max-width: 1780px; margin: 0 auto; width: 100%; }
+  header { max-width: 1780px; margin: 0 auto; width: 100%; }
+}
+
+/* ── Keyboard hints (desktop only) ──
+   Shown on devices with a fine pointer + keyboard, hidden on touch. */
+@media (hover: hover) and (pointer: fine) {
+  kbd {
+    display: inline-block;
+    padding: 1px 6px;
+    border: 1px solid #30365d;
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    background: #161b26;
+    color: #79c0ff;
+    font: 11px/1.4 ui-monospace, Menlo, Consolas, monospace;
+    white-space: nowrap;
+  }
+  .kbd-hints { display: inline-flex; }
+}
+
+/* touch / no-keyboard devices: hints hidden */
+@media not ((hover: hover) and (pointer: fine)) {
+  kbd { display: none; }
+  .kbd-hints { display: none; }
+}
+
+/* fallback where the `not` media-query list form is unsupported */
+@supports not (border-radius: 1px) {
+  kbd { display: none; }
+}
+
+.kbd-hints {
+  display: none; /* off by default; media query above enables it */
+  gap: 10px;
+  align-items: center;
+  color: #8b949e;
+  font-size: 11px;
+}
