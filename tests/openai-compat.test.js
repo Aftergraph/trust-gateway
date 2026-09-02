@@ -317,13 +317,14 @@ test('auth: bad token → 401 with OpenAI-shaped error', async () => {
   const server = await serve(gw);
   try {
     const r = await post(server, '/v1/chat/completions', { messages: [{ role: 'user', content: 'hi' }] }, 'tok-wrong');
-    assert.equal(r.status, 401);
-    const b = r.json();
-    assert.equal(b.error.type, 'authentication_error');
+    assert.equal(r.status, 401, 'raw=' + r.raw);
+    const b = JSON.parse(r.raw);
+    assert.equal(b.error.type, 'authentication_error', 'b=' + JSON.stringify(b));
     assert.equal(b.error.code, 'invalid_api_key');
     const g = await get(server, '/v1/models', 'tok-wrong');
     assert.equal(g.status, 401);
-    assert.equal(g.json().error.type, 'authentication_error');
+    const gb = JSON.parse(g.raw);
+    assert.equal(gb.error.type, 'authentication_error');
   } finally { server.close(); }
 });
 
@@ -333,10 +334,12 @@ test('auth: missing token → 401 OpenAI-shaped (both routes)', async () => {
   try {
     const r = await post(server, '/v1/chat/completions', { messages: [{ role: 'user', content: 'hi' }] }, null);
     assert.equal(r.status, 401);
-    assert.equal(r.json().error.type, 'authentication_error');
+    const b = JSON.parse(r.raw);
+    assert.equal(b.error.type, 'authentication_error');
     const g = await get(server, '/v1/models', null);
     assert.equal(g.status, 401);
-    assert.equal(g.json().error.code, 'invalid_api_key');
+    const gb = JSON.parse(g.raw);
+    assert.equal(gb.error.code, 'invalid_api_key');
     assert.ok(gw.chain.entries.some((e) => e.payload.type === 'auth_rejected'));
   } finally { server.close(); }
 });

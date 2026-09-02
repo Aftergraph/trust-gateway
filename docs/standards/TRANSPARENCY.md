@@ -299,8 +299,6 @@ plugins.js) across all files under `src/gateway/`.
 | 54 | `playground_run` | mounts/80-playground.js |
 | 55 | `worktree_snapshot` | mounts/55-harness.js |
 | 56 | `worktree_remove` | mounts/55-harness.js |
->>>>>>> v2c/playground
-
 ## Documented exceptions
 
 The test compares the table above against a programmatic extraction over
