@@ -170,13 +170,17 @@ class SqlChain {
     const prev = this.head;
     if (!prev) throw new Error('SqlChain: missing genesis; chain is empty');
     const seq = prev.seq + 1;
-    const hash = entryHash(seq, prev.hash, ts, payload);
+    // Hash the STORED (JSON-normalized) representation, not the live object:
+    // undefined-valued keys vanish in JSON.stringify, so hashing pre-roundtrip
+    // payloads makes verify() fail on reload. E2E-caught, 2026-09-02.
+    const rt = payload === undefined ? null : JSON.parse(JSON.stringify(payload));
+    const hash = entryHash(seq, prev.hash, ts, rt);
     const stmt = this.db.prepare(
       'INSERT INTO chain_entries(seq, ts, prev_hash, hash, payload) VALUES(?,?,?,?,?)'
     );
-    stmt.run(seq, ts, prev.hash, hash, JSON.stringify(payload));
-    this._insertFts(seq, payload);
-    return { seq, prevHash: prev.hash, ts, payload, hash };
+    stmt.run(seq, ts, prev.hash, hash, JSON.stringify(rt));
+    this._insertFts(seq, rt);
+    return { seq, prevHash: prev.hash, ts, payload: rt, hash };
   }
 
   since(seq) {

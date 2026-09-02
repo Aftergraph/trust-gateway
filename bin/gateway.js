@@ -9,6 +9,7 @@
 //   --dispatch    enable the per-bot jailed dispatcher (src/gateway/dispatcher.js)
 
 const http = require('node:http');
+const fs = require('node:fs');
 const path = require('node:path');
 const { Gateway } = require('../src/gateway/server');
 const { makeDispatcher } = require('../src/gateway/dispatcher');
@@ -44,10 +45,23 @@ if (Object.keys(bots).length === 0) {
 const PORT = Number(process.env.PORT || 8800);
 const AUDIT_FILE = process.env.AUDIT_FILE || path.join(__dirname, '..', 'data', 'audit.jsonl');
 const APPROVALS_FILE = process.env.APPROVALS_FILE || path.join(__dirname, '..', 'data', 'approvals.json');
+const DB_FILE = process.env.DB_FILE || path.join(__dirname, '..', 'data', 'gateway.db');
 const DISPATCH = process.argv.includes('--dispatch');
+
+// v2: SqlChain when DB_FILE exists (migrated); falls back to JSONL otherwise.
+let chain = null;
+let auditFile = AUDIT_FILE;
+if (process.env.V2_SQL !== '0' && fs.existsSync(DB_FILE)) {
+  const { SqlChain } = require('../src/gateway/sql-chain');
+  chain = new SqlChain({ file: DB_FILE });
+  auditFile = null; // sql chain persists by itself
+  console.log('▲ v2 storage: SqlChain @', DB_FILE, `(fts=${chain.fts ? 'on' : 'off'})`);
+}
+
 const gw = new Gateway({
   bots,
-  auditFile: AUDIT_FILE,
+  chain,
+  auditFile,
   approvalsFile: APPROVALS_FILE,
   staticDir: process.env.STATIC_DIR || path.join(__dirname, '..', 'app'),
   dispatch: DISPATCH

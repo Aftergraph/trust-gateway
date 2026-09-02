@@ -43,8 +43,13 @@ class HashChain {
   append(payload, ts = Date.now()) {
     const prev = this.head;
     const seq = prev.seq + 1;
-    const entry = { seq, prevHash: prev.hash, ts, payload };
-    entry.hash = entryHash(seq, prev.hash, ts, payload);
+    // Normalize through JSON round-trip BEFORE hashing: the hash must be
+    // reproducible from the STORED representation (undefined-valued keys
+    // vanish in JSON.stringify — hashing the pre-roundtrip object made
+    // reloaded chains fail verification). E2E-caught bug, 2026-09-02.
+    const rt = payload === undefined ? null : JSON.parse(JSON.stringify(payload));
+    const entry = { seq, prevHash: prev.hash, ts, payload: rt };
+    entry.hash = entryHash(seq, prev.hash, ts, rt);
     this.entries.push(entry);
     return entry;
   }

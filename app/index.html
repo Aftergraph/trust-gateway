@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Trust Gateway — Operator Console</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <div class="brand">▲ Trust Gateway <span class="ver">v2</span></div>
+  <div class="statusbar">
+    <span id="chainPill" class="pill sealed">…</span>
+    <span class="muted">entries</span> <b id="entryCount">0</b>
+    <span class="muted">pending</span> <b id="pendingCount">0</b>
+    <span class="muted">head</span> <code id="headHash" class="hash">…</code>
+    <span id="liveDot" class="dot off" title="SSE connection"></span>
+  </div>
+  <div class="tokenbox">
+    <input id="tokenInput" type="password" placeholder="bearer token" autocomplete="off">
+    <button id="connectBtn">connect</button>
+  </div>
+</header>
+
+<main class="panes">
+  <section class="pane" id="paneStream">
+    <h2>Live audit stream</h2>
+    <div class="pane-body" id="stream"></div>
+  </section>
+
+  <section class="pane" id="panePending">
+    <h2>Pending approvals</h2>
+    <div class="pane-body" id="pending"><div class="empty">none</div></div>
+  </section>
+
+  <section class="pane" id="paneWorkforce">
+    <h2>Workforce</h2>
+    <div class="pane-body" id="bots"><div class="empty">connect a token</div></div>
+    <div class="chatdock">
+      <div id="chatLog" class="chatlog"></div>
+      <form id="chatForm">
+        <input id="chatInput" type="text" placeholder="ask the console bot — e.g. status" autocomplete="off">
+        <button type="submit">send</button>
+      </form>
+    </div>
+  </section>
+</main>
+
+<footer class="foot muted">
+  every action decided before it happens, sealed after · <a href="/healthz">/healthz</a>
+</footer>
+
+<script src="/app.js"></script>
+</body>
+</html>
