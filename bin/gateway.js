@@ -69,6 +69,13 @@ const gw = new Gateway({
     ? makeDispatcher({ botsDir: process.env.BOTS_DIR || path.join(__dirname, '..', 'data', 'bots') })
     : null,
 });
+// wave B executors — synthetic tools (harness build/run, worktree snapshots)
+if (DISPATCH) {
+  const botsDir = process.env.BOTS_DIR || path.join(__dirname, '..', 'data', 'bots');
+  const { makeHarnessExecutor, makeWorktreeExecutor } = require('../src/gateway/mounts/55-harness');
+  gw.registerExecutor(/^harness\.(build|run):/, makeHarnessExecutor(botsDir, gw));
+  gw.registerExecutor(/^worktree\.(snapshot|remove|list)/, makeWorktreeExecutor(botsDir, gw));
+}
 
 const server = http.createServer((req, res) => gw.handle(req, res));
 server.listen(PORT, () => {
