@@ -53,11 +53,13 @@ class Gateway extends EventEmitter {
     approvalsFile = null, // path -> durable approvals (pending survive restart)
     mountFiles = true,    // v2: load src/gateway/mounts/*.js plugin routes
     staticDir = null,     // v2: serve SPA from this dir at /
+    marketingDir = null,  // v2: serve public site from this dir at /home
   } = {}) {
     super();
     this.bots = bots;
     this.dispatch = dispatch;
     this.auditFd = null;
+    this.marketingDir = marketingDir;
     if (auditFile) {
       const { chain: loaded } = disk.loadChain(auditFile);
       this.chain = chain ?? loaded;
@@ -94,12 +96,21 @@ class Gateway extends EventEmitter {
     const url = new URL(req.url, 'http://localhost');
     const pathname = url.pathname;
 
-    // ── v2 static SPA (dashboard) ──
+    // ── v2 static SPA (dashboard) + PWA assets ──
     if (this.staticDir && req.method === 'GET') {
       const rel = pathname === '/' ? 'index.html'
-        : /^\/(app\.js|style\.css|index\.html)$/.test(pathname) ? pathname.slice(1)
+        : /^\/(app\.js|style\.css|index\.html|sw\.js|offline\.html|pwa-head\.html|manifest\.webmanifest|responsive\.css|desktop\.css|favicon\.svg)$/.test(pathname) ? pathname.slice(1)
+        : /^\/icons\/[\w.-]+\.svg$/.test(pathname) ? pathname.slice(1)
         : null;
       if (rel) return this._serveStatic(res, rel);
+    }
+
+    // ── v2 marketing site at /home (separate dir, no auth — public content) ──
+    if (this.marketingDir && req.method === 'GET' && (pathname === '/home' || pathname === '/home/')) {
+      return this._serveStaticFrom(this.marketingDir, res, 'index.html');
+    }
+    if (this.marketingDir && req.method === 'GET' && pathname.startsWith('/home/')) {
+      return this._serveStaticFrom(this.marketingDir, res, pathname.slice('/home/'.length));
     }
 
     // ── v2 plugin mounts (before v1 auth; each mount declares its auth mode) ──
@@ -216,17 +227,29 @@ class Gateway extends EventEmitter {
   }
 
   _serveStatic(res, rel) {
-    const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
-    const file = path.join(this.staticDir, rel);
-    if (!file.startsWith(path.resolve(this.staticDir) + path.sep) && file !== path.resolve(this.staticDir)) {
+    return this._serveStaticFrom(this.staticDir, res, rel);
+  }
+
+  _serveStaticFrom(dir, res, rel) {
+    const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json' };
+    const file = path.join(dir, rel);
+    if (!file.startsWith(path.resolve(dir) + path.sep) && file !== path.resolve(dir)) {
       return send(res, 400, { error: 'bad_path' });
     }
     try {
-      const data = fs.readFileSync(file);
+      let data = fs.readFileSync(file);
+      if (dir === this.marketingDir && rel.endsWith('.html')) {
+        // rewrite relative asset refs so /home/* is self-contained
+        data = Buffer.from(
+          data.toString('utf8')
+            .replace(/href="style\.css"/g, 'href="/home/style.css"')
+            .replace(/href="styles\.css"/g, 'href="/home/styles.css"')
+            .replace(/src="app\.js"/g, 'src="/home/app.js"'));
+      }
       res.writeHead(200, { 'content-type': MIME[path.extname(file)] || 'application/octet-stream' });
       res.end(data);
     } catch {
-      if (rel === 'index.html') return send(res, 200, null, { html: this.dashboardHtml() }); // v1 fallback until SPA lands
+      if (rel === 'index.html' && dir === this.staticDir) return send(res, 200, null, { html: this.dashboardHtml() }); // v1 fallback
       send(res, 404, { error: 'not_found' });
     }
   }
