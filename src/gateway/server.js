@@ -41,7 +41,7 @@ function send(res, status, obj, extra = {}) {
 class Gateway {
   constructor({
     bots = {},            // name -> { token, capabilities, role }
-    dispatch = null,      // async (tool, args) -> result object
+    dispatch = null,      // async (bot, tool, args) -> result object
     chain = null,
     approvals = null,
     now = () => Date.now(),
@@ -222,7 +222,7 @@ class Gateway {
     // allow → dispatch
     if (!this.dispatch) return send(res, 500, { error: 'no_dispatcher' });
     try {
-      const result = await this.dispatch(tool, args);
+      const result = await this.dispatch(bot.name, tool, args);
       this._audit({ type: 'action_executed', bot: bot.name, tool, ok: true });
       return send(res, 200, { decision: 'allow', result });
     } catch (e) {
@@ -257,7 +257,7 @@ class Gateway {
     if (!parkedAction) return send(res, 500, { error: 'parked_action_missing' });
     if (!this.dispatch) return send(res, 500, { error: 'no_dispatcher' });
     try {
-      const out2 = await this.dispatch(parkedAction.tool, parkedAction.args);
+      const out2 = await this.dispatch(bot.name, parkedAction.tool, parkedAction.args);
       this._audit({ type: 'action_executed_after_approval', approvalId: id, tool: parkedAction.tool, ok: true });
       return send(res, 200, { id, status: 'approved', result: out2 });
     } catch (e) {

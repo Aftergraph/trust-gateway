@@ -5,10 +5,13 @@
 //   PORT          (default 8800)
 //   BOT_TOKENS    comma-separated name:token pairs, e.g. "forge:s3cret,atlas:op-s3cret"
 //   BOT_CAPS      optional per-bot caps JSON: {"forge":["fs.read","fs.write:*"]}
+//   BOTS_DIR      root under which per-bot jailed dirs are created (default data/bots)
+//   --dispatch    enable the per-bot jailed dispatcher (src/gateway/dispatcher.js)
 
 const http = require('node:http');
 const path = require('node:path');
 const { Gateway } = require('../src/gateway/server');
+const { makeDispatcher } = require('../src/gateway/dispatcher');
 
 function parseBots() {
   const bots = {};
@@ -40,21 +43,7 @@ const gw = new Gateway({
   auditFile: AUDIT_FILE,
   approvalsFile: APPROVALS_FILE,
   dispatch: DISPATCH
-    ? async (tool, args) => {
-        // v1 demo dispatcher: safe in-memory filesystem + echo shell.
-        const files = global.__gwFiles || (global.__gwFiles = new Map());
-        if (tool.startsWith('fs.write:')) {
-          const p = tool.slice('fs.write:'.length);
-          files.set(p, args && args.content ? args.content : '');
-          return { wrote: p, bytes: Buffer.byteLength(String((args && args.content) || '')) };
-        }
-        if (tool.startsWith('fs.read:')) {
-          const p = tool.slice('fs.read:'.length);
-          return { path: p, content: files.get(p) ?? null };
-        }
-        if (tool === 'shell.run') return { ran: args && args.cmd, exitCode: 0 }; // demo only — v2 runs real sandbox
-        return { tool, done: true };
-      }
+    ? makeDispatcher({ botsDir: process.env.BOTS_DIR || path.join(__dirname, '..', 'data', 'bots') })
     : null,
 });
 
