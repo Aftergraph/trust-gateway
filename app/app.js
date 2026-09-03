@@ -277,12 +277,27 @@
     const header = document.querySelector('header');
     if (header) header.appendChild(strip);
   }
+  let lastStripN = null;
   function refreshStrip() {
     if (!stripCount) return;
     const n = Number(document.getElementById('pendingCount') && document.getElementById('pendingCount').textContent) || 0;
+    const changed = lastStripN !== null && lastStripN !== n; // FE2: pulse only on real count changes
+    lastStripN = n;
     stripCount.textContent = n;
     const strip = document.getElementById('nowQueue');
-    if (strip) strip.classList.toggle('has-pending', n > 0);
+    if (strip) {
+      strip.classList.toggle('has-pending', n > 0);
+      if (changed) pulseStrip(strip);
+    }
+  }
+  // FE2 (craft): one-shot pulse when the pending count moves. Removing the
+  // class on animationend re-arms it for the next change; the reflow forces
+  // a restart when a previous pulse is still mid-flight.
+  function pulseStrip(strip) {
+    strip.classList.remove('just-changed');
+    void strip.offsetWidth;
+    strip.classList.add('just-changed');
+    strip.addEventListener('animationend', () => strip.classList.remove('just-changed'), { once: true });
   }
 
   // ── Phase 1 (§18.1): palette (⌘K / Ctrl+K) — one input, context-aware:
