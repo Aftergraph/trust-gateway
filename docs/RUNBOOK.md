@@ -77,6 +77,56 @@ Verified procedure (tier-C tested):
    in the restored manifest matches the head the backup saw; entries after
    that point are gone by design (document the gap, don't hide it).
 
+## §5 Archive restore drill — restore archived chain entries (FS-J3)
+
+`chain-archive.js` also ships a checksummed RE-IMPORT: archived entries can
+be brought back into the live chain, fail-closed, by manifest key. Same
+env gate as archival (`TG_CHAIN_ARCHIVE=1`; unset = fully inert).
+
+Endpoints (operator-only, like everything under /v2/chain/archive):
+
+- `GET /v2/chain/archive` — list manifests (see what exists)
+- `GET /v2/chain/archive/:date` — manifest details BEFORE restore: file,
+  count, sha256, headBefore/headAfter, any prior restore
+- `POST /v2/chain/archive/:date/restore` — run the restore
+
+Drill (use a maintenance window; the restore appends entries to the LIVE
+chain):
+
+1. Pick a manifest: `curl -s localhost:8800/v2/chain/archive -H "authorization: Bearer ***" | jq .`
+2. Inspect it BEFORE restoring: `curl -s localhost:8800/v2/chain/archive/<date> -H "authorization: Bearer ***"`
+   — check `count` (how many entries would come back), `sha256`, and
+   `lastRestore` (was this archive already restored?).
+3. Restore: `curl -s -X POST localhost:8800/v2/chain/archive/<date>/restore -H "authorization: Bearer ***"`
+   → `{restoredCount, skippedDuplicates, newHead}` on 200.
+4. Verify: `curl -s localhost:8800/v1/audit/verify | jq .ok` must be `true` —
+   restored entries are re-appended at the current head with recomputed
+   seq/prevHash/hash, so the chain verifies GREEN end-to-end.
+5. Re-run safety: a second restore of the same manifest is a clean no-op
+   (`restoredCount: 0, skippedDuplicates: N`) — duplicates are skipped by
+   content identity, and nothing else in the chain changes.
+
+What refuses, and how loudly:
+
+- Manifest missing / unreadable, archive file deleted, malformed entries,
+  or a sha256 mismatch between manifest and disk → the restore THROWS
+  before touching the live DB; the mount answers 409
+  `restore_refused` and audits `chain_restore_refused`. A checksum
+  mismatch means the archive is corrupt or tampered — investigate, do not
+  retry.
+- Bloat guard: if the live chain already has >1000 entries AND the restore
+  would push it past 10000 total, the restore refuses with
+  `bloat_guard` (409). This is deliberate — one mistyped manifest must
+  not inflate the live chain tenfold. If you truly need it, restore in
+  stages or lower the archive's `count` by splitting the file first.
+- Non-operator tokens get 403 + `chain_restore_refused` (RBAC), and with
+  `TG_CHAIN_ARCHIVE` unset everything answers 501 `archive_disabled`
+  (inert — nothing is read, written, or audited).
+
+Every restore outcome is audited with counts and hashes only:
+`chain_restored` (TRANSPARENCY.md row 142) or `chain_restore_refused`
+(row 143) — never entry payloads, never file contents.
+
 ## Chaos reference (measured 2026-09-03, this host)
 
 - kill -9 ×N mid-park: approvals survive (durable file), chain monotonic,
