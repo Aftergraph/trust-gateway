@@ -20,6 +20,10 @@
 //     telemetry payloads, no token material, no args, no tenant rows.
 //   - No caching: computed per call; the only memory kept is the top-5
 //     byType map built from the ring the caller already holds.
+//   - FS-I2: after the snapshot body is built, evaluateAlerts() checks
+//     ratelimit-spike / chain-stall conditions and pages the operator via
+//     the FS-G3 AlertSink (fire-and-forget, never throws into snapshot(),
+//     inert when TG_ALERT_URLS is unset). See obsv-alerts.js.
 //   - Fail-open per section: a missing store (e.g. api_keys table never
 //     created) yields zero-count scalars, never a throw — observability
 //     must not become a new failure mode.
@@ -31,6 +35,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { evaluateAlerts } = require('./obsv-alerts');
 
 const HOUR_MS = 3_600_000;
 const TOP_TYPES = 5;
@@ -175,7 +180,7 @@ function eventsSection(gw) {
 }
 
 function snapshot(gw) {
-  return {
+  const snap = {
     chain: chainSection(gw),
     telemetry: telemetrySection(gw),
     approvals: approvalsSection(gw),
@@ -187,6 +192,12 @@ function snapshot(gw) {
     uptimeSec: Math.round(process.uptime()),
     generatedAt: new Date().toISOString(),
   };
+  // FS-I2: evaluate auto-alert conditions against the finished snapshot.
+  // Fire-and-forget (alert() is async; snapshot() stays sync) and never
+  // awaited — alerting must not delay or break the snapshot. Inert when
+  // TG_ALERT_URLS is unset (AlertSink has no targets → zero side effects).
+  Promise.resolve(evaluateAlerts(snap)).catch(() => {});
+  return snap;
 }
 
 module.exports = { snapshot, HOUR_MS, TOP_TYPES };
