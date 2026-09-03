@@ -67,6 +67,11 @@ related: docs/TRUST-GATEWAY-V1.md
 | Self-host / data-ejerskab | ❌ | ✅ | ✅ (ejer selv infra) |
 | SMB-færdigpakke (ingen ops) | ⚠️ forbruger- UX | ❌ | ❌ (kun vores egen) |
 
+*Claims audited against the codebase 2026-09-03; see docs/standards/ for
+evidence. "Egen computer pr. bot" betyder i dag: jailed process island pr.
+bot (OS-sandbox på roadmap); "hosted" er single-tenant i dag —
+multi-tenant foundation på roadmap v3.*
+
 ## 3. Positionering — hvor kombinationen ligger
 
 De fire arketyper er each-and for sig tabte eller commoditiserede:
@@ -74,7 +79,8 @@ De fire arketyper er each-and for sig tabte eller commoditiserede:
 #2 er Lovable-red ocean. Den ubesatte plads er **laget mellem #1, #3 og #4**:
 
 > **A styret AI-workforce som produkt:** specialist-bots (persona + memory),
-> hver med isoleret computer, samlet provider-routing, og ett governing
+> hver med jailed process island (OS-sandbox på roadmap), samlet
+> provider-routing, og ett governing
 > action-gateway der beslutter før og beviser bagefter — leveret som færdig
 > løsning til virksomheder der ikke vil self-hoste og ikke kan køre xAI's sort box.
 
@@ -86,14 +92,14 @@ v1 vi bygger (se docs/TRUST-GATEWAY-V1.md + src/gateway).
 ## 4. Pitch ("sælg mig det")
 
 **One-liner:** *Ansett en AI-workforce du faktisk kan slippe løs på dine systemer
-— hver bot har sin egen computer, hver handling bliver vurderet før den sker og
+— hver bot kører i sin egen jailed process island, hver handling bliver vurderet før den sker og
 forseglet efter, og du kan skifte hjerne (model) uden at ændre autoritet.*
 
 | | Grok Bot | OpenBot | Trust Gateway (os) |
 |---|---|---|---|
 | Pris model | Abonnement, sort boks | Gratis kode, dyr ops | Hosted, per-workforce |
 | Garantier | "trust us" | dine folk skal køre det | garante + vores drift |
-| Data | xAI | egen Postgres | tenant-isoleret, EU-hosted |
+| Data | xAI | egen Postgres | single-tenant i dag; multi-tenant på roadmap v3 |
 | Models | kun Grok | egen nøgle pr. agent | routing + fallback-kæde |
 
 **Hårde tal (i dag, kørende system):** 5 profiler, 4 verificerede
