@@ -56,11 +56,18 @@ function check(name, cond, extra) {
     check('CONNECT POST /v2/adapters/:id/secret', false, 'no adapter.id');
   }
 
-  // MUST3: secret absent from list projection (regression guard — values never leak).
+  // MUST3: secret VALUE absent from list projection; the NAME is expected
+  // (projection is {name: {length, fingerprint}} — names are operator-owned
+  // metadata, values never leave the vault). Regression guard: any literal
+  // occurrence of the set value anywhere in the projection = leak.
   const list2 = await api('GET', '/v2/adapters', null, ATLAS);
   const projJson = JSON.stringify(list2.body);
-  const secretInList = projJson.includes('s3cret-value') || projJson.includes('webhook_url');
-  check('CONNECT secret absent from list projection', !secretInList, projJson.slice(0, 80));
+  const valueLeaked = projJson.includes('s3cret-value');
+  // every secrets entry must be a {length, fingerprint} shape — no strings
+  const shapeOk = (list2.body.adapters || []).every((a) =>
+    Object.values(a.secrets || {}).every((v) =>
+      v && typeof v === 'object' && typeof v.length === 'number' && typeof v.fingerprint === 'string'));
+  check('CONNECT secret value absent from list projection (names+metadata only)', !valueLeaked && shapeOk, projJson.slice(0, 80));
 
   // MUST4: adapter test probes (returns ok|fail|blocked).
   if (adapterId) {

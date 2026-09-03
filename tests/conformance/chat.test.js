@@ -40,6 +40,17 @@ function rawGet(path, token) {
   });
 }
 
+// Truly anonymous GET — no authorization header at all.
+function anonGet(path) {
+  return new Promise((resolve, reject) => {
+    http.get({ host: u.hostname, port: u.port, path }, (res) => {
+      let b = '';
+      res.on('data', (c) => (b += c));
+      res.on('end', () => resolve({ status: res.statusCode, raw: b }));
+    }).on('error', reject);
+  });
+}
+
 let fails = 0;
 function check(name, cond, extra) {
   console.log((cond ? '✔ ' : '✖ ') + name + (extra ? '  → ' + extra : ''));
@@ -71,8 +82,8 @@ function check(name, cond, extra) {
   const bad2 = await rawGet('/h/ffffffff');
   check('CHAT /h unknown tokens byte-identical', bad.status === bad2.status && bad.raw === bad2.raw, bad.status + '/' + bad2.status);
 
-  // MUST5: anon /h → 401/403.
-  const anon = await rawGet('/h');
+  // MUST5: anon /h → 401/403 (truly anonymous — no auth header at all).
+  const anon = await anonGet('/h');
   check('CHAT /h anon → 401/403', anon.status === 401 || anon.status === 403, anon.status);
 
   console.log(fails ? '\n✖ CHAT ' + fails + ' failed' : '\n★ CHAT PASS');
