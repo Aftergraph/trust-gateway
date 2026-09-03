@@ -153,18 +153,35 @@ Vurderet mod: kommerciel værdi × teknisk risiko × slice-størrelse.
 - **Ops**: systemd-unit installeret på VDS (tg-gateway active+enabled),
   tg-backup.timer 04:00 live, restore-drill verificeret fail-closed.
 
-## 7. Næste bølge (v2k-kandidater)
+## 7. Næste bølge (v2k/v2l) — status
 
-- **FS-F3**: sandbox hardening spike (bwrap/unshare, env-gated, ærlig
-  fallback) — DISPATCHERET.
-- **FS-F4**: skills marketplace/deling mellem tenants (bygger på skills.own
-  + tenants). *Leveret i FS-F4-slice: publish/unpublish + delt katalog +
-  cross-bot dry-runs — per-GATEWAY scope; cross-TENANT deling er stadig
-  fremtidigt arbejde.*
-- **FS-F5**: tier-C conformance (chaos/anti-fragility: kill -9 mid-flight,
-  disk-full, concurrent writers) + RUNBOOK i docs/.
-- **Ops**: installer systemd-gatewayen på alle miljøer via deploy/install.sh
-  (VDS gennemført 2026-09-03).
+- **FS-F3**: sandbox hardening spike — LEVERET (e244a36): bwrap + unshare
+  (user-ns) + systemd-run alle tilgængelige på host'en (målt); `TG_SANDBOX=1`
+  aktiverer wrapping (privat /tmp-tmpfs, ro-bind af jail + node, `--unshare-net`
+  medmindre network:true) med ærlig fallback; **bwrap-krav: /usr/lib64 som
+  mount-point** (loader-symlink dingler ellers). Byte-identisk uden env.
+- **FS-F4**: skills marketplace — LEVERET (0e379d2): `visibility`
+  private/shared, publish/unpublish (operator-only, auditeret), shared-katalog
+  uden steps, non-owner dry-runs; real runs forbliver approval-gated;
+  unpublish gendanner 404-anti-enum. Per-GATEWAY scope; cross-TENANT deling
+  er stadig fremtidigt arbejde.
+- **FS-F5**: tier-C chaos + RUNBOOK — LEVERET (4805e42): 4/4 scenarier
+  grønne (kill -9 ×3, concurrent WAL-writers, ENOSPC fail-closed, restart
+  storm ×5); **to ægte sql-chain-bugs fundet og fixet** (busy_timeout 5000
+  mod cross-process SQLITE_BUSY; genesis INSERT OR IGNORE mod boot-race);
+  `docs/RUNBOOK.md` dækker alle fire failure-modes med målt adfærd.
+- **Ops**: systemd-unit installeret på VDS via deploy/install.sh
+  (2026-09-03).
+
+## 8. Næste kandidater (v2m)
+
+- (a) Skills shared på tværs af tenants — kræver en federation-design-
+  beslutning (hvem ejer en delt skill? hvordan spores den i chainen?)
+- (b) Observability-dashboard: G12-telemetry-ring + chain-længde +
+  apikey-rate-tællere i ét operator-panel
+- (c) Multi-signal alarmering: watchdog → webhook (Tailscale/Telegram)
+- (d) Self-host dokumentation til eksterne kunder (install.sh + RUNBOOK
+  som kundevendt docs)
 
 *Owner: Jonas · Genereret af convergence-agent efter wave v2h + PM-audit;
-opdateret efter v2j.*
+opdateret efter v2l.*
