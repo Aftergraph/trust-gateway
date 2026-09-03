@@ -11,6 +11,7 @@
 const { send } = require('../server');
 const { searchChain } = require('../search');
 const { resolveTenant } = require('../tenant-resolve');
+const { enforceQuotas } = require('../tenant-scope');
 
 module.exports = {
   name: 'search',
@@ -26,6 +27,7 @@ module.exports = {
       gw
     );
     if (!tenant) return send(res, 404, { error: 'not_found' });
+    if (enforceQuotas(gw, tenant, res)) return; // FS-I3: fail-closed quotas
     const q = ctx.url.searchParams.get('q') || '';
     const limit = Number(ctx.url.searchParams.get('limit') || 50);
     const result = searchChain(gw.chain, q, { limit });

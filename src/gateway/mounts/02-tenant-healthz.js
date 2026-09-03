@@ -8,6 +8,7 @@
 
 const { send } = require('../server');
 const { resolveTenant } = require('../tenant-resolve');
+const { enforceQuotas } = require('../tenant-scope');
 
 module.exports = {
   name: 'tenant-healthz',
@@ -20,6 +21,7 @@ module.exports = {
     req.bot = ctx.bot || gw._auth ? (ctx.bot || (gw._auth ? gw._auth(req) : null)) : null;
     const { tenant } = resolveTenant(req, gw);
     if (!tenant) return send(res, 404, { error: 'not_found' });
+    if (enforceQuotas(gw, tenant, res)) return; // FS-I3: fail-closed quotas
     return send(res, 200, { ok: true, chain: gw.chain.verify(), tenant: tenant.id });
   },
 };

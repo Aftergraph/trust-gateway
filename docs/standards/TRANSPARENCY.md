@@ -460,6 +460,10 @@ plugins.js) across all files under `src/gateway/`.
 | 118 | `skill_fed_real_denied` | mounts/105-skills.js (FS-I1: {bot, runId?, skillId?, reason} — a REAL-run route refused: premature execute without dual approval, wrong tenant side, non-federated skill, or re-execute; nothing executed; TG_SKILLS_FEDERATION=1 only) |
 | 119 | `obsv_alert_ratelimit_spike` | obsv-alerts.js via obsv.js snapshot (FS-I2: {count, threshold} — apikeys.rateLimitedLast1h exceeded TG_ALERT_RATELIMIT_THRESHOLD (default 10); delivered out-of-band through the FS-G3 AlertSink with its 60s per-type rate limit + hourly suppression; counts only, never key material; inert when TG_ALERT_URLS is unset) |
 | 120 | `obsv_alert_chain_stall` | obsv-alerts.js via obsv.js snapshot (FS-I2: {head, stalledSince} — chain.length unchanged since the last snapshot while uptimeSec exceeded TG_ALERT_CHAIN_STALL_SEC (default 300); last-seen length persisted in kv_store 'obsv:lastChainLen'; head hash + ISO timestamp only, never chain contents; AlertSink rate-limited/suppressed like every type; inert when TG_ALERT_URLS is unset) |
+| 121 | `tenant_quota_exceeded` | tenant-scope.js middleware via mounts/* (FS-I3: {tenant, kind: disk\|api, used, limit} — a tenant-resolved request refused 429 quota_exceeded because its scoped data exceeded max_disk_mb or its hourly API count exceeded max_api_per_hour; checked AFTER tenant resolution, BEFORE handler dispatch; checker errors deny too (fail closed); never token material) |
+| 122 | `tenant_quota_set` | mounts/115-tenant-quotas.js (FS-I3: {id, by} — operator PUT /v2/tenants/:id/quota; caps only, never token material) |
+| 123 | `tenant_quota_read` | mounts/115-tenant-quotas.js (FS-I3: {id, by} — operator GET /v2/tenants/:id/quota usage view) |
+| 124 | `tenant_quota_denied` | mounts/115-tenant-quotas.js (FS-I3: {bot} — non-operator touched a quota route; RBAC refusal audited) |
 
 ### `sandbox.js` — optional OS sandbox layer for the harness2 jail (FS-F3)
 - **What it is:** a spike, additive and default-OFF. The jail's real

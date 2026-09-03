@@ -98,7 +98,7 @@ const { getSkillStore, resolveTemplate, skillsAccessLevel, isOwnSkill, isShared,
 const { getFedRunLedger, fedRunsPerHour, fedRunsPerSkillHour, WINDOW_MS } = require('../skills-federation');
 const { classify, decide } = require('../policy');
 const { resolveTenant } = require('../tenant-resolve');
-const { tenantAuditTag } = require('../tenant-scope');
+const { enforceQuotas, tenantAuditTag } = require('../tenant-scope');
 
 // FS-F1: access tier — 'operator' | 'author' | 'self' | null (see skills.js).
 function skillAuthorAllowed(bot) {
@@ -188,6 +188,7 @@ module.exports = {
     req.bot = bot;
     const { tenant } = resolveTenant(req, gw);
     if (!tenant) return send(res, 404, { error: 'not_found' });
+    if (enforceQuotas(gw, tenant, res)) return; // FS-I3: fail-closed quotas
 
     try {
       // ── GET /v2/skills — list (governed skills + module-provided skills) ──
