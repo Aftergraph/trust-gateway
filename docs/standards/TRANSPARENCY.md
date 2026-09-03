@@ -302,7 +302,7 @@ below is missing one.
 
 ## Full audit-event table
 
-97 event types emitted from `src/gateway/**`. Extraction rule: every string
+Event types emitted from `src/gateway/**`. Extraction rule: every string
 matched by `{type: '…'}` (including the `enabled ? 'a' : 'b'` ternary in
 plugins.js) across all files under `src/gateway/`.
 
@@ -389,6 +389,7 @@ plugins.js) across all files under `src/gateway/`.
 | 79 | `run_paused` | src/gateway/runs.js (wave F F1: cancellable-state transition — parked approval or operator/owner cancel; emitted by store.cancel() via POST /v2/runs/:id/cancel) |
 | 80 | `adapter_kind_register` | mounts/99-adapter-kinds.js (G9: {kind, fields count} — field names only, never values) |
 | 81 | `adapter_kind_rejected` | mounts/99-adapter-kinds.js (G9: {bot, kind?, errors[]} — validation failures) |
+<<<<<<< HEAD
 | 82 | `palette_open` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
 | 83 | `palette_command` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
 | 84 | `palette_search` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
@@ -409,6 +410,8 @@ plugins.js) across all files under `src/gateway/`.
 | 99 | `identity_me` | mounts/102-identity.js (FS-A2: {userId} only — never email, name or token material) |
 | 100 | `chat_user_denied` | mounts/103-chat-user.js (FS-A2: {userId, bot} — grant enforcement; never message text) |
 | 101 | `chat_user_ok` | mounts/103-chat-user.js (FS-A2: {userId, session} — namespaced session name only; never message text) |
+| 102 | `skill_created` | mounts/105-skills.js (FS-C1: {skillId, name, version, createdBy} — steps/tool detail not in the event) |
+| 103 | `skill_run_started` | mounts/105-skills.js (FS-C1: {skillId, name, bot, steps count, dry, runId} — per-step decisions ride the existing chat_action rows with kind 'skill_step') |
 
 ### `telemetry.js` + `mounts/100-telemetry.js` — post-launch telemetry (G12, §20.4)
 - **Endpoints:** `POST /v2/telemetry` {event, fields?} (bearer; server-side
@@ -423,6 +426,11 @@ plugins.js) across all files under `src/gateway/`.
   (silent drop); fields projected to scalars only.
 - **Inspect:** `GET /v2/telemetry` (operator bearer) or read
   `data/telemetry.json` directly (one JSON object with an `events` array).
+
+Note (FS-C1): per-step skill governance deliberately does NOT add a new
+event type — every step emits a standard `chat_action` row tagged
+`kind: 'skill_step'` ({skillId, seq, tool, decision}), so skill runs are
+auditable with the exact same chain vocabulary as chat proposals.
 ## Documented exceptions
 
 The test compares the table above against a programmatic extraction over
