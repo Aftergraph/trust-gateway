@@ -94,6 +94,7 @@
 
 const { send, readBody } = require('../server');
 const { getSkillStore, resolveTemplate, skillsAccessLevel, isOwnSkill, isShared, isFederated, isSharedLike, federationEnabled, canViewSkill } = require('../skills');
+const { getFedRunLedger, fedRunsPerHour, fedRunsPerSkillHour, WINDOW_MS } = require('../skills-federation');
 const { classify, decide } = require('../policy');
 const { resolveTenant } = require('../tenant-resolve');
 const { tenantAuditTag } = require('../tenant-scope');
@@ -118,6 +119,19 @@ function routeAction(method, segs, isRun) {
   if (method === 'PATCH') return 'patch';
   if (method === 'DELETE') return 'delete';
   return method.toLowerCase();
+}
+
+// FS-H2: over a federation dry-run cap → 429 + audited skill_fed_limited.
+function fedLimited(res, gw, tenant, skillId, cap, kind) {
+  gw._audit({
+    type: 'skill_fed_limited',
+    runnerTenant: tenant.id,
+    skillId,
+    cap,
+    window: 'hour',
+    limitKind: kind,
+  });
+  return send(res, 429, { error: 'fed_rate_limited' });
 }
 
 module.exports = {
@@ -186,6 +200,26 @@ module.exports = {
         return send(res, 200, { skills: shared });
       }
 
+      // ── GET /v2/skills/federated/runs — FS-H2 operator ledger view ──
+      // The CALLING tenant's operator sees their tenant's cross-tenant run
+      // ledger. Default (runner view): what THEIR bots ran elsewhere.
+      // ?owner=1 (owner view): which tenants ran THEIR skills.
+      // Scoped strictly to the calling tenant — no ?tenant= parameter, no
+      // cross-tenant peeking. Env OFF → 404 like every federation route.
+      // NOTE: matched BEFORE the /federated catalog block — segs[3]
+      // disambiguates the two /v2/skills/federated* paths.
+      if (req.method === 'GET' && id === 'federated' && segs[3] === 'runs') {
+        if (!federationEnabled()) return send(res, 404, { error: 'not_found' });
+        if (!isSkillOperator(bot)) {
+          gw._audit({ type: 'skill_denied', bot: bot.name, skillId: null, action: 'fed_runs' });
+          return send(res, 403, { error: 'operator_required' });
+        }
+        const ledger = getFedRunLedger();
+        const ownerView = url.searchParams.get('owner') === '1';
+        const runs = ownerView ? ledger.listByOwner(tenant.id) : ledger.listByRunner(tenant.id);
+        return send(res, 200, { runs, view: ownerView ? 'owner' : 'runner', tenant: tenant.id });
+      }
+
       // ── GET /v2/skills/federated — FS-G1 federated catalog ──────────
       // The calling tenant's view of the federation: every 'federated'
       // skill, projected to {id, name, version, ownerTenant, ownerBot,
@@ -193,7 +227,7 @@ module.exports = {
       // 404 (the route simply does not exist; 'federated' behaves as
       // 'shared' everywhere else). Every tier that can touch the skills
       // surface at all may read the catalog — same gate as /shared.
-      if (req.method === 'GET' && id === 'federated') {
+      if (req.method === 'GET' && id === 'federated' && !segs[3]) {
         if (!federationEnabled()) return send(res, 404, { error: 'not_found' });
         const federated = store.list()
           .filter((s) => isFederated(s))
@@ -341,6 +375,30 @@ module.exports = {
         const crossTenantFederated = federationEnabled()
           && isFederated(skill)
           && tenant.id !== (skill.ownerTenant || 'main');
+
+        // FS-H2: HONEST accounting + abuse limits for the cross-tenant
+        // dry-run surface. Both caps are enforced BEFORE the dry-run
+        // executes; the ledger records every cross-tenant dry run that
+        // passes the caps. Env-off never reaches this branch (the
+        // crossTenantFederated condition above is false), so a gateway
+        // with TG_SKILLS_FEDERATION unset is byte-identical pre/post.
+        if (crossTenantFederated && dry) {
+          const ledger = getFedRunLedger();
+          const perRunner = fedRunsPerHour();
+          if (ledger.countByRunner(tenant.id, WINDOW_MS) >= perRunner) {
+            return fedLimited(res, gw, tenant, skill.id, perRunner, 'per_runner_tenant');
+          }
+          const perSkill = fedRunsPerSkillHour();
+          if (ledger.countBySkill(skill.id) >= perSkill) {
+            return fedLimited(res, gw, tenant, skill.id, perSkill, 'per_skill');
+          }
+          ledger.record({
+            skillId: skill.id,
+            ownerTenant: skill.ownerTenant || 'main',
+            runnerTenant: tenant.id,
+            runnerBot: bot.name,
+          });
+        }
 
         // FS-F1 + FS-F4: self-service runs are dry-only — a non-owner may
         // dry-run its own or a SHARED skill, but the approval-gated live
