@@ -355,8 +355,8 @@ function startStub(handler) {
 }
 
 // A bare brain stub shaped like LlmBrain for the loop.
-function makeStubBrain(replyFn) {
-  return { configured: true, sessions: new Map(), chat: async () => replyFn() };
+function makeStubBrain(gw, replyFn) {
+  return { configured: true, sessions: new Map(), gateway: gw, chat: async () => replyFn() };
 }
 
 // ── llm single-turn → /h index lists it ──────────────────
@@ -397,7 +397,7 @@ test('transparency: deep-loop with allowed action + parked approval → page sho
   const port = new URL(front.base).port;
   // Brain returns one allowed read then one destructive suggestion (needs approval)
   let n = 0;
-  setBrain(gw, makeStubBrain(async () => {
+  setBrain(gw, makeStubBrain(gw, async () => {
     n += 1;
     if (n === 1) return 'reading\n<action tool="fs.read:notes/x.md" />';
     return 'wipe\n<action tool="shell.run" />';

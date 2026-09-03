@@ -204,12 +204,35 @@ async function askOnce(brain, messages) {
 // Append a turn to the brain's session history (the brain already keeps
 // a sessions Map — we reuse it so the loop and the single-turn brain
 // share memory for the same session key).
-function pushTurn(brain, session, role, content, maxChars = 2000) {
+//
+// We ALSO register the turn with the ChatPlanner store — that is the
+// canonical, transparency-indexable session registry (see
+// src/gateway/mounts/90-transparency.js). Keeping this bridge here means
+// deep-chat sessions appear in /h/<token> pages without coupling the brain
+// to the planner's data file. The planner is consulted lazily and
+// never throws the loop if the store is unavailable (transparency is a
+// bonus, not a hard dependency of the chat path).
+let _getPlanner;
+function planner(gw) {
+  if (_getPlanner) return _getPlanner(gw);
+  const mod = require('./chat-singleton'); // single shared registry per gateway
+  _getPlanner = mod.getPlanner;
+  return _getPlanner(gw);
+}
+function pushTurn(brain, session, role, content, maxChars = 2000, botName) {
   if (!brain.sessions) brain.sessions = new Map();
   let h = brain.sessions.get(session);
   if (!h) { h = []; brain.sessions.set(session, h); }
   h.push({ role, content: clampText(content, maxChars) });
   while (h.length > 60) h.shift();
+  // mirror into the transparency-indexable store (best-effort, never block).
+  if (role !== 'user' && brain.gateway) {
+    const p = planner(brain.gateway);
+    if (p && typeof p.registerTurn === 'function') {
+      try { p.registerTurn(session, { role, text: content, actions: [], bot: botName || null, source: 'llm-loop' }); }
+      catch { /* planner store is best-effort; never fail the loop */ }
+    }
+  }
 }
 
 // Build the messages array for a turn: system prompt + recent history.
@@ -282,7 +305,7 @@ async function deepTurn(gw, brain, { session, message, bot: botName, maxIteratio
     const parsed = parseAction(content);
     if (!parsed) {
       finalText = clampText(content, MAX_REPLY_CHARS);
-      pushTurn(brain, session, 'assistant', finalText);
+      pushTurn(brain, session, 'assistant', finalText, 2000, actingName);
       break;
     }
     // We have a tool call. Walk it through the SAME governed path the
@@ -312,7 +335,7 @@ async function deepTurn(gw, brain, { session, message, bot: botName, maxIteratio
 
     if (verdict.decision === 'deny') {
       const obs = `OBSERVATION: ${tool} was denied (${verdict.reason}). Do not retry.`;
-      pushTurn(brain, session, 'assistant', parsed.text || '');
+      pushTurn(brain, session, 'assistant', parsed.text || '', 2000, actingName);
       pushTurn(brain, session, 'user', obs);
       finalText = clampText(`${parsed.text}\ndenied: ${verdict.reason}`, MAX_REPLY_CHARS);
       continue;
@@ -343,7 +366,7 @@ async function deepTurn(gw, brain, { session, message, bot: botName, maxIteratio
           : `proposed ${tool} — waiting for operator approval (${approval.id})`,
         MAX_REPLY_CHARS,
       );
-      pushTurn(brain, session, 'assistant', finalText);
+      pushTurn(brain, session, 'assistant', finalText, 2000, actingName);
       // Park and stop — humans must resolve. No further iterations.
       iter += 1;
       break;
