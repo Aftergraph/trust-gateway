@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Status — Trust Gateway</title>
+<meta name="description" content="Public snapshot of the Trust Gateway audit chain: sealed state and entry count, straight from /healthz. Nothing sensitive — that is the point.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="site-header">
+  <span class="mark">▲ Trust Gateway</span>
+  <nav>
+    <a href="index.html">Home</a>
+    <a href="status.html">Status</a>
+    <a href="pricing.html">Pricing</a>
+    <a href="docs.html">Docs</a>
+  </nav>
+</header>
+
+<main>
+  <section class="hero">
+    <p class="kicker">Public · No auth · Nothing sensitive</p>
+    <h1>Chain status</h1>
+    <p class="sub">This page reads the public <code>/healthz</code> endpoint of
+    a running gateway and shows exactly two things: whether the audit chain
+    <strong>verifies and seals</strong>, and how many entries it holds. No bot
+    names, no tokens, no payload data — the chain's integrity is public; its
+    contents are not.</p>
+  </section>
+
+  <section id="status-panel">
+    <h2>Audit chain</h2>
+    <dl class="status-props">
+      <dt>Seal state</dt>
+      <dd id="chain-state">checking…</dd>
+
+      <dt>Entries</dt>
+      <dd id="chain-count">checking…</dd>
+
+      <dt>Chain head</dt>
+      <dd id="chain-head">checking…</dd>
+    </dl>
+    <p class="muted" id="status-note">Values load live from the gateway's
+    <code>/healthz</code> endpoint. If the gateway is not reachable from this
+    page, the fields above stay “unavailable” — we never fake a green light.</p>
+  </section>
+
+  <section id="what-this-means">
+    <h2>What you're looking at</h2>
+    <p>Every action a bot takes is written to a hash-chained audit log before
+    it executes, and each entry commits to the hash of the one before it.
+    “Sealed” here means the whole chain re-verified from genesis: no gaps, no
+    altered records. If even one entry were edited, the state on this page
+    would flip to <strong>verification failed</strong> instead of staying
+    quiet.</p>
+    <p class="foot">This page only reports — it cannot change anything. The
+    write path stays behind bot-token auth, and human approvals behind the
+    operator role. See the <a href="docs.html">docs</a> for the public API
+    surface.</p>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <span>▲ Trust Gateway</span>
+  <span class="muted">Every action decided before it happens. Sealed after.</span>
+  <span class="muted" id="chain-stamp">chain: checking…</span>
+</footer>
+<script src="app.js"></script>
+</body>
+</html>
