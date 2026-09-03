@@ -128,3 +128,68 @@ test('chat: validation 400s', async () => {
   await gw.handle(badJson.req, badJson.res);
   assert.equal(badJson.status(), 400);
 });
+
+// ── registerTurn unit tests ────────────────────────────────────
+
+test('chat: registerTurn creates session entry on first write', async () => {
+  const gw = makeGw();
+  const p = getPlanner(gw);
+  p.registerTurn('sess-new', {role: 'user', text: 'hello', bot: 'forge', source: 'chat'});
+  const sessions = p.listSessions();
+  assert.equal(sessions.length, 1);
+  assert.equal(sessions[0].name, 'sess-new');
+  assert.equal(sessions[0].turns, 1);
+});
+
+test('chat: registerTurn appends turns idempotently per session', async () => {
+  const gw = makeGw();
+  const p = getPlanner(gw);
+  p.registerTurn('s-multi', {role: 'user', text: 'hello', bot: 'forge', source: 'chat'});
+  p.registerTurn('s-multi', {role: 'assistant', text: 'hi there', actions: [], bot: 'forge', source: 'chat'});
+  p.registerTurn('s-multi', {role: 'user', text: 'how are you?', bot: 'forge', source: 'chat'});
+  const s = p.sessions.get('s-multi');
+  assert.equal(s.history.length, 3);
+  assert.equal(s.history[0].role, 'user');
+  assert.equal(s.history[1].role, 'assistant');
+  assert.equal(s.history[2].role, 'user');
+});
+
+test('chat: registerTurn stores governance summary (tool+decision), never raw args/results', async () => {
+  const gw = makeGw();
+  const p = getPlanner(gw);
+  const action = { id: 'act_1', tool: 'fs.read:notes/x.md', decision: 'allow', result: { path: 'notes/x.md', content: 'secret' }, error: undefined, approvalId: 'apr_xyz' };
+  p.registerTurn('s-gov', {role: 'assistant', text: 'read', actions: [action], bot: 'forge', source: 'llm'});
+  const s = p.sessions.get('s-gov');
+  assert.equal(s.history.length, 1);
+  const turn = s.history[0];
+  assert.ok(turn.governance, 'governance summary present');
+  assert.deepEqual(turn.governance.tools, ['fs.read:notes/x.md']);
+  assert.deepEqual(turn.governance.decisions, ['allow']);
+  assert.equal(turn.governance.bot, 'forge');
+  assert.equal(turn.governance.source, 'llm');
+  // Full result and error must NOT be stored in the turn
+  assert.ok(!JSON.stringify(turn).includes('secret'), 'no raw result material in stored turn');
+  assert.ok(!JSON.stringify(turn).includes('apr_xyz'), 'no approvalId material in stored turn');
+  assert.ok(!JSON.stringify(turn).includes('tok-forge'), 'no bot token in stored turn');
+  // Governance summary is present in the governance field, not in text
+  assert.ok(turn.governance.tools.includes('fs.read:notes/x.md'), 'governance has tool name');
+  assert.ok(turn.governance.decisions.includes('allow'), 'governance has decision');
+  // The stored turn should not include the full result object or raw args
+  assert.ok(!turn.text.includes('secret'), 'turn text has no raw result');
+});
+
+test('chat: registerTurn bounds history by maxTurns', async () => {
+  const gw = makeGw();
+  const p = getPlanner(gw);
+  // maxTurns is 50, history cap is maxTurns * 2 = 100
+  for (let i = 0; i < 120; i++) {
+    p.registerTurn('s-bounded', {role: i % 2 === 0 ? 'user' : 'assistant', text: `turn-${i}`, actions: [], bot: 'forge', source: 'chat'});
+  }
+  const s = p.sessions.get('s-bounded');
+  assert.ok(s.history.length <= 100, `history bounded to 100, got ${s.history.length}`);
+  // listSessions still works; turns counts user turns in the bounded history
+  const sessions = p.listSessions();
+  assert.equal(sessions.length, 1);
+  // After 120 alternating turns capped to 100, the first 20 (10 user+10 assistant) are dropped
+  assert.ok(sessions[0].turns <= 60, `turns should be bounded, got ${sessions[0].turns}`);
+});

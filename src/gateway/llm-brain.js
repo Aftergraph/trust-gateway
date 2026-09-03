@@ -21,6 +21,7 @@
 const http = require('node:http');
 const https = require('node:https');
 const { classify, decide } = require('./policy');
+const { getPlanner } = require('./chat-singleton');
 
 const DEFAULT_BASE_URL = 'https://api.dialagram.ai/v1';
 const DEFAULT_TIMEOUT_MS = 20_000;
@@ -178,6 +179,9 @@ class LlmBrain {
     if (!msg.trim()) return { fallback: true, reply: EMPTY_REPLY, error: 'llm_empty_request', actions: [] };
 
     this._push(session, 'user', msg);
+    const names = Object.keys(gw.bots);
+    const acting = botName || names.find((n) => (gw.bots[n].role || 'worker') === 'worker') || names[0];
+    getPlanner(gw).registerTurn(session, {role: 'user', text: msg, bot: acting, source: 'llm'});
     const messages = [
       { role: 'system', content: SYSTEM_PROMPT },
       ...this._history(session).slice(-HISTORY_SEND),
@@ -197,15 +201,15 @@ class LlmBrain {
     const said = clampText(stripAction(content), MAX_REPLY_CHARS);
     if (!tool) {
       this._push(session, 'assistant', said);
+      getPlanner(gw).registerTurn(session, {role: 'assistant', text: said, actions: [], bot: acting, source: 'llm'});
       return { reply: said, actions: [] };
     }
 
     // Resolve the acting bot exactly like ChatPlanner.
-    const names = Object.keys(gw.bots);
-    const acting = botName || names.find((n) => (gw.bots[n].role || 'worker') === 'worker') || names[0];
     if (!names.includes(acting)) {
       const reply = `unknown bot "${acting}"`;
       this._push(session, 'assistant', reply);
+      getPlanner(gw).registerTurn(session, {role: 'assistant', text: reply, actions: [], bot: acting, source: 'llm'});
       return { reply, actions: [] };
     }
     const bot = { name: acting, ...gw.bots[acting] };
@@ -244,6 +248,7 @@ class LlmBrain {
 
     const reply = clampText(said ? `${said}\n${decisionLine}` : decisionLine, MAX_REPLY_CHARS);
     this._push(session, 'assistant', reply);
+    getPlanner(gw).registerTurn(session, {role: 'assistant', text: reply, actions: [action], bot: acting, source: 'llm'});
     return { reply, actions: [action] };
   }
 }

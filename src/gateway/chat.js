@@ -23,7 +23,7 @@ const HELP = 'I can: read/write files, run commands, list pending approvals, rep
 class ChatPlanner {
   constructor({ gateway }) {
     this.gw = gateway;
-    this.sessions = new Map(); // name -> {created, history:[{role,text,ts}]}
+    this.sessions = new Map(); // name -> {created, history:[{role,text,ts,governance}]}
     this.maxTurns = 50;
   }
 
@@ -33,9 +33,21 @@ class ChatPlanner {
     return s;
   }
 
-  _push(s, role, text) {
-    s.history.push({ role, text: String(text).slice(0, 2000), ts: this.gw.now() });
+  _push(s, role, text, governance) {
+    s.history.push({ role, text: String(text).slice(0, 2000), ts: this.gw.now(), governance });
     while (s.history.length > this.maxTurns * 2) s.history.shift();
+  }
+
+  registerTurn(session, {role, text, actions, bot, source}) {
+    const s = this._session(session);
+    const governance = (actions && actions.length > 0)
+      ? { tools: actions.map(a => a.tool || '').filter(Boolean), decisions: actions.map(a => a.decision || '').filter(Boolean), bot: bot || '', source: source || 'planner' }
+      : null;
+    let turnText = text || '';
+    if (!turnText && governance && governance.tools.length) {
+      turnText = governance.tools.map((t, i) => `${t} → ${governance.decisions[i]}`).join('; ');
+    }
+    this._push(s, role, turnText, governance);
   }
 
   listSessions() {

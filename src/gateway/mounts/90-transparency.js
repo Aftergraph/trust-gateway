@@ -154,11 +154,11 @@ function collectActions(gw, sessionName) {
   const openByTool = new Map(); // "bot|tool" -> latest row awaiting join
   for (const e of gw.chain.entries) {
     const p = e.payload || {};
-    const key = String(p.bot) + '|' + String(p.tool);
+    const key = String(p.bot || '') + '|' + String(p.tool || '');
     if ((p.type === 'chat_action' || p.type === 'chat_llm') && p.session === sessionName) {
       const row = {
-        seq: e.seq, ts: e.ts, bot: p.bot, tool: p.tool,
-        decision: p.decision, class: p.class,
+        seq: e.seq, ts: e.ts, bot: p.bot || '', tool: p.tool || '',
+        decision: p.decision || '', class: p.class || '',
         source: p.source || 'planner',
         approvalId: null, approvalState: '', result: '',
       };
@@ -184,6 +184,27 @@ function collectActions(gw, sessionName) {
       if (row) row.approvalState = p.verb === 'approve' ? 'approved' : (p.verb === 'deny' ? 'denied' : String(p.verb));
     }
   }
+  // Supplement from the planner store: use governance summaries stored
+  // by registerTurn so brain/loop sessions are fully visible even if
+  // the audit chain entry is missing or incomplete.
+  try {
+    const planner = getPlanner(gw);
+    const ps = planner.sessions.get(sessionName);
+    if (ps) {
+      for (const h of ps.history) {
+        if (!h.governance || !h.governance.tools.length) continue;
+        const already = rows.some((r) => r.tool === h.governance.tools[0] && r.bot === h.governance.bot);
+        if (!already) {
+          rows.push({
+            seq: h.ts, ts: h.ts, bot: h.governance.bot || '', tool: h.governance.tools[0] || '',
+            decision: h.governance.decisions[0] || '', class: '',
+            source: h.governance.source || 'planner',
+            approvalId: null, approvalState: '', result: '',
+          });
+        }
+      }
+    }
+  } catch { /* planner not available — rely on audit chain only */ }
   // The live approval store is the source of truth for current state
   // (covers expiry and any resolution that happened after the chain scan).
   for (const r of rows) {

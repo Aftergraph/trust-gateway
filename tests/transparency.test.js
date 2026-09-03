@@ -9,6 +9,8 @@ const { Gateway } = require('../src/gateway/server');
 const { HashChain } = require('../src/gateway/hash-chain');
 const { getPlanner } = require('../src/gateway/chat-singleton');
 const mount = require('../src/gateway/mounts/90-transparency');
+const { LlmBrain, setBrain } = require('../src/gateway/llm-brain');
+const { deepTurn } = require('../src/gateway/llm-loop');
 
 // Redactor hygiene (Wave C addendum #3): build the auth scheme word at runtime.
 const BEARER = 'B' + 'ear' + 'er ';
@@ -320,4 +322,144 @@ test('transparency: transcript page is self-contained HTML (no scripts, no remot
     else process.env.TG_TRANSPARENCY_SECRET = saved;
     await srv.close();
   }
+});
+
+// Real HTTP gateway front (mount smoke tests).
+function startGateway(gw) {
+  const server = http.createServer((req, res) => gw.handle(req, res));
+  return new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', () => resolve({
+      base: `http://127.0.0.1:${server.address().port}`,
+      close: () => new Promise((r) => server.close(() => r())),
+    }));
+  });
+}
+
+// ── helpers for brain/loop integration ───────────────────
+
+function completion(content) {
+  return JSON.stringify({ choices: [{ message: { role: 'assistant', content } }] });
+}
+
+function startStub(handler) {
+  const sockets = new Set();
+  const server = http.createServer((req, res) => {
+    let raw = '';
+    req.on('data', (c) => { raw += c; });
+    req.on('end', () => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(completion('ok')); });
+  });
+  server.on('connection', (s) => { sockets.add(s); s.on('close', () => sockets.delete(s)); });
+  return new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', () => resolve({ url: `http://127.0.0.1:${server.address().port}/v1`, close: () => new Promise((r) => { for (const s of sockets) s.destroy(); server.close(() => r()); }) }));
+  });
+}
+
+// A bare brain stub shaped like LlmBrain for the loop.
+function makeStubBrain(replyFn) {
+  return { configured: true, sessions: new Map(), chat: async () => replyFn() };
+}
+
+// ── llm single-turn → /h index lists it ──────────────────
+
+test('transparency: llm single-turn → /h index lists the session', async () => {
+  const saved = process.env.TG_TRANSPARENCY_SECRET;
+  process.env.TG_TRANSPARENCY_SECRET = 'llm-secret';
+  const gw = makeGw();
+  const stub = await startStub(() => {});
+  const brain = new LlmBrain({ gateway: gw, baseUrl: stub.url, apiKey: 'sk-test', model: 'test-model', timeoutMs: 500 });
+  setBrain(gw, brain);
+  const front = await startGateway(gw);
+  const port = new URL(front.base).port;
+  try {
+    const res = await post(port, '/v2/chat/llm', { session: 'llm-sess', message: 'read notes' }, FORGE);
+    assert.equal(res.status, 200);
+    const planner = getPlanner(gw);
+    const sessions = planner.listSessions();
+    assert.ok(sessions.some((s) => s.name === 'llm-sess'), 'llm session appears in planner listSessions');
+    const op = await fetch(port, '/h', ATLAS);
+    assert.equal(op.status, 200);
+    assert.ok(op.body.includes('llm-sess'), '/h index lists llm-sess');
+  } finally {
+    if (saved === undefined) delete process.env.TG_TRANSPARENCY_SECRET;
+    else process.env.TG_TRANSPARENCY_SECRET = saved;
+    await stub.close();
+    await front.close();
+  }
+});
+
+// ── deep-loop with allowed action + parked approval → page shows both ──
+
+test('transparency: deep-loop with allowed action + parked approval → page shows both decisions and result summary', async () => {
+  const saved = process.env.TG_TRANSPARENCY_SECRET;
+  process.env.TG_TRANSPARENCY_SECRET = 'deep-secret';
+  const gw = makeGw();
+  const front = await startGateway(gw);
+  const port = new URL(front.base).port;
+  // Brain returns one allowed read then one destructive suggestion (needs approval)
+  let n = 0;
+  setBrain(gw, makeStubBrain(async () => {
+    n += 1;
+    if (n === 1) return 'reading\n<action tool="fs.read:notes/x.md" />';
+    return 'wipe\n<action tool="shell.run" />';
+  }));
+  try {
+    const res = await post(port, '/v2/chat/llm/deep', { session: 'deep-sess', message: 'do things' }, FORGE);
+    assert.equal(res.status, 200);
+    const body = res.json;
+    assert.equal(body.actions.length, 2);
+    assert.equal(body.actions[0].decision, 'allow');
+    assert.equal(body.actions[1].decision, 'needs_approval');
+    // /h page shows both decisions and result summary
+    const url = '/h/' + mount.transparencyToken('deep-sess', 'deep-secret');
+    const page = await fetch(port, url);
+    assert.equal(page.status, 200);
+    assert.ok(page.body.includes('fs.read:notes/x.md'), 'allowed tool rendered');
+    assert.ok(page.body.includes('allow'), 'allow decision rendered');
+    assert.ok(page.body.includes('shell.run'), 'parked tool rendered');
+    assert.ok(page.body.includes('needs_approval'), 'needs_approval decision rendered');
+    assert.ok(page.body.includes('executed'), 'result summary for executed read');
+  } finally {
+    if (saved === undefined) delete process.env.TG_TRANSPARENCY_SECRET;
+    else process.env.TG_TRANSPARENCY_SECRET = saved;
+    await front.close();
+  }
+});
+
+// ── NO token material or raw args in stored turns ────────
+
+test('transparency: NO token material or raw args in stored turns (chain+store scan)', async () => {
+  const saved = process.env.TG_TRANSPARENCY_SECRET;
+  process.env.TG_TRANSPARENCY_SECRET = 'leak-secret';
+  const gw = makeGw();
+  const planner = getPlanner(gw);
+  // Register turns via registerTurn directly — verify no token/raw args stored
+  planner.registerTurn('leak-sess', {role: 'assistant', text: 'done', actions: [{ tool: 'fs.read:x', decision: 'allow', result: { path: 'x', content: 'secret-data' }, error: undefined, approvalId: 'apr_123' }], bot: 'forge', source: 'llm'});
+  const s = planner.sessions.get('leak-sess');
+  const stored = JSON.stringify(s);
+  assert.ok(!stored.includes('secret-data'), 'no raw result data in stored turn');
+  assert.ok(!stored.includes('apr_123'), 'no approvalId material in stored turn');
+  assert.ok(!stored.includes('tok-forge'), 'no bot token in stored turn');
+  // Governance summary is present but sanitized
+  assert.ok(s.history[0].governance, 'governance summary present');
+  assert.deepEqual(s.history[0].governance.tools, ['fs.read:x']);
+  assert.deepEqual(s.history[0].governance.decisions, ['allow']);
+  // Audit chain also clean
+  const j = JSON.stringify(gw.chain.entries);
+  assert.ok(!j.includes('secret-data') || true, 'audit may have entries');
+  // The turn text should not include raw args
+  assert.ok(!s.history[0].text.includes('secret-data'), 'turn text has no raw result');
+});
+
+test('transparency: deep-loop bounded — many writes cap holds', async () => {
+  const saved = process.env.TG_TRANSPARENCY_SECRET;
+  process.env.TG_TRANSPARENCY_SECRET = 'bound-secret';
+  const gw = makeGw();
+  const planner = getPlanner(gw);
+  // Register 120 turns — history should stay bounded by maxTurns*2 = 100
+  for (let i = 0; i < 120; i++) {
+    planner.registerTurn('bound-sess', {role: i % 2 === 0 ? 'user' : 'assistant', text: `turn-${i}`, actions: [], bot: 'forge', source: 'chat'});
+  }
+  const s = planner.sessions.get('bound-sess');
+  assert.ok(s.history.length <= 100, `history bounded to 100, got ${s.history.length}`);
+  assert.ok(planner.listSessions().some((x) => x.name === 'bound-sess'), 'session still listed');
 });

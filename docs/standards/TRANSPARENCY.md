@@ -106,10 +106,14 @@ below is missing one.
   and secret never make it into the prompt). Reuses the same brain as
   `llm-brain.js` via `getBrain(gw)`. Degrades to `{fallback:true, reply:
   'llm not configured'}` when the brain is unset.
-- **Audit events:** `chat_action`, `chat_action_executed`,
-  `approval_requested` — same types as the single-turn brain, with
-  `source: 'llm-live'` to distinguish the loop-driven path. Parked
-  approvals return `{reply, pending_approval:{id,tool}, iterations}`.
+|- **Audit events:** `chat_action`, `chat_action_executed`,
+  `approval_requested`, `observation_scanned` — same types as
+  the single-turn brain, with `source: 'llm-live'` to distinguish
+  the loop-driven path. Parked approvals return
+  `{reply, pending_approval:{id,tool}, iterations}`. External tool
+  results (web.fetch, web.extract, harness.run, adapter probes) are
+  quarantined and scanned before reaching the brain;
+  `observation_scanned` records metadata only (tool, hits, chars).
 - **Tool execution:** routed through `gw._run(bot, tool, args)` — the
   SAME path the deterministic ChatPlanner and the v1 `_postAction`
   handler use. No second dispatch route.
@@ -247,7 +251,7 @@ below is missing one.
 
 ## Full audit-event table
 
-71 event types emitted from `src/gateway/**`. Extraction rule: every string
+72 event types emitted from `src/gateway/**`. Extraction rule: every string
 matched by `{type: '…'}` (including the `enabled ? 'a' : 'b'` ternary in
 plugins.js) across all files under `src/gateway/`.
 
@@ -324,6 +328,7 @@ plugins.js) across all files under `src/gateway/`.
 | 69 | `provider_live_probed` | mounts/92-providers-live.js (D5: operator successfully probed providers) |
 | 70 | `telegram_notify` | mounts/71-telegram.js (D2: chat_id + chars + outcome only — never text, never token) |
 | 71 | `telegram_notify_rejected` | mounts/71-telegram.js (D2: non-operator attempt; reason + bot name only) |
+| 72 | `observation_scanned` | src/gateway/llm-loop.js (D4: metadata ONLY — tool, hits, chars; scanned text is NEVER stored or logged) |
 ## Documented exceptions
 
 The test compares the table above against a programmatic extraction over
