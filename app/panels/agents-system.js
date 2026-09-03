@@ -43,6 +43,31 @@
   }
 
   // ── SYSTEM ────────────────────────────────────────────────────────────
+  // FS-G2: 'System health' row — operator-only /v2/observability scalars.
+  // Rendered textContent-only; the row is simply never added when the
+  // fetch 403s (workers) or fails.
+  function renderSystemHealth(host) {
+    window.TG.api('/v2/observability').then((o) => {
+      if (!o || typeof o !== 'object' || !o.chain) return;
+      const row = el('div', 'sys-health');
+      row.append(el('div', 'card-title', 'System health'));
+      const tel = o.telemetry || {};
+      const top = tel.byType && typeof tel.byType === 'object'
+        ? Object.keys(tel.byType).map((k) => k + ':' + tel.byType[k]).join(' ')
+        : '';
+      const ak = o.apikeys || {};
+      const tn = o.tenants || {};
+      row.append(el('div', 'card-reason',
+        'chain ' + (o.chain.ok ? 'SEALED ✓' : 'TAMPERED ✖') + ' (' + (o.chain.length || 0) + ')' +
+        ' · pending ' + ((o.approvals && o.approvals.pendingCount) || 0) +
+        ' · telemetry ' + (tel.total || 0) + (top ? ' [' + top + ']' : '') +
+        ' · keys ' + (ak.active || 0) + ' (rate-limited 1h: ' + (ak.rateLimitedLast1h || 0) + ')' +
+        ' · tenants ' + (tn.count || 0) + ' (disabled: ' + (tn.disabled || 0) + ')' +
+        ' · uptime ' + (o.uptimeSec || 0) + 's'));
+      host.appendChild(row);
+    }).catch(() => { /* 403 (non-operator) or unreachable — row stays hidden */ });
+  }
+
   function renderSystem(host) {
     host.textContent = '';
     host.append(el('h3', null, 'System'));
@@ -67,6 +92,7 @@
         grid.appendChild(c);
       }
     });
+    renderSystemHealth(host);
   }
 
   window.TG_PANELS.push({ id: 'agents', title: 'Agents', render: renderAgents });
