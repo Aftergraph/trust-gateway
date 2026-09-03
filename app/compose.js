@@ -123,9 +123,17 @@
     for (const k of ['lazy', 'hidden', 'required']) if (typeof m[k] !== 'boolean') errors.push(k + ': boolean required');
     if (m.keybindings !== undefined) {
       if (!Array.isArray(m.keybindings)) errors.push('keybindings: array required');
-      else for (const kb of m.keybindings) {
-        if (!kb || typeof kb.key !== 'string' || typeof kb.action !== 'string' ||
-            ['global', 'queue', 'palette'].indexOf(kb.context) === -1) errors.push('keybindings: {key,context∈global|queue|palette,action} required');
+      else {
+        for (const kb of m.keybindings) {
+          if (!kb || typeof kb.key !== 'string' || typeof kb.action !== 'string' ||
+              ['global', 'queue', 'palette'].indexOf(kb.context) === -1) errors.push('keybindings: {key,context∈global|queue|palette,action} required');
+        }
+        // G5 (§18.7): manifest keybindings go through the same conflict check
+        // as the TG_KEYS registry — no double (context, key) binding, ever.
+        const kc = (typeof window !== 'undefined' && window.TG_KEYS && typeof window.TG_KEYS.detectConflicts === 'function')
+          ? window.TG_KEYS.detectConflicts(m.keybindings)
+          : localKbConflicts(m.keybindings);
+        for (const c of kc) errors.push('keybindings: duplicate (context,key) binding: ' + c.context + ' "' + c.key + '"');
       }
     }
     return { ok: errors.length === 0, errors };
@@ -133,6 +141,20 @@
 
   // ── the decision function (§5.1 → §5.2) ────────────────────────────────
   function riskRank(r) { const i = RISKS.indexOf(r); return i === -1 ? 0 : i; }
+
+    // G5: local duplicate-(context,key) scan — same semantics as
+    // TG_KEYS.detectConflicts, used when keys.js is not in the sandbox.
+    function localKbConflicts(kbs) {
+      const seen = {};
+      const dupes = [];
+      (kbs || []).forEach((b, i) => {
+        if (!b || typeof b.key !== 'string' || typeof b.context !== 'string') return;
+        const id = b.context + '::' + String(b.key).trim().toLowerCase();
+        if (seen[id] !== undefined) dupes.push({ context: b.context, key: b.key, index: i, first: seen[id] });
+        else seen[id] = i;
+      });
+      return dupes;
+    }
 
   function capabilitiesGranted(need, have) {
     if (!need || !need.length) return true;

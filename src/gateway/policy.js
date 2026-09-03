@@ -55,6 +55,21 @@ function decide({ tool, cls = classify(tool), bot }) {
   return { decision: 'deny', reason: `unclassified class ${cls}` };
 }
 
+// True when `tool` matches one of the explicit classification rules.
+// classify() maps UNKNOWN tools to 'destructive' (fail closed) — that is
+// NOT the same as "classified in policy": an unrecognized tool must be
+// rejected by callers that need a real classification (e.g. skills.js).
+function isClassified(tool) {
+  if (typeof tool !== 'string' || tool.length === 0) return false;
+  for (const rule of CLASSIFICATIONS) {
+    for (const pattern of rule.match) {
+      if (pattern === tool) return true;
+      if (pattern.endsWith(':*') && tool.startsWith(pattern.slice(0, -1))) return true;
+    }
+  }
+  return false;
+}
+
 // Role-based default capabilities (used when provisioning a bot).
 const ROLE_CAPABILITIES = {
   worker: ['fs.read', 'fs.write:*', 'web.get', 'web.search'],
@@ -67,4 +82,4 @@ function capabilitiesFor(role) {
   return ROLE_CAPABILITIES[role] ? [...ROLE_CAPABILITIES[role]] : ['fs.read', 'web.get'];
 }
 
-module.exports = { classify, decide, capabilitiesFor, ROLE_CAPABILITIES };
+module.exports = { classify, decide, capabilitiesFor, ROLE_CAPABILITIES, CLASSIFICATIONS, isClassified };

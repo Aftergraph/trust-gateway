@@ -44,7 +44,7 @@
   function renderRows(entries) {
     const frag = document.createDocumentFragment();
     for (const e of entries) {
-      const row = el('div', 'row', '');
+      const row = el('div', 'row clickable', ''); // FE2: rows are click-to-detail
       const seq = el('span', 'hash', '#' + e.seq);
       const ts = el('span', 'age', new Date(e.ts).toLocaleTimeString());
       const p = e.payload || {};

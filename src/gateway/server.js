@@ -12,6 +12,7 @@ const { computeImpact } = require('./impact');
 const { ApprovalStore } = require('./approvals');
 const { MemoryStore, getMemoryStore } = require('./memory');
 const disk = require('./disk-audit');
+const { TelemetryRing, DEFAULT_FILE: DEFAULT_TELEMETRY_FILE } = require('./telemetry');
 const { loadMounts, match } = require('./http-mounts');
 
 const MAX_BODY = 256 * 1024;
@@ -57,6 +58,7 @@ class Gateway extends EventEmitter {
     staticDir = null,     // v2: serve SPA from this dir at /
     marketingDir = null,  // v2: serve public site from this dir at /home
     botsDir = null,       // wave C: jails root, available to mount-declared executors
+    telemetryFile,        // G12: telemetry ring file (default data/telemetry.json; null = memory-only)
   } = {}) {
     super();
     this.bots = bots;
@@ -72,6 +74,8 @@ class Gateway extends EventEmitter {
     }
     this.approvals = approvals ?? new ApprovalStore({ now, file: approvalsFile, gw: this });
     this.memory = getMemoryStore(this);
+    // G12 (§20.4): telemetry ring — observability, NOT the audit chain.
+    this.telemetry = new TelemetryRing({ file: telemetryFile !== undefined ? telemetryFile : DEFAULT_TELEMETRY_FILE, now });
     this.now = now;
     this.mounts = mountFiles ? loadMounts() : [];
     this.staticDir = staticDir ?? null;
@@ -142,7 +146,7 @@ class Gateway extends EventEmitter {
         return this._serveStatic(res, 'index.html');
       }
       const rel = pathname === '/' ? 'index.html'
-        : /^\/(app\.js|compose\.js|style\.css|index\.html|sw\.js|offline\.html|pwa-head\.html|manifest\.webmanifest|responsive\.css|desktop\.css|favicon\.svg)$/.test(pathname) ? pathname.slice(1)
+        : /^(\/(app\.js|keys\.js|compose\.js|style\.css|index\.html|sw\.js|offline\.html|pwa-head\.html|manifest\.webmanifest|responsive\.css|desktop\.css|favicon\.svg))$/.test(pathname) ? pathname.slice(1)
         : /^\/icons\/[\w.-]+\.svg$/.test(pathname) ? pathname.slice(1)
         : /^\/panels\/[\w.-]+\.js$/.test(pathname) ? pathname.slice(1)
         : null;

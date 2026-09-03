@@ -1,0 +1,34 @@
+# systemd SYSTEM-level unit — Trust Gateway (tg-gateway)
+#
+# Production unit for the VDS: runs the gateway from /root/agent-workforce with
+# the per-bot dispatcher enabled. Secrets live ONLY in the EnvironmentFile
+# (data/gateway.env, gitignored) — this file must never contain real tokens.
+#
+# Install with deploy/install.sh (idempotent):
+#   sudo ./deploy/install.sh
+#
+# Logs: journalctl -u tg-gateway -f
+# Status: ./deploy/status.sh
+
+[Unit]
+Description=Trust Gateway (tg-gateway) — agent-workforce
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/root/agent-workforce
+# EnvironmentFile holds secrets (TG_BOT_TOKENS, TG_LLM_KEY). data/ is
+# gitignored, so they never enter git. Set them ONLY there.
+EnvironmentFile=/root/agent-workforce/data/gateway.env
+ExecStart=/usr/bin/env node bin/gateway.js --dispatch
+Restart=always
+RestartSec=2
+
+# ── Hardening ──
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/root/agent-workforce/data
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

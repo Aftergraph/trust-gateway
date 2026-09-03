@@ -73,6 +73,8 @@ function makeGateway({ dataDir = null, sourceDir = REPO_MODULES } = {}) {
       audit: (p) => gw._audit(p),
     });
   }
+  // FS-C1: keep the governed skill store out of the repo's data/ dir in tests.
+  gw._skillsFile = path.join(tmpdir('w4-skills-'), 'skills.json');
   return gw;
 }
 
@@ -467,7 +469,9 @@ test('mount: invalid JSON body → 400, unknown route → 404/405', async () => 
       body: '{oops',
     });
     assert.equal(res.status, 400);
+    // FS-C1: POST /v2/skills is now the governed skill create (mounts/105-skills.js).
+    // An empty body fails governed validation instead of the old 405.
     const skillsPost = await api(base, 'POST', '/v2/skills', { body: {} });
-    assert.equal(skillsPost.status, 405);
+    assert.equal(skillsPost.status, 400);
   } finally { await ctx.close(); }
 });

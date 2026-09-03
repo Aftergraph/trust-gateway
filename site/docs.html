@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Docs — Trust Gateway</title>
+<meta name="description" content="Quickstart for Trust Gateway: clone, source your env file, run the zero-dependency gateway with the jailed dispatcher, open the console. Plus the public API surface.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="site-header">
+  <span class="mark">▲ Trust Gateway</span>
+  <nav>
+    <a href="index.html">Home</a>
+    <a href="status.html">Status</a>
+    <a href="pricing.html">Pricing</a>
+    <a href="docs.html">Docs</a>
+  </nav>
+</header>
+
+<main>
+  <section class="hero">
+    <p class="kicker">From clone to governed bots</p>
+    <h1>Quickstart</h1>
+    <p class="sub">Four steps. No Docker, no Postgres, no Bun — the gateway
+    runs on Node core alone.</p>
+  </section>
+
+  <section id="quickstart">
+    <h2>Run it</h2>
+    <pre class="snap"># 1. Clone
+git clone &lt;your-fork-url&gt; trust-gateway &amp;&amp; cd trust-gateway
+
+# 2. Write your env file (gitignored — data/ never enters git).
+#    Use placeholder tokens here, real ones only on your machine.
+mkdir -p data
+cat &gt; data/gateway.env &lt;&lt;'EOF'
+BOT_TOKENS=atlas:your-operator-token,forge:your-worker-token
+EOF
+chmod 600 data/gateway.env
+
+# 3. Source it and start the gateway with the jailed per-bot dispatcher
+source data/gateway.env
+node bin/gateway.js --dispatch
+
+# 4. Open the console
+#    http://localhost:8800        — operator console (dashboard + audit)
+#    http://localhost:8800/home   — this public site
+#    http://localhost:8800/healthz — public chain snapshot (no auth)</pre>
+    <p class="foot"><code>atlas</code> is the operator (may approve or deny);
+    every other bot is a worker that fails closed on approval endpoints. The
+    <code>--dispatch</code> flag enables the per-bot jailed dispatcher: each
+    bot gets its own directory under <code>data/bots/</code> and its own tool
+    access — nothing shared between bots, and your own sign-ins stay yours.
+    Rotate tokens by editing <code>data/gateway.env</code> and restarting;
+    old tokens die with the restart, and rejected attempts land in the audit
+    trail.</p>
+  </section>
+
+  <section id="api">
+    <h2>Public API surface</h2>
+    <p class="muted">Everything an authenticated bot or operator can call.
+    Nothing here is hidden, and nothing sensitive is needed to evaluate the
+    design — <code>/healthz</code> is the only endpoint that answers without
+    a token.</p>
+    <table>
+      <thead>
+        <tr><th scope="col">Method &amp; path</th><th scope="col">Auth</th><th scope="col">What it does</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th scope="row"><code>GET /healthz</code></th>
+          <td>None (public)</td>
+          <td>Liveness + audit-chain snapshot: <code>ok</code>, entry <code>length</code>, <code>head</code> hash. This is what the <a href="status.html">status page</a> reads.</td>
+        </tr>
+        <tr>
+          <th scope="row"><code>POST /v1/actions</code></th>
+          <td>Bearer bot token</td>
+          <td>Submit a tool action. The fail-closed policy engine answers allow, deny, or <code>202 needs_approval</code> — before anything executes.</td>
+        </tr>
+        <tr>
+          <th scope="row"><code>GET /v1/approvals</code></th>
+          <td>Bearer bot token</td>
+          <td>List pending human approvals (bot, tool, reason, expiry).</td>
+        </tr>
+        <tr>
+          <th scope="row"><code>POST /v1/approvals/:id/approve</code> · <code>/deny</code></th>
+          <td>Bearer operator token</td>
+          <td>Resolve a pending approval. The decision is itself an audited chain entry. Workers fail closed here.</td>
+        </tr>
+        <tr>
+          <th scope="row"><code>GET /v1/audit</code></th>
+          <td>Bearer bot token</td>
+          <td>Audit entries since a sequence number, plus current verification state. Secrets never appear — only their length.</td>
+        </tr>
+        <tr>
+          <th scope="row"><code>GET /v1/audit/verify</code></th>
+          <td>Bearer bot token</td>
+          <td>Re-verify the full hash chain from genesis. Same verdict the <code>/healthz</code> snapshot reports publicly.</td>
+        </tr>
+        <tr>
+          <th scope="row"><code>GET /home</code></th>
+          <td>None (public)</td>
+          <td>This site.</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="foot">Unauthenticated requests to anything except
+    <code>/healthz</code> and <code>/home</code> get a <code>401</code> — and
+    the rejection itself is written to the audit chain.</p>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <span>▲ Trust Gateway</span>
+  <span class="muted">Every action decided before it happens. Sealed after.</span>
+  <span class="muted" id="chain-stamp">chain: checking…</span>
+</footer>
+<script src="app.js"></script>
+</body>
+</html>

@@ -14,6 +14,9 @@
     <a href="#workforce">Workforce</a>
     <a href="#features">Guarantees</a>
     <a href="#comparison">Compare</a>
+    <a href="status.html">Status</a>
+    <a href="pricing.html">Pricing</a>
+    <a href="docs.html">Docs</a>
   </nav>
 </header>
 
@@ -30,7 +33,11 @@
       <li>A fail-closed policy engine decides each action: allow, deny, or ask a human.</li>
       <li>Model routing with provider fallback — swap the brain, keep the authority.</li>
     </ul>
-    <p class="hero-cta"><a href="#features">See the guarantees</a></p>
+    <p class="hero-cta">
+      <a class="cta-open" href="/">Open console</a>
+      <a class="cta-create" href="/?auth=signup">Create account</a>
+      <a href="#features">See the guarantees</a>
+    </p>
   </section>
 
   <section id="features">
@@ -60,6 +67,60 @@
       chain keeps the workforce running. You change the model — never the
       authority, the memory, or the audit trail.</p>
     </article>
+  </section>
+
+  <section id="loop">
+    <h2>See it work</h2>
+    <p class="muted">The governed loop in three steps — every action below is an
+    <strong>illustrative snapshot</strong> of the audit-chain JSON, not live
+    data. The real chain seals each step the moment it happens.</p>
+    <div class="loop-grid">
+      <article class="loop-card">
+        <h3><span class="idx">1</span> Proposed</h3>
+        <p class="loop-note">A bot asks to act. The gateway records the request
+        before anything executes.</p>
+        <p class="snap-label">Illustrative snapshot — approval_requested</p>
+        <pre class="snap">{
+  "seq": 41,
+  "type": "approval_requested",
+  "bot": "forge",
+  "tool": "fs.write",
+  "reason": "publish report to public folder",
+  "createdAt": "2026-09-03T09:14:02Z"
+}</pre>
+      </article>
+      <article class="loop-card">
+        <h3><span class="idx">2</span> Approved</h3>
+        <p class="loop-note">A human operator resolves the request. The decision
+        itself is an audited entry — refusals are on the record too.</p>
+        <p class="snap-label">Illustrative snapshot — approval_resolved</p>
+        <pre class="snap">{
+  "seq": 42,
+  "type": "approval_resolved",
+  "verb": "approve",
+  "approver": "atlas",
+  "bot": "forge",
+  "tool": "fs.write"
+}</pre>
+      </article>
+      <article class="loop-card">
+        <h3><span class="idx">3</span> Sealed</h3>
+        <p class="loop-note">Only then does the action run — and the execution
+        is sealed into the hash chain, linked to the step before it.</p>
+        <p class="snap-label">Illustrative snapshot — action_executed_after_approval</p>
+        <pre class="snap">{
+  "seq": 43,
+  "type": "action_executed_after_approval",
+  "bot": "forge",
+  "tool": "fs.write",
+  "decision": "allow",
+  "sealed": true
+}</pre>
+      </article>
+    </div>
+    <p class="foot">Want the live version? The <a href="status.html">status
+    page</a> reads the public <code>/healthz</code> snapshot of the running
+    chain — its seal state and entry count, nothing else.</p>
   </section>
 
   <section id="comparison">
@@ -130,6 +191,10 @@
 <footer class="site-footer">
   <span>▲ Trust Gateway</span>
   <span class="muted">Every action decided before it happens. Sealed after.</span>
+  <span class="footer-cta">
+    <a href="/">Open console</a> · <a href="/?auth=signup">Create account</a>
+  </span>
+  <span class="muted" id="chain-stamp">chain: checking…</span>
 </footer>
 <script src="app.js"></script>
 </body>

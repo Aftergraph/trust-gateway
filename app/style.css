@@ -109,6 +109,17 @@ header {
   display: flex; align-items: center; gap: var(--tg-space-5); flex-wrap: wrap;
   padding: var(--tg-space-3) var(--tg-space-5); border-bottom: 1px solid var(--tg-border); background: var(--tg-bg-surface);
 }
+/* FE1 header density: above 1280px the header stays on ONE row — the NOW
+ * queue strip sits inline right after the domain rail (order ties resolve
+ * by DOM order: #tabs, then .now-queue), statusbar/tokenbox right-aligned.
+ * Wrapping is capped at ≤1280px where the narrow shell needs stacked rows. */
+@media (min-width: 1281px) {
+  header { flex-wrap: nowrap; }
+  #tabs { order: 1; flex: 1 1 auto; min-width: 0; flex-wrap: nowrap; overflow-x: auto; }
+  .now-queue { order: 1; }
+  .statusbar { order: 2; flex: 0 0 auto; margin-left: auto; }
+  .tokenbox { order: 3; }
+}
 .brand { font-size: var(--tg-text-lg); font-weight: 700; color: var(--tg-text-bright); }
 .ver { color: var(--tg-risk-read); font-size: var(--tg-text-sm); vertical-align: super; }
 .statusbar { display: flex; align-items: center; gap: var(--tg-space-2); flex: 1; }
@@ -142,10 +153,15 @@ header {
 .pane { background: var(--tg-bg-elevated); border: 1px solid var(--tg-border); border-radius: var(--tg-radius-lg); display: flex; flex-direction: column; min-height: 0; }
 .pane h2 { margin: 0; padding: 10px var(--tg-space-4); font-size: var(--tg-text-sm); text-transform: uppercase; letter-spacing: .09em; color: var(--tg-text-muted); border-bottom: 1px solid var(--tg-border); }
 .pane-body { overflow-y: auto; padding: var(--tg-space-2) 10px; flex: 1; }
-.empty { color: var(--tg-text-muted); padding: var(--tg-space-4); text-align: center; font-style: italic; }
+.empty {
+  color: var(--tg-text-muted); padding: var(--tg-space-4); text-align: center; font-style: italic;
+  border: 1px dashed var(--tg-border); border-radius: var(--tg-radius-md); /* FE2: quiet empty state block */
+  margin: var(--tg-space-2) auto; max-width: 48ch;
+}
 
 /* stream */
-.row { display: flex; gap: var(--tg-space-2); align-items: baseline; padding: 3px var(--tg-space-1); border-bottom: 1px solid var(--tg-row-line); animation: flash 1.2s ease-out; }
+/* FE2 (craft): uniform 4/8px row rhythm (spaces 1/2) + hover lift. */
+.row { display: flex; gap: var(--tg-space-2); align-items: baseline; padding: var(--tg-space-1) var(--tg-space-2); border-bottom: 1px solid var(--tg-row-line); animation: flash 1.2s ease-out; }
 @keyframes flash { from { background: var(--tg-risk-read-bg); } to { background: transparent; } }
 .age { color: var(--tg-text-muted); font-size: var(--tg-text-xs); min-width: 64px; }
 .tool { color: var(--tg-text-bright); font-size: var(--tg-text-sm); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -169,7 +185,7 @@ header {
 .btnrow { display: flex; gap: var(--tg-space-2); font-size: var(--tg-text-sm); color: var(--tg-text-muted); }
 
 /* workforce */
-.botrow { display: flex; gap: var(--tg-space-2); align-items: baseline; padding: 6px var(--tg-space-1); border-bottom: 1px solid var(--tg-row-line); }
+.botrow { display: flex; gap: var(--tg-space-2); align-items: baseline; padding: var(--tg-space-1) var(--tg-space-2); border-bottom: 1px solid var(--tg-row-line); }
 .role { padding: 1px 7px; border-radius: 9px; font-size: var(--tg-text-xs); background: var(--tg-risk-write-bg); color: var(--tg-risk-write); }
 .role.operator { background: var(--tg-state-ok-bg); color: var(--tg-state-ok); }
 .role.worker { background: var(--tg-risk-read-bg); color: var(--tg-risk-read); }
@@ -196,11 +212,19 @@ header {
 .tab.active { background: var(--tg-bg-elevated); color: var(--tg-risk-read); border-color: var(--tg-border-accent); border-bottom-color: var(--tg-bg-elevated); }
 .view-hide { display: none !important; }
 .panel-host { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: var(--tg-space-3) var(--tg-space-4); }
+/* FE1 fix: an empty #panel-host kept flex:1 and split the body column 50/50
+ * with main.panes — the ~340px dead band under the header on /now. core.js
+ * (syncHostEmpty) toggles .panel-host-empty whenever the host has no visible
+ * panel-view; the :has() rule below is the progressive-enhancement twin. */
+.panel-host.panel-host-empty { display: none; }
+@supports selector(.panel-host:has(.panel-view.view-show)) {
+  .panel-host:not(:has(.panel-view.view-show)):not(:has(.compose-cap-note)) { display: none; }
+}
 /* Phase 1 fix: the router toggles .view-show, but no rule used to show/hide
  * by it — mounted panels and modals were permanently visible. Show only the
  * active panel-view; modals hidden until view-show (history detail, palette). */
 .panel-view { background: var(--tg-bg-elevated); border: 1px solid var(--tg-border); border-radius: var(--tg-radius-lg); flex: 1; overflow-y: auto; padding: var(--tg-space-4); display: none; }
-.panel-view.view-show { display: block; }
+.panel-view.view-show { display: block; border-top: 1px solid var(--tg-border-accent); } /* FE2: active view hairline */
 .panel-view h3 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--tg-text-muted); }
 .panel-placeholder { color: var(--tg-text-muted); font-style: italic; padding: var(--tg-space-5); }
 .modal {
@@ -208,6 +232,16 @@ header {
   display: none; align-items: center; justify-content: center;
 }
 .modal.view-show { display: flex; }
+
+/* G5 (§18.7): keyboard registry — approval-card focus ring + help overlay */
+.card.kbd-focus { outline: 2px solid var(--tg-accent, #58a6ff); outline-offset: 1px; }
+.help-box { background: var(--tg-bg-surface, #161b22); border: 1px solid var(--tg-border-strong, #30363d); border-radius: var(--tg-radius-md, 8px); padding: 16px 20px; max-height: 80vh; overflow: auto; min-width: 320px; }
+.help-box h3 { margin: 0 0 8px; font-size: 14px; color: var(--tg-text-bright, #e6edf3); }
+.help-box h4 { margin: 10px 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--tg-text-muted, #8b949e); }
+.help-box table { border-collapse: collapse; width: 100%; }
+.help-box td { padding: 3px 10px 3px 0; font-size: 12px; vertical-align: top; }
+.help-box td:first-child { color: var(--tg-text-bright, #e6edf3); white-space: nowrap; font-family: var(--tg-mono, monospace); }
+.help-box p { margin: 10px 0 0; font-size: 11px; }
 .modal pre {
   background: var(--tg-bg-surface); border: 1px solid var(--tg-border-accent); border-radius: var(--tg-radius-lg);
   padding: var(--tg-space-5); max-width: 80vw; max-height: 80vh; overflow: auto;
@@ -252,14 +286,29 @@ header {
 
 /* Phase 2 (§20.3): domain rail + per-domain subnav */
 .tab.domain { text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
+/* FE2 (craft): active rail button = background lift + left accent (inset
+ * box-shadow keeps layout identical to the inactive state). */
+.tab.domain.active {
+  background: var(--tg-bg-hover);
+  box-shadow: inset 3px 0 0 var(--tg-risk-read);
+}
 .subtabs { display: flex; gap: var(--tg-space-1); flex-wrap: wrap; padding: 0 var(--tg-space-4); }
 .subtab {
-  background: transparent; border: 0; border-bottom: 2px solid transparent;
+  position: relative; background: transparent; border: 0; border-bottom: 2px solid transparent;
   color: var(--tg-text-muted); padding: var(--tg-space-1) var(--tg-space-2);
   cursor: pointer; font-family: inherit; font-size: var(--tg-text-sm);
 }
+/* FE2 (craft): underline animates via transform (no width/border layout
+ * thrash) — scaleX 0→1 on a hairline pseudo-element. */
+.subtab::after {
+  content: ''; position: absolute; left: var(--tg-space-2); right: var(--tg-space-2); bottom: 0;
+  height: 2px; background: var(--tg-risk-read);
+  transform: scaleX(0); transform-origin: left center;
+  transition: transform 120ms ease;
+}
 .subtab:hover { color: var(--tg-text); }
-.subtab.active { color: var(--tg-risk-read); border-bottom-color: var(--tg-risk-read); }
+.subtab.active { color: var(--tg-risk-read); }
+.subtab.active::after { transform: scaleX(1); }
 
 /* Phase 3 (§5): compose-mode capability-filter note */
 .compose-cap-note {
@@ -268,8 +317,90 @@ header {
   border-radius: var(--tg-radius-sm); padding: var(--tg-space-1) var(--tg-space-2); margin-bottom: var(--tg-space-2);
 }
 
+/* ── FE2 (craft): surface polish within the token system ─────────────── */
+
+/* Row hover lift (stream, workforce, hub adapter rows). */
+.hub-row { display: flex; gap: var(--tg-space-2); align-items: baseline; padding: var(--tg-space-1) var(--tg-space-2); border-bottom: 1px solid var(--tg-row-line); }
+.row:hover, .botrow:hover, .hub-row:hover { background: var(--tg-bg-hover); }
+.clickable { cursor: pointer; }
+
+/* Interactive controls: quick 120ms ease on state changes; keyboard focus
+ * gets a visible 2px ring in the read-risk hue. */
+.btn, .tab, .subtab {
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+.btn:focus-visible, .tab:focus-visible, .subtab:focus-visible {
+  outline: 2px solid var(--tg-risk-read); outline-offset: 1px;
+}
+
+/* Thin scrollbars on the scrollable surfaces (Firefox + WebKit). */
+.panel-view, .pane-body, .chatlog {
+  scrollbar-width: thin;
+  scrollbar-color: var(--tg-border-strong) transparent;
+}
+.panel-view::-webkit-scrollbar, .pane-body::-webkit-scrollbar, .chatlog::-webkit-scrollbar { width: 6px; height: 6px; }
+.panel-view::-webkit-scrollbar-track, .pane-body::-webkit-scrollbar-track, .chatlog::-webkit-scrollbar-track { background: transparent; }
+.panel-view::-webkit-scrollbar-thumb, .pane-body::-webkit-scrollbar-thumb, .chatlog::-webkit-scrollbar-thumb { background: var(--tg-border-strong); border-radius: 3px; }
+.panel-view::-webkit-scrollbar-thumb:hover, .pane-body::-webkit-scrollbar-thumb:hover, .chatlog::-webkit-scrollbar-thumb:hover { background: var(--tg-border-accent); }
+
+/* NOW strip pulses exactly once when the pending count changes
+ * (.just-changed is added by app.js refreshStrip and removed on
+ * animationend, so it re-arms for the next change). */
+@keyframes now-pulse {
+  0% { box-shadow: 0 0 0 0 var(--tg-risk-write); }
+  100% { box-shadow: 0 0 0 6px transparent; }
+}
+.now-queue.just-changed { animation: now-pulse 360ms ease-out 1; }
+
 @media (max-width: 800px) {
   .panes { grid-template-columns: 1fr; overflow-y: auto; }
   body { height: auto; }
   .pane { min-height: 300px; }
 }
+
+/* FS-A3: auth shell — Sign in affordance, user chip, login/signup overlay.
+ * Modal surface reuses .modal/.view-show; colors come only from --tg-* tokens. */
+#authChip { display: inline-flex; align-items: center; }
+.signin-btn {
+  background: transparent; color: var(--tg-risk-read); border: 1px solid var(--tg-border-accent);
+  border-radius: var(--tg-radius-sm); padding: 2px var(--tg-space-2); cursor: pointer;
+  font-family: inherit; font-size: var(--tg-text-sm);
+}
+.signin-btn:hover { background: var(--tg-bg-hover); }
+.user-chip {
+  display: inline-flex; align-items: center; gap: var(--tg-space-1);
+  background: var(--tg-bg-elevated); border: 1px solid var(--tg-border);
+  border-radius: var(--tg-radius-sm); padding: 2px var(--tg-space-2);
+  font-size: var(--tg-text-sm); color: var(--tg-text);
+}
+.user-chip-name { color: var(--tg-text-bright); }
+.user-chip-logout {
+  background: transparent; border: 0; color: var(--tg-text-muted); cursor: pointer;
+  font-family: inherit; font-size: var(--tg-text-sm); padding: 0;
+}
+.user-chip-logout:hover { color: var(--tg-risk-destructive); }
+.auth-modal { align-items: center; justify-content: center; }
+.auth-box {
+  background: var(--tg-bg-elevated); border: 1px solid var(--tg-border-strong);
+  border-radius: var(--tg-radius-md, 8px); padding: var(--tg-space-4);
+  width: min(340px, 92vw); display: flex; flex-direction: column; gap: var(--tg-space-3);
+}
+.auth-title { margin: 0; font-size: var(--tg-text-lg); color: var(--tg-text-bright); }
+.auth-tabs { display: flex; gap: var(--tg-space-2); }
+.auth-tab {
+  background: transparent; border: 0; border-bottom: 2px solid transparent;
+  color: var(--tg-text-muted); cursor: pointer; font-family: inherit;
+  font-size: var(--tg-text-sm); padding: var(--tg-space-1) 0;
+}
+.auth-tab-active { color: var(--tg-risk-read); border-bottom-color: var(--tg-risk-read); }
+.auth-field { display: flex; flex-direction: column; gap: var(--tg-space-1); }
+.auth-field-label { font-size: var(--tg-text-sm); color: var(--tg-text-muted); }
+.auth-input {
+  background: var(--tg-bg-base); border: 1px solid var(--tg-border);
+  border-radius: var(--tg-radius-sm); color: var(--tg-text-bright);
+  padding: var(--tg-space-2); font-family: inherit; font-size: var(--tg-text-base);
+}
+.auth-input:focus { outline: none; border-color: var(--tg-border-accent); }
+.auth-submit { align-self: flex-start; cursor: pointer; }
+.auth-submit:disabled { opacity: .5; cursor: default; }
+.auth-msg { min-height: 1em; font-size: var(--tg-text-sm); color: var(--tg-risk-destructive); }

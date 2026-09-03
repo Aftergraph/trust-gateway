@@ -280,9 +280,47 @@ below is missing one.
 - **Storage:** operates only inside `data/bots/<name>/` jails (per-bot).
 - **Inspect:** audit entries for every dispatch; jail contents per bot dir.
 
+### `users.js` + `sessions.js` + mount `101-auth.js` — human accounts + scrypt sessions (FS-A1)
+- **Endpoints:** `POST /v2/auth/register` {email, password, display_name?}
+  (pw ≥10 chars, 5/min/IP), `POST /v2/auth/login` (10/min/IP, generic
+  'invalid credentials' — no account enumeration, dummy scrypt burn keeps
+  timing flat), `POST /v2/auth/logout`, `GET /v2/auth/me` → {user, bot:null}.
+- **Audit events:** `user_registered` ({userId, role}), `user_login_ok`
+  ({userId}), `user_login_failed` ({reason}), `user_logout` ({userId}).
+- **Storage:** `data/users.json` (atomic 0600, fail-closed on corrupt;
+  `TG_USERS_FILE` env override) — {id 'u_<8hex>', email (unique lowercase),
+  scrypt passwordHash + per-user salt, role owner|operator|member,
+  display_name, created_at, disabled}; first registered user = owner (env
+  `TG_FIRST_USER_ROLE` overrides), later signups = member. `data/sessions.json`
+  (atomic 0600, fail-closed; `TG_SESSIONS_FILE` env override) — keyed by
+  sha256(token); the plaintext token is NEVER stored, it rides an httpOnly
+  SameSite=Lax cookie `tg_session` (Secure behind https). TTL 7d sliding,
+  max 200 sessions/user.
+- **Inspect:** `GET /v2/auth/me` with the browser cookie; user file via jq
+  (passwordHash/salt visible — never a plaintext password); sessions file
+  contains hashes only.
+
+### `harness2.js` + mount `106-harness2.js` — project build/run loop (FS-C2)
+- **Endpoints:** POST `/v2/harness2/projects` {name, files:{relPath:content}}
+  (256 KB total cap, traversal rejected, id = slug of name); GET
+  `/v2/harness2/projects` + `/:id`; POST `/:id/build` (files/ → jail/ copy);
+  POST `/:id/run` (node entry in jail). RBAC on create/build/run: operator
+  role, cap `harness.run`, or `*`.
+- **Approval gate:** manifest `requiresApproval=true` → run requests park in
+  the approvals store (202 `needs_approval`); execution happens only after
+  operator approval via the `harness2.run:<id>` executor.
+- **Honest limitation:** the jail is a same-user directory — process
+  discipline (no shell, env scrubbed to PATH/HOME/NODE_ENV, 10 s SIGKILL,
+  8 KB output tails), NOT an OS sandbox.
+- **Audit events:** `harness2_project_created` {id, fileCount};
+  `harness2_run` {id, ok, exitCode, durationMs}. Never file contents,
+  never stdout/stderr.
+- **Storage:** `data/harness2/<id>/{manifest.json, files/, jail/}`.
+- **Inspect:** `GET /v2/harness2/projects/:id`; jail contents on disk.
+
 ## Full audit-event table
 
-81 event types emitted from `src/gateway/**`. Extraction rule: every string
+Event types emitted from `src/gateway/**`. Extraction rule: every string
 matched by `{type: '…'}` (including the `enabled ? 'a' : 'b'` ternary in
 plugins.js) across all files under `src/gateway/`.
 
@@ -369,6 +407,66 @@ plugins.js) across all files under `src/gateway/`.
 | 79 | `run_paused` | src/gateway/runs.js (wave F F1: cancellable-state transition — parked approval or operator/owner cancel; emitted by store.cancel() via POST /v2/runs/:id/cancel) |
 | 80 | `adapter_kind_register` | mounts/99-adapter-kinds.js (G9: {kind, fields count} — field names only, never values) |
 | 81 | `adapter_kind_rejected` | mounts/99-adapter-kinds.js (G9: {bot, kind?, errors[]} — validation failures) |
+| 82 | `palette_open` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
+| 83 | `palette_command` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
+| 84 | `palette_search` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
+| 85 | `palette_object_resolve` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
+| 86 | `palette_nl_intent` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
+| 87 | `panel_manifest_validate` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
+| 88 | `capability_filter_hit` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
+| 89 | `compose_engine_render` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
+| 90 | `migration_phase` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
+| 91 | `four_oh2_handled` | telemetry.js (G12 §20.4, renamed from `402_429_handled` — extractor-hostile — telemetry ring buffer, not audit chain) |
+| 92 | `tg_api_raw_fetch_blocked` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
+| 93 | `tg_session_unavailable` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
+| 94 | `search_backend_fts5_swap` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
+| 95 | `user_registered` | mounts/101-auth.js (FS-A1: {userId, role} — never the password, never the hash) |
+| 96 | `user_login_ok` | mounts/101-auth.js (FS-A1: {userId} — humans only; bots stay bearer tokens) |
+| 97 | `user_login_failed` | mounts/101-auth.js (FS-A1: {reason} — 'invalid_credentials' or 'account_disabled'; response is always the same generic error, no enumeration) |
+| 98 | `user_logout` | mounts/101-auth.js (FS-A1: {userId}) |
+| 99 | `identity_me` | mounts/102-identity.js (FS-A2: {userId} only — never email, name or token material) |
+| 100 | `chat_user_denied` | mounts/103-chat-user.js (FS-A2: {userId, bot} — grant enforcement; never message text) |
+| 101 | `chat_user_ok` | mounts/103-chat-user.js (FS-A2: {userId, session} — namespaced session name only; never message text) |
+| 102 | `skill_created` | mounts/105-skills.js (FS-C1: {skillId, name, version, createdBy} — steps/tool detail not in the event) |
+| 103 | `skill_run_started` | mounts/105-skills.js (FS-C1: {skillId, name, bot, steps count, dry, runId} — per-step decisions ride the existing chat_action rows with kind 'skill_step') |
+| 104 | `harness2_project_created` | mounts/106-harness2.js (FS-C2: {id, fileCount} — file names/contents stay on disk, never in the chain) |
+| 105 | `harness2_run` | mounts/106-harness2.js (FS-C2: {id, ok, exitCode, durationMs} — never stdout/stderr) |
+| 106 | `backup_created` | mounts/110-backup.js (FS-B1: {files, chainHead} — file counts + chain head only, never contents/paths) |
+| 107 | `backup_restored` | mounts/110-backup.js (FS-B1: {name, files, chainHead} — restore success, counts only) |
+| 108 | `backup_restore_refused` | mounts/110-backup.js (FS-B1: {name, reason} — fail-closed on sha256 mismatch/missing file; live data untouched) |
+| 109 | `backup_denied` | mounts/110-backup.js (FS-B1: {bot} — non-operator touched a backup route; RBAC refusal audited) |
+
+### `backup.js` + mount `110-backup.js` — verified backup/restore (FS-B1)
+- **Endpoints:** `GET /v2/backup` (list, operator), `POST /v2/backup`
+  (create, operator), `POST /v2/backup/restore` {name} (operator).
+- **Manifest:** {files:[{name,size,sha256}], chainHead, chainId, createdAt}
+  — every file sha256-verified BEFORE restore replaces anything; restore
+  fails closed on any mismatch/missing/corrupt manifest.
+- **Honest limitation:** backups are byte copies (no consistent-snapshot
+  window across multiple files); the SQLite db is copied with the same
+  window risk as JSON — documented in backup.js header. Restore integrity
+  is still exact: what was backed up is what comes back.
+- **Storage:** `data/backups/backup-<ISO>/` (atomic dir rename, FIFO last
+  10).
+
+### `telemetry.js` + `mounts/100-telemetry.js` — post-launch telemetry (G12, §20.4)
+- **Endpoints:** `POST /v2/telemetry` {event, fields?} (bearer; server-side
+  allow-list, unknown event → 400); `GET /v2/telemetry?event=&since=`
+  (operator-only).
+- **Audit events:** rows 82–94 above are TELEMETRY events, deliberately NOT
+  sealed into the hash chain — observability ≠ governance. `gw.telemetry.record()`
+  never calls `_audit`, so `GET /v1/audit/verify` length is unaffected by
+  telemetry traffic.
+- **Storage:** `data/telemetry.json` — bounded ring buffer (max 2000, FIFO),
+  atomic tmp+rename, mode 0600; survives restart. Per-type rate limit 250 ms
+  (silent drop); fields projected to scalars only.
+- **Inspect:** `GET /v2/telemetry` (operator bearer) or read
+  `data/telemetry.json` directly (one JSON object with an `events` array).
+
+Note (FS-C1): per-step skill governance deliberately does NOT add a new
+event type — every step emits a standard `chat_action` row tagged
+`kind: 'skill_step'` ({skillId, seq, tool, decision}), so skill runs are
+auditable with the exact same chain vocabulary as chat proposals.
 ## Documented exceptions
 
 The test compares the table above against a programmatic extraction over

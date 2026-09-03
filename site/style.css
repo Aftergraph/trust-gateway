@@ -73,6 +73,11 @@ main { max-width: 880px; margin: 0 auto; padding: 0 24px; }
   left: 0;
 }
 .hero-cta { margin-top: 28px; font-size: 14px; }
+.hero-cta a { margin-right: 16px; }
+.hero-cta .cta-open { color: var(--green); font-weight: 700; }
+.hero-cta .cta-create { color: inherit; }
+.footer-cta { margin-left: auto; }
+.footer-cta a { color: var(--green); }
 
 #features { padding: 48px 0; }
 .feature {
@@ -130,3 +135,138 @@ tbody tr:last-child th, tbody tr:last-child td { border-bottom: none; }
   table { font-size: 12.5px; display: block; overflow-x: auto; }
   thead th, tbody th { width: auto; }
 }
+
+/* ── Design tokens (§13.3) ────────────────────────────────────────────────
+ * Copied verbatim from app/style.css :root so site/ and app/ stay visually
+ * consistent but file-independent (no shared import; site has no deps).
+ * Site styles below still use the legacy --* vars; new sections use --tg-*. */
+:root {
+  color-scheme: dark;
+
+  /* ── Surface scale (§13.3) ── */
+  --tg-bg-base:           #0b0e14;
+  --tg-bg-surface:        #0d1117;
+  --tg-bg-elevated:       #11151f;
+  --tg-bg-hover:          #161b26;
+  --tg-border:            #21262d;
+  --tg-border-strong:     #30365d;
+  --tg-text:              #c9d1d9;
+  --tg-text-bright:       #e6edf3;
+  --tg-text-muted:        #8b949e;
+
+  /* ── Risk palette (§13.3) ── */
+  --tg-risk-read:         #79c0ff;
+  --tg-risk-read-bg:      #1c2a3a;
+  --tg-risk-write:        #e3b341;
+  --tg-risk-write-bg:     #332a12;
+  --tg-risk-destructive:  #f85149;
+  --tg-risk-destructive-bg: #3a1c1c;
+  --tg-risk-secret:       #d2a8ff;
+  --tg-risk-secret-bg:    #2a1c3a;
+
+  /* ── State colors (§13.3) ── */
+  --tg-state-ok:          #58d68d;
+  --tg-state-blocked:     #f85149;
+  --tg-state-pending:     #e3b341;
+  --tg-state-unknown:     #8b949e;
+
+  /* ── Derived extensions (see app/style.css header note) ── */
+  --tg-state-ok-bg:       #12331f;
+  --tg-border-accent:     #2f4a6b;
+  --tg-border-accent-strong: #1f6b36;
+  --tg-border-destructive:   #6b2f2f;
+  --tg-border-write-accent:  #6b5217;
+  --tg-row-line:          #161b26;
+
+  /* ── Type scale (§13.3) ── */
+  --tg-text-xs:  10px;
+  --tg-text-sm:  11px;
+  --tg-text-base: 13px;
+  --tg-text-md:  14px;
+  --tg-text-lg:  15px;
+  --tg-text-xl:  18px;
+  --tg-text-mono: ui-monospace, Menlo, Consolas, monospace;
+
+  /* ── Spacing ── */
+  --tg-space-1: 4px;
+  --tg-space-2: 8px;
+  --tg-space-3: 12px;
+  --tg-space-4: 16px;
+  --tg-space-5: 20px;
+
+  /* ── Radius ── */
+  --tg-radius-sm: 6px;
+  --tg-radius-md: 8px;
+  --tg-radius-lg: 10px;
+  --tg-radius-pill: 12px;
+
+  /* ── Elevation ── */
+  --tg-elev-modal: rgba(0,0,0,.65);
+}
+
+/* ── Phase 2 sections (loop cards, status, pricing, docs) ──────────────── */
+.loop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+.loop-card {
+  background: var(--panel);
+  border: 1px solid var(--tg-border);
+  border-radius: var(--tg-radius-lg);
+  padding: 18px 18px 14px;
+  margin: 0;
+}
+.loop-card h3 { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.loop-card h3 .idx {
+  color: var(--tg-state-ok);
+  font-size: var(--tg-text-sm);
+  border: 1px solid var(--tg-border-accent);
+  border-radius: var(--tg-radius-pill);
+  padding: 1px 8px;
+}
+.tier-sub { color: var(--muted); font-size: var(--tg-text-sm); font-weight: 400; }
+.price {
+  color: var(--tg-state-ok);
+  font-size: var(--tg-text-xl);
+  font-weight: 700;
+  margin: 10px 0 4px;
+}
+.loop-note { color: var(--muted); font-size: 13.5px; }
+.loop-card ul { margin: 10px 0 0; padding-left: 18px; }
+.loop-card li { margin: 4px 0; }
+
+.snap-label {
+  margin: 12px 0 6px;
+  color: var(--tg-state-pending);
+  font-size: var(--tg-text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.snap {
+  background: var(--tg-bg-base);
+  border: 1px solid var(--tg-border);
+  border-radius: var(--tg-radius-sm);
+  padding: 12px 14px;
+  margin: 0;
+  overflow-x: auto;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--tg-text);
+}
+code {
+  background: var(--tg-bg-base);
+  border: 1px solid var(--tg-border);
+  border-radius: var(--tg-radius-sm);
+  padding: 1px 5px;
+  font-size: 0.92em;
+}
+pre.snap code { background: none; border: none; padding: 0; }
+
+.status-props { display: grid; grid-template-columns: max-content 1fr; gap: 10px 24px; margin: 0; }
+.status-props dt { color: var(--muted); font-size: var(--tg-text-sm); text-transform: uppercase; letter-spacing: 0.06em; align-self: center; }
+.status-props dd { margin: 0; font-size: var(--tg-text-lg); color: var(--tg-text-bright); font-weight: 700; }
+#chain-state, .price { font-variant-numeric: tabular-nums; }
+
+#chain-stamp { color: var(--tg-state-ok); }

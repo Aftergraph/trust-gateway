@@ -33,6 +33,18 @@
     return n;
   }
 
+  // ── G12 telemetry (§20.4): fire-and-forget POSTs to /v2/telemetry.
+  // Client-side 400ms/type cap on top of the server's 250ms rate limit;
+  // failures are swallowed — telemetry never blocks or breaks the console.
+  const telLast = {};
+  function tel(event, fields) {
+    const t = Date.now();
+    if (telLast[event] && t - telLast[event] < 400) return;
+    telLast[event] = t;
+    api('/v2/telemetry', { method: 'POST', body: JSON.stringify({ event, fields: fields || {} }) }).catch(() => {});
+  }
+  let paletteOpened = false; // palette_open fires ONCE per session (§18.1)
+
   function setPill(ok) {
     const p = $('chainPill');
     p.textContent = ok ? 'SEALED ✓' : 'TAMPERED ✖';
@@ -277,12 +289,27 @@
     const header = document.querySelector('header');
     if (header) header.appendChild(strip);
   }
+  let lastStripN = null;
   function refreshStrip() {
     if (!stripCount) return;
     const n = Number(document.getElementById('pendingCount') && document.getElementById('pendingCount').textContent) || 0;
+    const changed = lastStripN !== null && lastStripN !== n; // FE2: pulse only on real count changes
+    lastStripN = n;
     stripCount.textContent = n;
     const strip = document.getElementById('nowQueue');
-    if (strip) strip.classList.toggle('has-pending', n > 0);
+    if (strip) {
+      strip.classList.toggle('has-pending', n > 0);
+      if (changed) pulseStrip(strip);
+    }
+  }
+  // FE2 (craft): one-shot pulse when the pending count moves. Removing the
+  // class on animationend re-arms it for the next change; the reflow forces
+  // a restart when a previous pulse is still mid-flight.
+  function pulseStrip(strip) {
+    strip.classList.remove('just-changed');
+    void strip.offsetWidth;
+    strip.classList.add('just-changed');
+    strip.addEventListener('animationend', () => strip.classList.remove('just-changed'), { once: true });
   }
 
   // ── Phase 1 (§18.1): palette (⌘K / Ctrl+K) — one input, context-aware:
@@ -335,20 +362,58 @@
       const q = input.value.trim();
       const cmds = PALETTE_COMMANDS
         .filter((c) => !q || c.label.toLowerCase().includes(q.toLowerCase()))
-        .map((c) => ({ label: c.label, kind: 'command', meta: 'jump', run: () => { close(); c.run(); } }));
+        .map((c) => ({ label: c.label, kind: 'command', meta: 'jump', run: () => { tel('palette_command', { label: c.label }); close(); c.run(); } }));
       if (!q) {
         lastResults = cmds; selected = 0; render(); return;
       }
-      // audit search as primary channel (§18: palette search → /v2/search)
-      window.TG.api('/v2/search?q=' + encodeURIComponent(q) + '&limit=8').then((d) => {
+      // ── G3 (§18.5): fuzzy object-id resolution ─────────────────────────
+      // 18.5.1 — bare integer resolves to the audit entry at that chain seq.
+      const SEQ_ID_RE = /^\d+$/;
+      // 18.5.2 — 8-hex transparency token (same regex as mounts/90-transparency.js);
+      // optional sess_ prefix. Format-validated client-side ONLY: the palette
+      // never probes /h for existence — unknown token and missing session are
+      // byte-identical 404s server-side, and the client must not distinguish.
+      const TOKEN_ID_RE = /^(sess_)?[0-9a-f]{8}$/;
+      // 18.5 fuzzy ladder on zero hits: retry last word, then its first 4 chars.
+      function fuzzyQueries(query) {
+        const words = query.split(/\s+/).filter(Boolean);
+        const last = words[words.length - 1];
+        if (!last) return [];
+        const ladder = [last];
+        if (last.length > 4) ladder.push(last.slice(0, 4));
+        return ladder.filter((s) => s.toLowerCase() !== query.toLowerCase());
+      }
+      const idRows = [];
+      if (SEQ_ID_RE.test(q)) {
+        idRows.push({
+          label: 'jump to seq ' + q, kind: 'id', meta: 'seq',
+          run: () => { close(); jumpToSeq(Number(q)); },
+        });
+      }
+      if (TOKEN_ID_RE.test(q)) {
+        // /h expects the bare 8-hex token (mounts/90-transparency.js TOKEN_RE),
+        // so a sess_-prefixed input sheds the prefix for the URL. Navigate
+        // unconditionally — the client never probes for existence.
+        const hex = q.replace(/^sess_/, '');
+        idRows.push({
+          label: 'open transcript /h/' + hex, kind: 'id', meta: 'transcript',
+          run: () => { close(); location.assign('/h/' + hex); },
+        });
+      }
+      // audit search as primary channel (§18: palette search → /v2/search);
+      // G3: on zero hits walk the fuzzy ladder, marking retried rows 'fuzzy'.
+      const runSearch = (query, rest, fuzzy) => window.TG.api('/v2/search?q=' + encodeURIComponent(query) + '&limit=8').then((d) => {
         const hits = (d.hits || []).map((h) => ({
           label: (h.payload && h.payload.type ? h.payload.type : 'entry') + '  #' + h.seq,
           kind: 'hit',
-          meta: (h.payload && (h.payload.bot || h.payload.tool)) || '',
-          run: () => { close(); jumpToSeq(h.seq); },
+          meta: ((h.payload && (h.payload.bot || h.payload.tool)) || '') + (fuzzy ? ' fuzzy' : ''),
+          run: () => { tel('palette_object_resolve', { via: fuzzy ? 'fuzzy' : 'search', seq: h.seq, ok: true }); close(); jumpToSeq(h.seq); },
         }));
-        lastResults = hits.concat(cmds); selected = 0; render();
-      }).catch(() => { lastResults = cmds; selected = 0; render(); });
+        tel('palette_search', { qlen: q.length, results: hits.length });
+        if (!hits.length && rest.length) return runSearch(rest[0], rest.slice(1), true);
+        lastResults = idRows.concat(hits, cmds); selected = 0; render();
+      }).catch(() => { tel('palette_search', { qlen: q.length, results: 0, error: true }); lastResults = idRows.concat(cmds); selected = 0; render(); });
+      runSearch(q, fuzzyQueries(q), false);
     }
     input.addEventListener('input', update);
     input.addEventListener('keydown', (e) => {
@@ -362,6 +427,7 @@
   }
   function openPalette() {
     const p = ensurePalette();
+    if (!paletteOpened) { paletteOpened = true; tel('palette_open'); }
     p.wrap.classList.add('view-show');
     p.input.value = '';
     p.input.focus();
@@ -383,6 +449,10 @@
   // shared surface for /panels/*.js (wave B UI modules)
   window.TG = {
     api, el,
+    // G5 (§18.7): keys.js (loaded before app.js) owns the global ⌘K binding
+    // and dispatches it here — the palette keeps its own Esc/Enter/↑↓ input
+    // handler, documented as native palette bindings in the TG_KEYS registry.
+    openPalette,
     token: () => token,
     authed,
     // phase 3 composition inputs (§5.1): the engine reads permissions from
@@ -401,5 +471,13 @@
     },
     refresh: () => { refreshPending(); refreshBots(); },
     onAudit: (fn) => { window.addEventListener('tg-audit', (ev) => fn(ev.detail)); },
+    // G12: shared fire-and-forget telemetry poster (400ms/type client cap).
+    telemetry: tel,
   };
+
+  // G12 (§20.3): migration_phase fires ONCE at boot — phase 4, and whether
+  // the compose flag is currently on (drives the §5 engine fallback story).
+  let composeFlag = false;
+  try { composeFlag = !!(window.TG_COMPOSE && window.TG_COMPOSE.composeEnabled()); } catch { /* sandboxed */ }
+  tel('migration_phase', { phase: 4, hasFlag: composeFlag });
 })();
