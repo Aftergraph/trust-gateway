@@ -494,6 +494,9 @@ plugins.js) across all files under `src/gateway/`.
 | 151 | `quota_disk_warning` | quota-alerts.js (FS-K4: {tenant, usedMb, limitMb, pct} — disk usage exceeded TG_QUOTA_DISK_WARN_PCT (default 80); delivered via FS-G3 AlertSink with per-tenant per-hour dedup; inert when TG_ALERT_URLS unset) |
 | 152 | `quota_api_warning` | quota-alerts.js (FS-K4: {tenant, apiCount, limit, pct} — API count exceeded TG_QUOTA_API_WARN_PCT (default 80); delivered via FS-G3 AlertSink with per-tenant per-hour dedup; inert when TG_ALERT_URLS unset) |
 | 153 | `quota_alerts_read` | mounts/122-quota-alerts.js (FS-K4: {by, tenant, count} — operator queried /v2/tenants/:id/quota/alerts; tenant id + count only) |
+| 154 | `flag_set` | mounts/126-feature-flags.js (FS-L3: {by, name, enabled, value} — operator set a feature flag; flag name + enabled + value, no secret material) |
+| 155 | `flag_reset` | mounts/126-feature-flags.js (FS-L3: {by, name} — operator reset a feature flag to its env default) |
+| 156 | `flag_listed` | mounts/126-feature-flags.js (FS-L3: {by, count} — operator listed feature flags; count only) |
 
 ### `secrets-vault.js` + mounts `115-secrets.js` / `119-secrets-rotate.js` — tenant secrets vault + master-key rotation (FS-I5, FS-J2)
 - **Endpoints:** `PUT/GET/DELETE /v2/tenants/:id/secrets[/:key]` (operator;
