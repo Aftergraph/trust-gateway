@@ -1,0 +1,23 @@
+# FS-E2 — daily backup service for the Trust Gateway data dir.
+# Installed by hand or by a future installer step:
+#   sudo cp deploy/backup-timer/tg-backup.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+# Runs bin/backup-once.js (createBackup + manifest summary). Secrets, if any
+# are needed by the backup, come ONLY from the gitignored EnvironmentFile.
+# Never edit paths here blindly — install.sh-style sed-replacement of
+# /root/agent-workforce applies to this unit too.
+
+[Unit]
+Description=Trust Gateway — daily data backup (tg-backup)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/agent-workforce
+EnvironmentFile=-/root/agent-workforce/data/gateway.env
+ExecStart=/usr/bin/env node bin/backup-once.js
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/root/agent-workforce/data
+PrivateTmp=true
