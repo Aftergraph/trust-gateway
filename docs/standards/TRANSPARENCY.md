@@ -491,6 +491,9 @@ plugins.js) across all files under `src/gateway/`.
 | 148 | `obsv_snapshot_captured` | mounts/121-obsv-history.js (FS-K3: {by, id} — operator triggered a manual capture; id is the obsv_snapshots row id; TG_OBSV_HISTORY=1 only) |
 | 149 | `obsv_history_read` | mounts/121-obsv-history.js (FS-K3: {by, count} — operator queried historical snapshots; count only, no raw payloads) |
 | 150 | `obsv_snapshot_cleanup` | mounts/121-obsv-history.js (FS-K3: {by, deletedCount} — operator pruned snapshots older than retention) |
+| 151 | `quota_disk_warning` | quota-alerts.js (FS-K4: {tenant, usedMb, limitMb, pct} — disk usage exceeded TG_QUOTA_DISK_WARN_PCT (default 80); delivered via FS-G3 AlertSink with per-tenant per-hour dedup; inert when TG_ALERT_URLS unset) |
+| 152 | `quota_api_warning` | quota-alerts.js (FS-K4: {tenant, apiCount, limit, pct} — API count exceeded TG_QUOTA_API_WARN_PCT (default 80); delivered via FS-G3 AlertSink with per-tenant per-hour dedup; inert when TG_ALERT_URLS unset) |
+| 153 | `quota_alerts_read` | mounts/122-quota-alerts.js (FS-K4: {by, tenant, count} — operator queried /v2/tenants/:id/quota/alerts; tenant id + count only) |
 
 ### `secrets-vault.js` + mounts `115-secrets.js` / `119-secrets-rotate.js` — tenant secrets vault + master-key rotation (FS-I5, FS-J2)
 - **Endpoints:** `PUT/GET/DELETE /v2/tenants/:id/secrets[/:key]` (operator;
