@@ -135,4 +135,34 @@ Vurderet mod: kommerciel værdi × teknisk risiko × slice-størrelse.
 
 ---
 
-*Owner: Jonas · Genereret af convergence-agent efter wave v2h + PM-audit.*
+---
+
+## 6. Wave-log (faktisk leveret)
+
+- **v2h** (15 dispatchet, 12 landet, FS-B1 + FS-D1 overtaget af parent):
+  G3/G5/G12/FE1/FE2 + FS-A1–A4 + FS-B1–B3 + FS-C1–C2.
+- **v2i**: FS-A5 (users/sessions/approvals → SQLite), FS-B1 (backup,
+  parent-inline), FS-D1/D2 (integration battery + load smoke + security
+  sweep + tier-A portabilitet), FS-E1 s1 (tenant foundation), FS-E2 (ops
+  automation), FS-E3 (tgk_ API-nøgler + persistente rate-limits), FS-E4
+  (honesty pass).
+- **v2j**: FS-E1 s2 (tenant-scoped memory/artifacts/search), FS-E1 s3
+  (tenant CRUD + whoami + konsol-chip), FS-E1 s4 (tenant-scoped approvals
+  + audit/events), FS-F1 (skills self-service `skills.own`), FS-F2
+  (conformance tier-B + policy null-tool crash-fix).
+- **Ops**: systemd-unit installeret på VDS (tg-gateway active+enabled),
+  tg-backup.timer 04:00 live, restore-drill verificeret fail-closed.
+
+## 7. Næste bølge (v2k-kandidater)
+
+- **FS-F3**: sandbox hardening spike (bwrap/unshare, env-gated, ærlig
+  fallback) — DISPATCHERET.
+- **FS-F4**: skills marketplace/deling mellem tenants (bygger på skills.own
+  + tenants).
+- **FS-F5**: tier-C conformance (chaos/anti-fragility: kill -9 mid-flight,
+  disk-full, concurrent writers) + RUNBOOK i docs/.
+- **Ops**: installer systemd-gatewayen på alle miljøer via deploy/install.sh
+  (VDS gennemført 2026-09-03).
+
+*Owner: Jonas · Genereret af convergence-agent efter wave v2h + PM-audit;
+opdateret efter v2j.*
