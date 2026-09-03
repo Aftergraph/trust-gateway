@@ -33,7 +33,11 @@ function classify(tool) {
 // audit entry (write-ahead) and for dispatching only on 'allow'.
 function decide({ tool, cls = classify(tool), bot }) {
   const caps = (bot && Array.isArray(bot.capabilities)) ? bot.capabilities : [];
-  const hasCap = caps.includes('*') || caps.includes(tool) || caps.some((c) => c.endsWith(':*') && tool.startsWith(c.slice(0, -1)));
+  // Null/degenerate tool: never a capability match — fail closed to the
+  // class decision only (tier-B caught this crash: tool.startsWith on null).
+  const hasCap = typeof tool === 'string' && (
+    caps.includes('*') || caps.includes(tool) || caps.some((c) => c.endsWith(':*') && tool.startsWith(c.slice(0, -1)))
+  );
 
   if (cls === 'read') {
     return { decision: 'allow', reason: 'read actions are pre-approved' };
