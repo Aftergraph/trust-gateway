@@ -511,6 +511,8 @@ plugins.js) across all files under `src/gateway/`.
 | 166 | `skill_rolled_back` | mounts/128-skill-versions.js (FS-M2: {by, skillId, version} — operator rolled a skill back to a prior version; the steps themselves are NEVER logged, audited, or returned in the audit row) |
 | 167 | `rate_bucket_read` | mounts/129-rate-ledger.js (FS-M3: {by, key, count} — operator queried a rate-limit bucket; count + key only, no caller identity) |
 | 168 | `rate_bucket_reset` | mounts/129-rate-ledger.js (FS-M3: {by, key, removed} — operator reset a rate-limit bucket; key + rows removed only) |
+| 169 | `chain_prune_preview_read` | mounts/132-chain-prune-preview.js (FS-N3: {by, beforeTs, wouldRemove} — operator previewed chain pruning; counts + timestamps only, no row payloads; TG_CHAIN_PRUNE_PREVIEW=1 only) |
+| 170 | `chain_prune_preview_denied` | mounts/132-chain-prune-preview.js (FS-N3: {bot} — non-operator touched /v2/chain/prune-preview; RBAC refusal audited) |
 
 ### `secrets-vault.js` + mounts `115-secrets.js` / `119-secrets-rotate.js` — tenant secrets vault + master-key rotation (FS-I5, FS-J2)
 - **Endpoints:** `PUT/GET/DELETE /v2/tenants/:id/secrets[/:key]` (operator;
