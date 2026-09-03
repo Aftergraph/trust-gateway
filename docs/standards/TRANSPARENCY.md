@@ -443,6 +443,27 @@ plugins.js) across all files under `src/gateway/`.
 | 111 | `tenant_enabled` | mounts/113-tenants.js (FS-E1: {id} — tenant id only) |
 | 111 | `tenant_denied` | mounts/113-tenants.js (FS-E1: {bot} — non-operator touched a tenant route; RBAC refusal audited) |
 | 112 | `skill_denied` | mounts/105-skills.js (FS-F1: {bot, skillId?, action} — non-self-service bot touched the skills surface, or a self-service bot attempted a non-dry run; RBAC refusal audited, never args/steps) |
+| 113 | `sandbox_used` | sandbox.js via mounts/106-harness2.js (FS-F3: {id, method: bwrap\|unshare\|none} — optional OS-level wrap, TG_SANDBOX=1 only; method and project id only, never argv/paths) |
+| 113 | `sandbox_fallback` | sandbox.js via mounts/106-harness2.js (FS-F3: {id, method, reason≤60 chars} — wrapped child failed at runtime, run retried unwrapped per the documented same-user discipline) |
+
+### `sandbox.js` — optional OS sandbox layer for the harness2 jail (FS-F3)
+- **What it is:** a spike, additive and default-OFF. The jail's real
+  guarantee remains the same-user process discipline documented under
+  `harness2.js`. With `TG_SANDBOX=1`, harness2 runs are additionally wrapped
+  via bwrap (full layer: private /tmp tmpfs, jail + node binary + minimum
+  lib dirs read-only, network removed unless opted in) or — weaker, honestly
+  documented — unshare user+mount+net+pid namespaces with a mapped non-root
+  uid.
+- **Honest detection:** `detectSandboxSupport()` probes the real host
+  (`which bwrap`, `unshare --user --map-root-user true`, `which systemd-run`)
+  with 5 s timeouts and returns booleans + probe error strings. No
+  assumptions; systemd-run is detected but not used for wrapping yet.
+- **Graceful degradation:** no primitives (or a runtime wrap failure) → the
+  run executes unwrapped, byte-identical to the pre-FS-F3 path, with a
+  `sandbox_fallback` row explaining why. Unwrapped = current discipline,
+  documented here and in sandbox.js/harness2.js headers.
+- **Audit events:** `sandbox_used` {id, method}; `sandbox_fallback`
+  {id, method, reason}. Never argv, never paths, never output.
 
 ### `backup.js` + mount `110-backup.js` — verified backup/restore (FS-B1)
 - **Endpoints:** `GET /v2/backup` (list, operator), `POST /v2/backup`

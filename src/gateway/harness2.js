@@ -15,6 +15,15 @@
 //   - 10 s hard timeout; the child is SIGKILLed on expiry
 //   - stdout/stderr tails capped at 8 KB each
 //
+// OPTIONAL OS SANDBOX LAYER (FS-F3, strictly additive): when TG_SANDBOX=1,
+// the jailed run is additionally wrapped in an OS-level sandbox when the
+// host offers one (bwrap full layer; unshare user-ns weaker layer) via
+// sandbox.js wrapCommand(); when nothing is available — or a wrap attempt
+// fails at runtime — the run falls back to the unwrapped spawn below, which
+// IS the current same-user discipline (byte-identical to pre-FS-F3). Every
+// sandboxed/fallen-back run emits `sandbox_used` / `sandbox_fallback`
+// rows; TG_SANDBOX unset (default) changes nothing at all.
+//
 // HONEST LIMITATION (acknowledged, same as harness.js wave B): the jail is a
 // directory under the same user account. It is process-discipline (no shell,
 // scrubbed env, timeout, tails), NOT an OS sandbox — a malicious entry could
@@ -26,6 +35,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { jailResolve } = require('./harness');
+const { detectSandboxSupport, clearSandboxCache, wrapCommand } = require('./sandbox');
 
 const RUN_TIMEOUT_MS = 10_000;
 const TAIL_BYTES = 8 * 1024; // 8 KB stdout/stderr tails
@@ -86,9 +96,11 @@ function validateRelPath(rel) {
 }
 
 /**
- * @param {{ dataDir?: string, knownSkills?: (() => string[]) | string[], runTimeoutMs?: number }} opts
+ * @param {{ dataDir?: string, knownSkills?: (() => string[]) | string[], runTimeoutMs?: number,
+ *           onSandboxUsed?: (info: {id: string, method: string}) => void,
+ *           onSandboxFallback?: (info: {id: string, method: string, reason: string}) => void }} opts
  */
-function makeHarness2({ dataDir, knownSkills = null, runTimeoutMs = RUN_TIMEOUT_MS } = {}) {
+function makeHarness2({ dataDir, knownSkills = null, runTimeoutMs = RUN_TIMEOUT_MS, onSandboxUsed = null, onSandboxFallback = null } = {}) {
   if (!dataDir) throw new Error('makeHarness2 requires { dataDir }');
   const root = path.resolve(dataDir);
   const projectDir = (id) => path.join(root, String(id));
@@ -265,6 +277,9 @@ function makeHarness2({ dataDir, knownSkills = null, runTimeoutMs = RUN_TIMEOUT_
 
   // ── runProject ─────────────────────────────────────────────────
   // node <entry> in the jail. Env = PATH/HOME/NODE_ENV ONLY. 10 s SIGKILL.
+  // TG_SANDBOX=1 additionally tries an OS-level wrap (sandbox.js); any
+  // runtime failure falls back to the plain spawn below (fail-open to the
+  // documented same-user discipline, with a sandbox_fallback audit row).
   function runProject(id) {
     if (typeof id !== 'string' || !ID_RE.test(id)) return { ok: false, error: 'bad_id' };
     const manifest = readManifest(id);
@@ -280,46 +295,128 @@ function makeHarness2({ dataDir, knownSkills = null, runTimeoutMs = RUN_TIMEOUT_
       HOME: process.env.HOME || '/tmp',
       NODE_ENV: 'production',
     };
+
+    // FS-F3: optional OS-level wrapping, default OFF → the spawn below is
+    // byte-identical to pre-FS-F3 behavior. With TG_SANDBOX=1 the wrapper
+    // (bwrap/unshare when present) is tried first; if the wrapped child
+    // dies immediately — bwrap setuid denied, ENOSYS on clone, execvp of a
+    // path not mounted, … — the run falls back to the unwrapped spawn and
+    // reports both facts via the sandboxUsed/sandboxFallback callbacks so
+    // the mount can audit `sandbox_used` / `sandbox_fallback`.
+    const sandboxOn = process.env.TG_SANDBOX === '1';
+    let attempts;
+    if (sandboxOn) {
+      const wrap = wrapCommand('node', [entryAbs], { jail, env });
+      const plain = { cmd: 'node', args: [entryAbs], env, wrapped: false, method: 'none' };
+      attempts = wrap.wrapped
+        ? [{ spec: wrap, wrapped: true }, { spec: plain, wrapped: false }]
+        : [{ spec: plain, wrapped: false, reason: wrap.reason }];
+    } else {
+      attempts = [{ spec: { cmd: 'node', args: [entryAbs], env }, wrapped: false }];
+    }
+    // Audit callbacks are injected (makeHarness2) so this module stays
+    // chain-agnostic; the mount wires them to gw._audit.
+    const onUsed = (info) => { if (onSandboxUsed) onSandboxUsed(info); };
+    const onFallback = (info) => { if (onSandboxFallback) onSandboxFallback(info); };
+
     return new Promise((resolve) => {
-      const started = Date.now();
-      let child;
-      try {
-        child = spawn('node', [entryAbs], { cwd: jail, env, stdio: ['ignore', 'pipe', 'pipe'] });
-      } catch (e) {
-        return resolve({ ok: false, error: 'spawn_failed', id, message: String(e && e.message).slice(0, 200) });
-      }
+      let attemptIdx = 0;
+      let child = null;
       let out = '';
       let err = '';
       let done = false;
-      const finish = (r) => { if (!done) { done = true; clearTimeout(timer); resolve(r); } };
-      const timer = setTimeout(() => {
-        try { child.kill('SIGKILL'); } catch { /* already gone */ }
-        finish({
-          ok: true, id, exitCode: null, timedOut: true,
-          stdout: tail(out), stderr: tail(err),
-          durationMs: Date.now() - started,
+      let usedReported = false;
+      const started = Date.now();
+      let timer = null;
+
+      const cleanupTimer = () => { if (timer) { clearTimeout(timer); timer = null; } };
+      const finish = (r) => { if (!done) { done = true; cleanupTimer(); resolve(r); } };
+      const armTimer = () => {
+        timer = setTimeout(() => {
+          try { child.kill('SIGKILL'); } catch { /* already gone */ }
+          finish({
+            ok: true, id, exitCode: null, timedOut: true,
+            stdout: tail(out), stderr: tail(err),
+            durationMs: Date.now() - started,
+          });
+        }, runTimeoutMs);
+      };
+
+      const attemptNext = () => {
+        const a = attempts[attemptIdx];
+        if (!usedReported && a.wrapped) {
+          usedReported = true;
+          onUsed({ id, method: a.spec.method });
+        }
+        try {
+          child = spawn(a.spec.cmd, a.spec.args, {
+            cwd: jail,
+            env: a.spec.env,
+            stdio: ['ignore', 'pipe', 'pipe'],
+          });
+        } catch (e) {
+          return fallbackOrFinish(a, {
+            ok: false, error: 'spawn_failed', id,
+            message: String(e && e.message).slice(0, 200),
+          });
+        }
+        out = '';
+        err = '';
+        armTimer();
+        child.stdout.on('data', (c) => { out += c.toString('utf8'); });
+        child.stderr.on('data', (c) => { err += c.toString('utf8'); });
+        child.on('error', (e) => {
+          cleanupTimer();
+          fallbackOrFinish(a, {
+            ok: false, error: 'spawn_failed', id,
+            message: String(e && e.message).slice(0, 200),
+            durationMs: Date.now() - started,
+          });
         });
-      }, runTimeoutMs);
-      child.stdout.on('data', (c) => { out += c.toString('utf8'); });
-      child.stderr.on('data', (c) => { err += c.toString('utf8'); });
-      child.on('error', (e) => {
-        finish({ ok: false, error: 'spawn_failed', id, message: String(e && e.message).slice(0, 200), durationMs: Date.now() - started });
-      });
-      child.on('close', (code) => {
-        finish({
-          ok: true, id, exitCode: code, timedOut: false,
-          stdout: tail(out), stderr: tail(err),
-          durationMs: Date.now() - started,
+        child.on('close', (code, signal) => {
+          cleanupTimer();
+          const result = {
+            ok: true, id, exitCode: code, timedOut: false,
+            stdout: tail(out), stderr: tail(err),
+            durationMs: Date.now() - started,
+          };
+          // A wrapped child that exits non-zero with NO stdout means the
+          // SANDBOX failed to start (bwrap setuid denied/ENOSYS, execvp
+          // miss — its error went to stderr), not a program that failed
+          // after printing. Fall back and retry unwrapped. Documented
+          // trade-off: a program that fails instantly without any stdout
+          // is executed twice (once wrapped, once plain) — the jail is
+          // read-only at run time, which bounds the blast radius of that.
+          if (a.wrapped && code !== 0 && out.length === 0) {
+            return fallbackOrFinish(a, result);
+          }
+          finish(result);
         });
-      });
+      };
+
+      const fallbackOrFinish = (a, result) => {
+        if (a.wrapped && attemptIdx < attempts.length - 1) {
+          attemptIdx += 1;
+          onFallback({ id, method: a.spec.method, reason: 'wrapped_child_failed', exitCode: result.exitCode === undefined ? null : result.exitCode });
+          return attemptNext();
+        }
+        finish(result);
+      };
+
+      attemptNext();
     });
   }
 
-  return { createProject, validateProject, buildProject, runProject, listProjects, getProject, jailResolve, root };
+  return {
+    createProject, validateProject, buildProject, runProject,
+    listProjects, getProject, jailResolve, root,
+    detectSandboxSupport, clearSandboxCache, // FS-F3 spike: exposed for ops/tests
+  };
 }
 
 module.exports = {
   makeHarness2, slugify, validateRelPath,
   ID_RE, RUN_TIMEOUT_MS, TAIL_BYTES, MAX_TOTAL_BYTES,
   MANIFEST, FILES_DIR, JAIL_DIR,
+  detectSandboxSupport, clearSandboxCache, wrapCommand,
 };

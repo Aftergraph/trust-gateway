@@ -30,6 +30,10 @@
 // malicious entry can still reach anything the gateway user can. This is the
 // same limitation harness.js (wave B) already acknowledges; requiresApproval
 // exists precisely so a human decides before any declared-risk project runs.
+// FS-F3 adds an OPTIONAL OS-level layer behind TG_SANDBOX=1 (bwrap/unshare
+// with honest detection + graceful fallback, see sandbox.js) — off by
+// default, and a fallback to the unwrapped run is the documented norm, not
+// an error state.
 //
 // Transparency rows (TRANSPARENCY.md 106-107): the chain carries
 // harness2_project_created {id, fileCount} and harness2_run
@@ -56,7 +60,17 @@ function getHarness2(gw) {
   const key = dataDirFor(gw);
   const rec = instances.get(gw);
   if (rec && rec.key === key) return rec.h;
-  const h = makeHarness2({ dataDir: key });
+  // FS-F3: sandbox audit rows ride the same chain, one per run — method is
+  // 'bwrap' | 'unshare' | 'none'; a runtime wrap failure additionally emits
+  // sandbox_fallback before the unwrapped retry. No argv, no paths, no
+  // file contents — id and method only.
+  const h = makeHarness2({
+    dataDir: key,
+    onSandboxUsed: (info) => gw._audit({ type: 'sandbox_used', id: info.id, method: info.method }),
+    onSandboxFallback: (info) => gw._audit({
+      type: 'sandbox_fallback', id: info.id, method: info.method, reason: String(info.reason || 'unknown').slice(0, 60),
+    }),
+  });
   instances.set(gw, { key, h });
   return h;
 }
