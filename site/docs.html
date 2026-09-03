@@ -109,6 +109,41 @@ node bin/gateway.js --dispatch
     <code>/healthz</code> and <code>/home</code> get a <code>401</code> — and
     the rejection itself is written to the audit chain.</p>
   </section>
+
+  <section id="self-hosting">
+    <h2>Self-hosting</h2>
+    <p class="muted">You can run this entire stack on your own Linux box —
+    the gateway, the jailed dispatcher, the audit chain, the backup timer.
+    No Docker, no Postgres, no phone-home: the process makes no outbound
+    connections except to the LLM base URL you configure yourself.</p>
+    <pre class="snap"># Prerequisites: Linux + systemd, Node 24+, port 8800 free, sudo.
+# Full guide: docs/SELF-HOSTING.md in the repository.
+
+git clone &lt;your-fork-url&gt; trust-gateway &amp;&amp; cd trust-gateway
+npm test                      # sanity gate, node core only
+
+mkdir -p data
+cat &gt; data/gateway.env &lt;&lt;'EOF'
+BOT_TOKENS=atlas:your-operator-token,forge:your-worker-token
+EOF
+chmod 600 data/gateway.env
+
+sudo bash deploy/install.sh   # idempotent systemd install, health-gated
+curl -s http://127.0.0.1:8800/healthz</pre>
+    <p class="foot">What you get on day one: a systemd unit with hardening
+    (<code>ProtectSystem=strict</code>, <code>ReadWritePaths</code> scoped to
+    <code>data/</code>), an audit chain that verifies on boot and shutdown, a
+    daily 04:00 backup timer with sha256 manifests, a watchdog you can point
+    at your own webhook via <code>TG_ALERT_URLS</code>, and a restore path
+    that refuses to replace anything until every checksum matches. The full
+    guide covers every environment variable <code>bin/gateway.js</code> reads
+    (prefixed and unprefixed), daily operations, all four documented failure
+    modes with measured behavior, upgrade procedure, and uninstall — see
+    <code>docs/SELF-HOSTING.md</code> and <code>docs/RUNBOOK.md</code> in the
+    repo. Honest limits: you own the ops. Backups, disk space, token
+    rotation, and incident response are on you; the watchdog tells you when
+    one of them is failing, it does not fix it.</p>
+  </section>
 </main>
 
 <footer class="site-footer">
