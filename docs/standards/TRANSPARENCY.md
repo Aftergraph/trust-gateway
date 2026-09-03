@@ -453,6 +453,9 @@ plugins.js) across all files under `src/gateway/`.
 | 116 | `skill_unfederated` | mounts/105-skills.js (FS-G1: {id, by} — owning-tenant operator pulled a skill back to shared; never steps/args) |
 | 116 | `skill_federation_denied` | mounts/105-skills.js (FS-G1: {bot, skillId, action} — cross-tenant write attempt on a federated skill (run/patch/federate/unfederate) refused owner-tenant-only, answered 404 anti-enumeration; TG_SKILLS_FEDERATION=1 only; never args/steps) |
 | 117 | `skill_fed_limited` | mounts/105-skills.js (FS-H2: {runnerTenant, skillId, cap, window, limitKind} — a cross-tenant DRY run of a federated skill refused 429 fed_rate_limited because the runner tenant hit TG_FED_RUNS_PER_HOUR (default 20) or the skill hit TG_FED_RUNS_PER_SKILL_HOUR (default 50); enforced BEFORE the dry-run executes; TG_SKILLS_FEDERATION=1 only; never args/steps) |
+| 118 | `chain_archived` | chain-archive.js via mounts/111-chain-archive.js (FS-I7: {bot, archivedCount, manifestKey, headBefore, headAfter} — counts + hashes only; archived entries never re-enter the chain; TG_CHAIN_ARCHIVE=1 only) |
+| 118 | `chain_archive_listed` | mounts/111-chain-archive.js (FS-I7: {bot, count} — operator listed archive manifests; keys + counts only) |
+| 118 | `chain_archive_refused` | mounts/111-chain-archive.js (FS-I7: {bot, reason, length?} — non-operator touched /v2/chain/archive (RBAC refusal), or archival refused chain_too_short under the <100-entry safety gate; nothing deleted, nothing written) |
 
 ### `sandbox.js` — optional OS sandbox layer for the harness2 jail (FS-F3)
 - **What it is:** a spike, additive and default-OFF. The jail's real
@@ -485,6 +488,33 @@ plugins.js) across all files under `src/gateway/`.
   is still exact: what was backed up is what comes back.
 - **Storage:** `data/backups/backup-<ISO>/` (atomic dir rename, FIFO last
   10).
+
+### `chain-archive.js` + mount `111-chain-archive.js` — chain compaction / archival (FS-I7)
+- **Endpoints:** `POST /v2/chain/archive` {beforeIso?} (operator; triggers
+  archival), `GET /v2/chain/archive` (operator; lists archive manifests).
+  Both audited; worker access → 403 + `chain_archive_refused`.
+- **Gating:** `TG_CHAIN_ARCHIVE=1` enables archival — unset means fully
+  INERT (POST answers 501 `archive_disabled`; the module never reads,
+  writes or deletes anything). `TG_CHAIN_ARCHIVE_DAYS` sets the age
+  threshold (default 90).
+- **Behavior:** entries older than the cutoff move to
+  `data/archive/chain-<date>.jsonl` (append-only; per-run sha256 recorded
+  in the manifest), are deleted from `chain_entries` (genesis seq 0 is
+  never deletable), and the survivors are RE-BASED (seq 1..N,
+  prevHash-linked, hashes recomputed) so `verify()` stays green.
+- **Honest head change:** compaction changes the chain head by design.
+  The kv_store manifest `archive:chain:<date>` records {file, count,
+  headBefore, headAfter, archivedAt, sha256} — headBefore is reproducible
+  by replaying the archived file (every line carries its ORIGINAL
+  seq/hashes and re-verifies). The gap is documented, not hidden (same
+  contract as backup/restore, docs/RUNBOOK.md mode 4).
+- **Safety:** archival REFUSES (`chain_archive_refused`, HTTP 409) while
+  the live chain has fewer than 100 entries — compaction can never wipe a
+  young chain. Re-archiving an already-archived period is an audited
+  no-op (archivedCount 0, no manifest, no file append).
+- **Audit events:** `chain_archived`, `chain_archive_listed`,
+  `chain_archive_refused` — counts, keys and hashes only; entry payloads
+  never re-enter the chain and file contents are never logged.
 
 ### `telemetry.js` + `mounts/100-telemetry.js` — post-launch telemetry (G12, §20.4)
 - **Endpoints:** `POST /v2/telemetry` {event, fields?} (bearer; server-side
