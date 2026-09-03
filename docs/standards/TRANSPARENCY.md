@@ -532,6 +532,9 @@ plugins.js) across all files under `src/gateway/`.
 | 186 | `tenant_inactive_listed` | mounts/141-tenant-activity.js (FS-W1: {by, count, thresholdMs} — operator listed inactive tenants; count + threshold only) |
 | 187 | `chain_pruned` | mounts/142-chain-prune.js (FS-W2: {by, removed, beforeTs, manifestPath} — operator executed a real chain prune; counts + manifest path only; TG_CHAIN_PRUNE=1 only) |
 | 188 | `chain_prune_refused` | mounts/142-chain-prune.js (FS-W2: {by, reason, current?} — prune refused (below_safety_threshold without force, invalid_before, no_audit_chain); nothing deleted on refusal) |
+| 189 | `operator_notify_read` | mounts/143-operator-notify.js (FS-W3: {by, count} — operator read their own notify preferences; count only; TG_OPERATOR_NOTIFY=1 only) |
+| 190 | `operator_notify_set` | mounts/143-operator-notify.js (FS-W3: {by, eventType, channel, enabled} — operator subscribed/unsubscribed to an event category) |
+| 191 | `operator_notify_deleted` | mounts/143-operator-notify.js (FS-W3: {by, eventType, channel, removed} — operator removed a notification preference) |
 
 ### `secrets-vault.js` + mounts `115-secrets.js` / `119-secrets-rotate.js` — tenant secrets vault + master-key rotation (FS-I5, FS-J2)
 - **Endpoints:** `PUT/GET/DELETE /v2/tenants/:id/secrets[/:key]` (operator;
