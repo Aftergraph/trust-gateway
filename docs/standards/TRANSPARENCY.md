@@ -527,6 +527,8 @@ plugins.js) across all files under `src/gateway/`.
 | 182 | `impersonation_listed` | mounts/134-tenant-impersonation.js (FS-O2: {by, count} — operator listed active impersonation tokens) |
 | 183 | `operator_dashboard_read` | mounts/135-operator-dashboard.js (FS-O3: {by, sections[]} — operator read the aggregated dashboard; section names only, no row data) |
 | 184 | `operator_dashboard_denied` | mounts/135-operator-dashboard.js (FS-O3: {bot} — non-operator touched /v2/dashboard; RBAC refusal audited) |
+| 185 | `skill_deps_validated` | mounts/144-skill-deps.js (FS-W4: {by, skillId, requires[]} — operator validated a skill's dependency graph; skill id + slugs only, never step bodies; TG_SKILL_DEPS=1 only) |
+| 186 | `skill_deps_rejected` | mounts/144-skill-deps.js (FS-W4: {by, skillId, reason} — operator's skill was rejected: self_reference, invalid_dependency_slug, missing_dependency, or cycle_detected) |
 
 ### `secrets-vault.js` + mounts `115-secrets.js` / `119-secrets-rotate.js` — tenant secrets vault + master-key rotation (FS-I5, FS-J2)
 - **Endpoints:** `PUT/GET/DELETE /v2/tenants/:id/secrets[/:key]` (operator;
