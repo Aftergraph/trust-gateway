@@ -273,3 +273,50 @@ header {
   body { height: auto; }
   .pane { min-height: 300px; }
 }
+
+/* FS-A3: auth shell — Sign in affordance, user chip, login/signup overlay.
+ * Modal surface reuses .modal/.view-show; colors come only from --tg-* tokens. */
+#authChip { display: inline-flex; align-items: center; }
+.signin-btn {
+  background: transparent; color: var(--tg-risk-read); border: 1px solid var(--tg-border-accent);
+  border-radius: var(--tg-radius-sm); padding: 2px var(--tg-space-2); cursor: pointer;
+  font-family: inherit; font-size: var(--tg-text-sm);
+}
+.signin-btn:hover { background: var(--tg-bg-hover); }
+.user-chip {
+  display: inline-flex; align-items: center; gap: var(--tg-space-1);
+  background: var(--tg-bg-elevated); border: 1px solid var(--tg-border);
+  border-radius: var(--tg-radius-sm); padding: 2px var(--tg-space-2);
+  font-size: var(--tg-text-sm); color: var(--tg-text);
+}
+.user-chip-name { color: var(--tg-text-bright); }
+.user-chip-logout {
+  background: transparent; border: 0; color: var(--tg-text-muted); cursor: pointer;
+  font-family: inherit; font-size: var(--tg-text-sm); padding: 0;
+}
+.user-chip-logout:hover { color: var(--tg-risk-destructive); }
+.auth-modal { align-items: center; justify-content: center; }
+.auth-box {
+  background: var(--tg-bg-elevated); border: 1px solid var(--tg-border-strong);
+  border-radius: var(--tg-radius-md, 8px); padding: var(--tg-space-4);
+  width: min(340px, 92vw); display: flex; flex-direction: column; gap: var(--tg-space-3);
+}
+.auth-title { margin: 0; font-size: var(--tg-text-lg); color: var(--tg-text-bright); }
+.auth-tabs { display: flex; gap: var(--tg-space-2); }
+.auth-tab {
+  background: transparent; border: 0; border-bottom: 2px solid transparent;
+  color: var(--tg-text-muted); cursor: pointer; font-family: inherit;
+  font-size: var(--tg-text-sm); padding: var(--tg-space-1) 0;
+}
+.auth-tab-active { color: var(--tg-risk-read); border-bottom-color: var(--tg-risk-read); }
+.auth-field { display: flex; flex-direction: column; gap: var(--tg-space-1); }
+.auth-field-label { font-size: var(--tg-text-sm); color: var(--tg-text-muted); }
+.auth-input {
+  background: var(--tg-bg-base); border: 1px solid var(--tg-border);
+  border-radius: var(--tg-radius-sm); color: var(--tg-text-bright);
+  padding: var(--tg-space-2); font-family: inherit; font-size: var(--tg-text-base);
+}
+.auth-input:focus { outline: none; border-color: var(--tg-border-accent); }
+.auth-submit { align-self: flex-start; cursor: pointer; }
+.auth-submit:disabled { opacity: .5; cursor: default; }
+.auth-msg { min-height: 1em; font-size: var(--tg-text-sm); color: var(--tg-risk-destructive); }
