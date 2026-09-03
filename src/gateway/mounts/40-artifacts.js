@@ -25,7 +25,7 @@ const { send, readBody, canApprove } = require('../server');
 const { getHub } = require('../events');
 const { ArtifactStore, KINDS, getArtifactStore } = require('../artifacts');
 const { resolveTenant } = require('../tenant-resolve');
-const { scopeDir, scopedStore, tenantAuditTag } = require('../tenant-scope');
+const { enforceQuotas, scopeDir, scopedStore, tenantAuditTag } = require('../tenant-scope');
 
 // FS-E1 slice 2: tenant-scoped artifacts. A non-main tenant gets its own
 // ArtifactStore over <TG_DATA_DIR>/data/tenants/<id>/artifacts/artifacts.json;
@@ -111,6 +111,7 @@ async function route(gw, req, res, ctx, pathname) {
   req.bot = bot;
   const { tenant } = resolveTenant(req, gw);
   if (!tenant) return send(res, 404, { error: 'not_found' });
+  if (enforceQuotas(gw, tenant, res)) return; // FS-I3: fail-closed quotas
   const tag = tenantAuditTag(tenant);
   const seg = pathname.split('/').filter(Boolean); // ['v2','artifacts',id?,sub?]
   const store = artifactStoreFor(gw, tenant);

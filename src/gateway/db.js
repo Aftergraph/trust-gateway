@@ -39,6 +39,15 @@ function open(file = resolveDbFile()) {
       updated_at INTEGER NOT NULL
     );
   `);
+  // FS-I3: per-tenant quota caps (NULL column → env-configurable default).
+  d.exec(`
+    CREATE TABLE IF NOT EXISTS tenant_quotas (
+      tenant           TEXT PRIMARY KEY,
+      max_disk_mb      INTEGER,
+      max_api_per_hour INTEGER,
+      updated_at       INTEGER NOT NULL
+    );
+  `);
   return d;
 }
 

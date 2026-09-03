@@ -453,6 +453,10 @@ plugins.js) across all files under `src/gateway/`.
 | 116 | `skill_unfederated` | mounts/105-skills.js (FS-G1: {id, by} — owning-tenant operator pulled a skill back to shared; never steps/args) |
 | 116 | `skill_federation_denied` | mounts/105-skills.js (FS-G1: {bot, skillId, action} — cross-tenant write attempt on a federated skill (run/patch/federate/unfederate) refused owner-tenant-only, answered 404 anti-enumeration; TG_SKILLS_FEDERATION=1 only; never args/steps) |
 | 117 | `skill_fed_limited` | mounts/105-skills.js (FS-H2: {runnerTenant, skillId, cap, window, limitKind} — a cross-tenant DRY run of a federated skill refused 429 fed_rate_limited because the runner tenant hit TG_FED_RUNS_PER_HOUR (default 20) or the skill hit TG_FED_RUNS_PER_SKILL_HOUR (default 50); enforced BEFORE the dry-run executes; TG_SKILLS_FEDERATION=1 only; never args/steps) |
+| 118 | `tenant_quota_exceeded` | tenant-scope.js middleware via mounts/* (FS-I3: {tenant, kind: disk\\|api, used, limit} — a tenant-resolved request refused 429 quota_exceeded because its scoped data exceeded max_disk_mb or its hourly API count exceeded max_api_per_hour; checked AFTER tenant resolution, BEFORE handler dispatch; checker errors deny too (fail closed); never token material) |
+| 119 | `tenant_quota_set` | mounts/115-tenant-quotas.js (FS-I3: {id, by} — operator PUT /v2/tenants/:id/quota; caps only, never token material) |
+| 120 | `tenant_quota_read` | mounts/115-tenant-quotas.js (FS-I3: {id, by} — operator GET /v2/tenants/:id/quota usage view) |
+| 121 | `tenant_quota_denied` | mounts/115-tenant-quotas.js (FS-I3: {bot} — non-operator touched a quota route; RBAC refusal audited) |
 
 ### `sandbox.js` — optional OS sandbox layer for the harness2 jail (FS-F3)
 - **What it is:** a spike, additive and default-OFF. The jail's real

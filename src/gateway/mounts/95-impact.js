@@ -10,6 +10,7 @@
 
 const { send, readBody } = require('../server');
 const { resolveTenant } = require('../tenant-resolve');
+const { enforceQuotas } = require('../tenant-scope');
 const { approvalsStoreFor } = require('./09-approvals');
 
 module.exports = {
@@ -25,6 +26,7 @@ module.exports = {
     req.bot = ctx.bot;
     const { tenant } = resolveTenant(req, gw);
     if (!tenant) return send(res, 404, { error: 'not_found' });
+    if (enforceQuotas(gw, tenant, res)) return; // FS-I3: fail-closed quotas
     const [, id] = ctx.params.matches;
     const store = approvalsStoreFor(gw, tenant);
     const approval = store.get(id);

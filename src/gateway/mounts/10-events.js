@@ -22,6 +22,7 @@
 
 const { getHub } = require('../events');
 const { resolveTenant } = require('../tenant-resolve');
+const { enforceQuotas } = require('../tenant-scope');
 const { send } = require('../server');
 
 module.exports = {
@@ -39,6 +40,7 @@ module.exports = {
     req.bot = ctx.bot;
     const { tenant } = resolveTenant(req, gw);
     if (!tenant) return send(res, 404, { error: 'not_found' });
+    if (enforceQuotas(gw, tenant, res)) return; // FS-I3: fail-closed quotas
 
     if (tenant.id === 'main') {
       getHub(gw).addClient(res); // unfiltered — byte-identical

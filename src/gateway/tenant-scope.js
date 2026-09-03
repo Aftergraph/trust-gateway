@@ -90,4 +90,75 @@ function tenantAuditTag(tenant, opts = {}) {
   return base;
 }
 
-module.exports = { scopeDir, scopedStore, tenantAuditTag, KINDS };
+// ── FS-I3: per-tenant quota enforcement (fail closed) ─────────────────────
+// enforceQuotas(gw, tenant, res) runs AFTER tenant resolution and BEFORE any
+// handler work. Both caps are checked: disk (read-only du-shim over the
+// tenant's scoped dir) and API (atomic per-hour counter in kv_store). The
+// first failure → 429 {error:'quota_exceeded', kind, ...} + audited
+// tenant_quota_exceeded. ANY error from the quota layer itself → 429 denial
+// too (fail closed: a broken checker never becomes an allowance).
+//
+// MAIN-TENANT RULE: the implicit default 'main' tenant (no explicit quota
+// row) is NOT counted/enforced — it is the platform's own tenant and its
+// traffic must stay byte-identical for every legacy surface (the same
+// guarantee every FS-E1 slice gives main). Defaults are still REPORTED for
+// main via getQuota(), and an operator can cap main by setting an explicit
+// row (PUT /v2/tenants/main/quota) — from then on main is enforced like
+// any other tenant. Every OTHER tenant (token/header-scoped, i.e. a real
+// multi-tenant customer) is always enforced with the env defaults.
+//
+// Returns null when the request may proceed; `true` once a 429 was written.
+function enforceQuotas(gw, tenant, res) {
+  if (!tenant || !tenant.id) return null; // unresolved tenants are 404s upstream
+  const { getTenantQuotas } = require('./tenant-quotas');
+  const quotas = getTenantQuotas(gw);
+  // Main without an explicit row: never counted, never capped (see header).
+  if (tenant.id === 'main' && !quotas.hasStoredRow('main')) return null;
+  let disk = null;
+  try {
+    disk = quotas.checkDisk(tenant.id, gw && getTenantStore(gw));
+  } catch {
+    _quotaDeny(gw, tenant, res, 'disk', { used: null, limit: null, reason: 'quota_check_error' });
+    return true;
+  }
+  if (!disk.ok) {
+    _quotaDeny(gw, tenant, res, 'disk', { used: disk.usedMb, limit: disk.limitMb });
+    return true;
+  }
+  let api = null;
+  try {
+    api = quotas.checkApi(tenant.id);
+  } catch {
+    _quotaDeny(gw, tenant, res, 'api', { used: null, limit: null, reason: 'quota_check_error' });
+    return true;
+  }
+  if (!api.ok) {
+    _quotaDeny(gw, tenant, res, 'api', { used: api.count, limit: api.limit });
+    return true;
+  }
+  return null;
+}
+
+function _quotaDeny(gw, tenant, res, kind, extra) {
+  const { send } = require('./server');
+  const limit = extra.limit;
+  const body = { error: 'quota_exceeded', kind };
+  if (kind === 'disk') {
+    body.usedMb = extra.used;
+    body.limitMb = limit;
+  } else {
+    body.count = extra.used;
+    body.limit = limit;
+  }
+  if (extra.reason) body.reason = extra.reason;
+  gw._audit({
+    type: 'tenant_quota_exceeded',
+    tenant: tenant.id,
+    kind,
+    used: extra.used,
+    limit,
+  });
+  return send(res, 429, body);
+}
+
+module.exports = { scopeDir, scopedStore, tenantAuditTag, enforceQuotas, KINDS };

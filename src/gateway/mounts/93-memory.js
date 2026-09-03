@@ -17,7 +17,7 @@ const { send, readBody } = require('../server');
 const path = require('node:path');
 const { getMemoryStore, MemoryStore } = require('../memory');
 const { resolveTenant } = require('../tenant-resolve');
-const { scopeDir, scopedStore, tenantAuditTag } = require('../tenant-scope');
+const { scopeDir, scopedStore, tenantAuditTag, enforceQuotas } = require('../tenant-scope');
 
 // FS-E1 slice 2: tenant-scoped memory. A non-main tenant gets its own
 // MemoryStore over <TG_DATA_DIR>/data/tenants/<id>/memory/memory.json;
@@ -52,6 +52,7 @@ module.exports = {
       req.bot = bot;
       const { tenant } = resolveTenant(req, gw);
       if (!tenant) return send(res, 404, { error: 'not_found' });
+      if (enforceQuotas(gw, tenant, res)) return; // FS-I3: fail-closed quotas
       const store = memoryStoreFor(gw, tenant);
 
       // ── GET /v2/memory?bot=<name> — list facts ──

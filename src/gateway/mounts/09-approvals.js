@@ -43,7 +43,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { send, readBody, canApprove } = require('../server');
 const { resolveTenant } = require('../tenant-resolve');
-const { scopeDir, tenantAuditTag } = require('../tenant-scope');
+const { enforceQuotas, scopeDir, tenantAuditTag } = require('../tenant-scope');
 const { ApprovalStore } = require('../approvals');
 
 const scopedStores = new WeakMap(); // gw → Map(tenantId → ApprovalStore)
@@ -100,6 +100,7 @@ module.exports = {
     req.bot = bot; // resolver operator check
     const { tenant } = resolveTenant(req, gw);
     if (!tenant) return send(res, 404, { error: 'not_found' });
+    if (enforceQuotas(gw, tenant, res)) return; // FS-I3: fail-closed quotas
 
     // ── MAIN: replicate the v1 handlers EXACTLY (untagged, singleton) ──
     if (tenant.id === 'main') return handleMain(gw, req, res, ctx, bot);
