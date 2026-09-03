@@ -113,6 +113,8 @@ class MemoryStore {
     const now = this.now();
     const fact = {
       id: 'm_' + crypto.randomBytes(4).toString('hex'),
+      bot, // durable owner stamp — mounts scope access by it (FS-D2 fix: the
+           // shape must be self-describing; edit/remove return it too)
       text,
       source,
       tags: Array.isArray(tags) ? tags : [],
@@ -135,6 +137,7 @@ class MemoryStore {
       const idx = this.bots[botName].facts.findIndex((f) => f.id === id);
       if (idx === -1) continue;
       const fact = this.bots[botName].facts[idx];
+      fact.bot = botName; // backfill for pre-stamp records (idempotent)
       if (typeof text === 'string') {
         if (text.length === 0) throw err('bad_request', 'text cannot be empty');
         if (text.length > MAX_TEXT_LEN) throw err('bad_request', 'text too long (max 4000)');
@@ -158,6 +161,7 @@ class MemoryStore {
       const idx = this.bots[botName].facts.findIndex((f) => f.id === id);
       if (idx === -1) continue;
       const removed = this.bots[botName].facts.splice(idx, 1);
+      removed[0].bot = removed[0].bot || botName; // backfill pre-stamp records
       if (this.bots[botName].facts.length === 0) {
         delete this.bots[botName];
       } else {
