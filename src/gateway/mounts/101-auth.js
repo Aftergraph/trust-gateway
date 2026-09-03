@@ -16,8 +16,9 @@
 
 const path = require('node:path');
 const { send, readBody } = require('../server');
-const { UserStore, timingBurn } = require('../users');
-const { SessionStore } = require('../sessions');
+const { timingBurn } = require('../users');
+const { getUsers } = require('../users-db');     // FS-A5: env-gated DB variant
+const { getSessions } = require('../sessions-db'); // FS-A5: env-gated DB variant
 
 const COOKIE = 'tg_session';
 const COOKIE_MAX_AGE_S = 7 * 24 * 60 * 60; // mirrors the 7d sliding TTL
@@ -27,8 +28,14 @@ const RATE = { register: { max: 5, windowMs: 60_000 }, login: { max: 10, windowM
 function getStores(gw) {
   if (!gw._authStores) {
     gw._authStores = {
-      users: new UserStore({ file: process.env.TG_USERS_FILE || path.join(DATA_DIR, 'users.json') }),
-      sessions: new SessionStore({ file: process.env.TG_SESSIONS_FILE || path.join(DATA_DIR, 'sessions.json') }),
+      // FS-A5: env-gated SQLite variants (TG_USERS_DB / TG_SESSIONS_DB = 1);
+      // env unset → legacy JSON stores, byte-identical, WeakMap-cached per gw.
+      users: getUsers(gw, {
+        file: process.env.TG_USERS_FILE || path.join(DATA_DIR, 'users.json'),
+      }),
+      sessions: getSessions(gw, {
+        file: process.env.TG_SESSIONS_FILE || path.join(DATA_DIR, 'sessions.json'),
+      }),
       rl: new Map(), // rate limiter: `${route}|${ip}` -> [timestamps]
     };
   }
