@@ -518,6 +518,10 @@ plugins.js) across all files under `src/gateway/`.
 | 173 | `audit_search_denied` | mounts/131-audit-search.js (FS-N2: {bot} — non-operator touched /v2/audit/search; RBAC refusal audited) |
 | 174 | `chain_prune_preview_read` | mounts/132-chain-prune-preview.js (FS-N3: {by, beforeTs, wouldRemove} — operator previewed chain pruning; counts + timestamps only, no row payloads; TG_CHAIN_PRUNE_PREVIEW=1 only) |
 | 175 | `chain_prune_preview_denied` | mounts/132-chain-prune-preview.js (FS-N3: {bot} — non-operator touched /v2/chain/prune-preview; RBAC refusal audited) |
+| 176 | `skill_exported` | mounts/133-skill-io.js (FS-O1: {by, skillId} — operator exported a skill; id only, never step bodies; TG_SKILL_IO=1 only) |
+| 177 | `skill_bulk_exported` | mounts/133-skill-io.js (FS-O1: {by, count} — operator exported all skills; count only) |
+| 178 | `skill_imported` | mounts/133-skill-io.js (FS-O1: {by, id} — operator imported a single skill; id only, steps never logged) |
+| 179 | `skill_bulk_imported` | mounts/133-skill-io.js (FS-O1: {by, ok, failed} — operator bulk-imported skills; counts only) |
 
 ### `secrets-vault.js` + mounts `115-secrets.js` / `119-secrets-rotate.js` — tenant secrets vault + master-key rotation (FS-I5, FS-J2)
 - **Endpoints:** `PUT/GET/DELETE /v2/tenants/:id/secrets[/:key]` (operator;
