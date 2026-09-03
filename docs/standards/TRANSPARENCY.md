@@ -280,9 +280,29 @@ below is missing one.
 - **Storage:** operates only inside `data/bots/<name>/` jails (per-bot).
 - **Inspect:** audit entries for every dispatch; jail contents per bot dir.
 
+### `users.js` + `sessions.js` + mount `101-auth.js` — human accounts + scrypt sessions (FS-A1)
+- **Endpoints:** `POST /v2/auth/register` {email, password, display_name?}
+  (pw ≥10 chars, 5/min/IP), `POST /v2/auth/login` (10/min/IP, generic
+  'invalid credentials' — no account enumeration, dummy scrypt burn keeps
+  timing flat), `POST /v2/auth/logout`, `GET /v2/auth/me` → {user, bot:null}.
+- **Audit events:** `user_registered` ({userId, role}), `user_login_ok`
+  ({userId}), `user_login_failed` ({reason}), `user_logout` ({userId}).
+- **Storage:** `data/users.json` (atomic 0600, fail-closed on corrupt;
+  `TG_USERS_FILE` env override) — {id 'u_<8hex>', email (unique lowercase),
+  scrypt passwordHash + per-user salt, role owner|operator|member,
+  display_name, created_at, disabled}; first registered user = owner (env
+  `TG_FIRST_USER_ROLE` overrides), later signups = member. `data/sessions.json`
+  (atomic 0600, fail-closed; `TG_SESSIONS_FILE` env override) — keyed by
+  sha256(token); the plaintext token is NEVER stored, it rides an httpOnly
+  SameSite=Lax cookie `tg_session` (Secure behind https). TTL 7d sliding,
+  max 200 sessions/user.
+- **Inspect:** `GET /v2/auth/me` with the browser cookie; user file via jq
+  (passwordHash/salt visible — never a plaintext password); sessions file
+  contains hashes only.
+
 ## Full audit-event table
 
-81 event types emitted from `src/gateway/**`. Extraction rule: every string
+97 event types emitted from `src/gateway/**`. Extraction rule: every string
 matched by `{type: '…'}` (including the `enabled ? 'a' : 'b'` ternary in
 plugins.js) across all files under `src/gateway/`.
 
@@ -369,6 +389,11 @@ plugins.js) across all files under `src/gateway/`.
 | 79 | `run_paused` | src/gateway/runs.js (wave F F1: cancellable-state transition — parked approval or operator/owner cancel; emitted by store.cancel() via POST /v2/runs/:id/cancel) |
 | 80 | `adapter_kind_register` | mounts/99-adapter-kinds.js (G9: {kind, fields count} — field names only, never values) |
 | 81 | `adapter_kind_rejected` | mounts/99-adapter-kinds.js (G9: {bot, kind?, errors[]} — validation failures) |
+| 94 | `user_registered` | mounts/101-auth.js (FS-A1: {userId, role} — never the password, never the hash) |
+| 95 | `user_login_ok` | mounts/101-auth.js (FS-A1: {userId} — humans only; bots stay bearer tokens) |
+| 96 | `user_login_failed` | mounts/101-auth.js (FS-A1: {reason} — 'invalid_credentials' or 'account_disabled'; response is always the same generic error, no enumeration) |
+| 97 | `user_logout` | mounts/101-auth.js (FS-A1: {userId}) |
+
 ## Documented exceptions
 
 The test compares the table above against a programmatic extraction over
