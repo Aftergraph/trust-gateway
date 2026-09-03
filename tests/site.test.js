@@ -52,10 +52,13 @@ test('no external assets: no src=/href= pointing at remote hosts', () => {
   // Also no protocol-relative //host references.
   const protoRel = html.match(/\b(src|href)\s*=\s*["']\/\/[^"']/gi) || [];
   assert.deepEqual(protoRel, [], 'no protocol-relative src/href: ' + JSON.stringify(protoRel));
-  // All referenced local assets actually exist (skip anchors + remote URLs).
+  // All referenced local assets actually exist (skip anchors, remote URLs,
+  // and path-absolute routes like "/" or "/?auth=signup" — those are console
+  // routes served by the gateway, not files in site/).
   const refs = [...html.matchAll(/\b(?:src|href)\s*=\s*["']([^"']+)["']/g)].map((m) => m[1]);
   for (const r of refs) {
     if (/^https?:|^\/\//.test(r) || r.startsWith('#')) continue;
+    if (r.startsWith('/')) continue;
     assert.ok(fs.existsSync(path.join(SITE, r)), 'local asset exists: ' + r);
   }
 });

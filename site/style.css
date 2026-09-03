@@ -73,6 +73,11 @@ main { max-width: 880px; margin: 0 auto; padding: 0 24px; }
   left: 0;
 }
 .hero-cta { margin-top: 28px; font-size: 14px; }
+.hero-cta a { margin-right: 16px; }
+.hero-cta .cta-open { color: var(--green); font-weight: 700; }
+.hero-cta .cta-create { color: inherit; }
+.footer-cta { margin-left: auto; }
+.footer-cta a { color: var(--green); }
 
 #features { padding: 48px 0; }
 .feature {
