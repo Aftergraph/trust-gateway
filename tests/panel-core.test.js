@@ -23,7 +23,7 @@ test('XSS policy: no innerHTML assignment in core.js', () => {
 });
 
 test('core.js builds the expected tab ids in order', () => {
-  const expected = ['console', 'rooms', 'artifacts', 'goals', 'builder', 'hub', 'providers', 'history', 'computer'];
+  const expected = ['console', 'rooms', 'artifacts', 'goals', 'builder', 'hub', 'providers', 'providers-live', 'history', 'computer', 'playground', 'voice', 'integrations'];
   for (const id of expected) {
     assert.match(src, new RegExp("id:\\s*'" + id + "'", 'i'), 'tab id present: ' + id);
   }

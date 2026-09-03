@@ -247,7 +247,7 @@ below is missing one.
 
 ## Full audit-event table
 
-68 event types emitted from `src/gateway/**`. Extraction rule: every string
+71 event types emitted from `src/gateway/**`. Extraction rule: every string
 matched by `{type: '…'}` (including the `enabled ? 'a' : 'b'` ternary in
 plugins.js) across all files under `src/gateway/`.
 
@@ -322,6 +322,8 @@ plugins.js) across all files under `src/gateway/`.
 | 67 | `trust_scan` | mounts/91-trust.js (D4: metadata ONLY — chars, hits, rule names; scanned text is NEVER stored or logged) |
 | 68 | `provider_live_access_denied` | mounts/92-providers-live.js (D5: worker attempted access to live probe) |
 | 69 | `provider_live_probed` | mounts/92-providers-live.js (D5: operator successfully probed providers) |
+| 70 | `telegram_notify` | mounts/71-telegram.js (D2: chat_id + chars + outcome only — never text, never token) |
+| 71 | `telegram_notify_rejected` | mounts/71-telegram.js (D2: non-operator attempt; reason + bot name only) |
 ## Documented exceptions
 
 The test compares the table above against a programmatic extraction over

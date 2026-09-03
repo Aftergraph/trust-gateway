@@ -14,8 +14,12 @@
     { id: 'builder', title: 'Builder' },
     { id: 'hub', title: 'Hub' },
     { id: 'providers', title: 'Providers' },
+    { id: 'providers-live', title: 'Live' },
     { id: 'history', title: 'History' },
     { id: 'computer', title: 'Computer' },
+    { id: 'playground', title: 'Playground' },
+    { id: 'voice', title: 'Voice' },
+    { id: 'integrations', title: 'Integrations' },
   ];
 
   const TAB_IDS = TABS.map((t) => t.id);
