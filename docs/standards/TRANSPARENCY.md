@@ -427,7 +427,7 @@ plugins.js) across all files under `src/gateway/`.
 | 99 | `identity_me` | mounts/102-identity.js (FS-A2: {userId} only — never email, name or token material) |
 | 100 | `chat_user_denied` | mounts/103-chat-user.js (FS-A2: {userId, bot} — grant enforcement; never message text) |
 | 101 | `chat_user_ok` | mounts/103-chat-user.js (FS-A2: {userId, session} — namespaced session name only; never message text) |
-| 102 | `skill_created` | mounts/105-skills.js (FS-C1: {skillId, name, version, createdBy} — steps/tool detail not in the event) |
+| 102 | `skill_created` | mounts/105-skills.js (FS-C1: {skillId, name, version, createdBy, owner (FS-F1)} — steps/tool detail not in the event) |
 | 103 | `skill_run_started` | mounts/105-skills.js (FS-C1: {skillId, name, bot, steps count, dry, runId} — per-step decisions ride the existing chat_action rows with kind 'skill_step') |
 | 104 | `harness2_project_created` | mounts/106-harness2.js (FS-C2: {id, fileCount} — file names/contents stay on disk, never in the chain) |
 | 105 | `harness2_run` | mounts/106-harness2.js (FS-C2: {id, ok, exitCode, durationMs} — never stdout/stderr) |
@@ -442,6 +442,7 @@ plugins.js) across all files under `src/gateway/`.
 | 111 | `tenant_disabled` | mounts/113-tenants.js (FS-E1: {id} — tenant id only) |
 | 111 | `tenant_enabled` | mounts/113-tenants.js (FS-E1: {id} — tenant id only) |
 | 111 | `tenant_denied` | mounts/113-tenants.js (FS-E1: {bot} — non-operator touched a tenant route; RBAC refusal audited) |
+| 112 | `skill_denied` | mounts/105-skills.js (FS-F1: {bot, skillId?, action} — non-self-service bot touched the skills surface, or a self-service bot attempted a non-dry run; RBAC refusal audited, never args/steps) |
 
 ### `backup.js` + mount `110-backup.js` — verified backup/restore (FS-B1)
 - **Endpoints:** `GET /v2/backup` (list, operator), `POST /v2/backup`
