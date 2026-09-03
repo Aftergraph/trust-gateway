@@ -99,6 +99,22 @@ below is missing one.
 - **Storage:** none beyond the chain; `TG_LLM_KEY` never leaves env.
 - **Inspect:** audit search on `chat_action` (payload carries `source: 'llm'`).
 
+### `llm-loop.js` + mount `23-chat-llm-live.js` — multi-iteration LLM tool-call loop
+- **Endpoints:** `POST /v2/chat/llm/deep` {session, message, bot?} (bearer).
+  Up to 3 iterations; allowed-tools list is built from
+  `ROLE_CAPABILITIES + classify` (read/write classes only — destructive
+  and secret never make it into the prompt). Reuses the same brain as
+  `llm-brain.js` via `getBrain(gw)`. Degrades to `{fallback:true, reply:
+  'llm not configured'}` when the brain is unset.
+- **Audit events:** `chat_action`, `chat_action_executed`,
+  `approval_requested` — same types as the single-turn brain, with
+  `source: 'llm-live'` to distinguish the loop-driven path. Parked
+  approvals return `{reply, pending_approval:{id,tool}, iterations}`.
+- **Tool execution:** routed through `gw._run(bot, tool, args)` — the
+  SAME path the deterministic ChatPlanner and the v1 `_postAction`
+  handler use. No second dispatch route.
+- **Inspect:** audit search `q=chat_action source:llm-live`.
+
 ### `events.js` + mount `10-events.js` — SSE hub
 - **Endpoints:** `GET /v2/events?token=…` (auth: query — EventSource can't
   set headers); broadcasts `event: audit`, `pending`, `artifact`, `computer`.
