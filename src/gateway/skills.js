@@ -53,6 +53,33 @@ function isClassifiedInPolicy(tool) {
   return policy.isClassified(tool);
 }
 
+// ── FS-F1: skills self-service RBAC ──────────────────────────────
+// Access tier for a bot on the skills surface:
+//   'operator' — full control, byte-identical FS-C1 behavior.
+//   'author'   — explicit 'skill.author' cap: full CRUD/run as before (FS-C1).
+//   'self'     — 'skills.own' cap: create (scoped owner=bot.name), list OWN,
+//                get OWN, patch OWN, delete OWN, dry-run OWN. A non-dry run
+//                is refused (approval-gated runs stay operator/author-only).
+//   null       — no access (fail closed).
+// Note: unlike apikeys/tenants, a '*' capability does NOT widen skills
+// access — FS-C1 scoped the surface to role 'operator' or 'skill.author'
+// and that contract is preserved byte-identically.
+function skillsAccessLevel(bot) {
+  if (!bot) return null;
+  if (bot.role === 'operator') return 'operator';
+  const caps = Array.isArray(bot.capabilities) ? bot.capabilities : [];
+  if (caps.includes('skill.author')) return 'author';
+  if (caps.includes('skills.own')) return 'self';
+  return null;
+}
+
+// Ownership check: a 'self'-tier bot owns exactly the skills it created
+// (createdBy === bot.name). Fail closed on anything malformed.
+function isOwnSkill(skill, bot) {
+  if (!skill || !bot || !bot.name) return false;
+  return skill.createdBy === bot.name;
+}
+
 // Validate an argsTemplate:
 //   • '' → no args ({} at run time)
 //   • otherwise a JSON object template whose string leaves carry
@@ -272,6 +299,8 @@ module.exports = {
   DEFAULT_FILE,
   getSkillStore,
   isClassifiedInPolicy,
+  skillsAccessLevel,
+  isOwnSkill,
   validateTemplate,
   resolveTemplate,
   METACHAR_RE,

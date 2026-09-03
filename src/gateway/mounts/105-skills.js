@@ -1,7 +1,15 @@
 'use strict';
 // FS-C1 mount: skills as first-class governed objects.
+// FS-F1 extension: skills self-service for non-operators.
 //
-// Routes (all bearer, RBAC: operator role OR capability 'skill.author'):
+// Routes (all bearer, RBAC — see skillsAccessLevel in ../skills):
+//   operator (role) or 'skill.author' cap → full FS-C1 behavior, unchanged.
+//   'skills.own' cap → self-service ONLY:
+//     create (forced owner=bot.name), list/get/patch/delete OWN skills,
+//     run OWN skills with ?dry=1 only. Non-owned records are 404
+//     (anti-enumeration); a non-dry run is 403 skill_denied audited.
+//   neither → 403 { error: 'skill_owner_required' }, audited skill_denied.
+//
 //   GET    /v2/skills                → list skills
 //   GET    /v2/skills/:id            → get one skill
 //   POST   /v2/skills                → create {name, version, description, steps, createdBy}
@@ -14,21 +22,28 @@
 //                                     approval — NEVER direct execution.
 //   ?dry=1 on run returns the plan without executing anything.
 //
-// Audit: skill_created + skill_run_started (own TRANSPARENCY rows).
+// Audit: skill_created + skill_run_started (own TRANSPARENCY rows) +
+// skill_denied (FS-F1: RBAC / dry-only refusals, {bot, skillId?, action}).
 // Per-step governance rides the EXISTING chat_action rows:
 //   {type:'chat_action', kind:'skill_step', skillId, seq, tool, decision}
 // — no raw args ever enter the chain (argsLength only).
 
 const { send, readBody } = require('../server');
-const { getSkillStore, resolveTemplate } = require('../skills');
+const { getSkillStore, resolveTemplate, skillsAccessLevel, isOwnSkill } = require('../skills');
 const { classify, decide } = require('../policy');
 
-// RBAC: operator role, or the bot explicitly holds the 'skill.author' cap.
+// FS-F1: access tier — 'operator' | 'author' | 'self' | null (see skills.js).
 function skillAuthorAllowed(bot) {
-  if (!bot) return false;
-  if (bot.role === 'operator') return true;
-  const caps = Array.isArray(bot.capabilities) ? bot.capabilities : [];
-  return caps.includes('skill.author');
+  return skillsAccessLevel(bot) !== null;
+}
+
+// Which action a request is attempting (for skill_denied audit rows).
+function routeAction(method, segs, isRun) {
+  if (method === 'GET') return segs.length >= 3 ? 'read' : 'list';
+  if (method === 'POST') return isRun ? 'run' : 'create';
+  if (method === 'PATCH') return 'patch';
+  if (method === 'DELETE') return 'delete';
+  return method.toLowerCase();
 }
 
 module.exports = {
@@ -44,14 +59,25 @@ module.exports = {
     const segs = pathname.split('/').filter(Boolean); // ['v2','skills', ...]
     const id = segs.length >= 3 ? decodeURIComponent(segs[2]) : null;
     const isRun = segs.length === 4 && segs[3] === 'run';
+    const access = skillsAccessLevel(bot);
 
     if (!skillAuthorAllowed(bot)) {
-      return send(res, 403, { error: 'forbidden — requires operator role or skill.author capability' });
+      gw._audit({ type: 'skill_denied', bot: bot && bot.name, action: routeAction(req.method, segs, isRun) });
+      return send(res, 403, { error: 'skill_owner_required' });
     }
+    // FS-F1: 'self' tier — ownership-scoped self-service. operator/author
+    // take the unchanged FS-C1 paths below.
+    const selfService = access === 'self';
 
     try {
       // ── GET /v2/skills — list (governed skills + module-provided skills) ──
       if (req.method === 'GET' && !id) {
+        // Self-service: owner filter — only the bot's own skills. Module
+        // skills are not its records, so hub discovery is skipped entirely.
+        if (selfService) {
+          const own = store.list().filter((s) => isOwnSkill(s, bot));
+          return send(res, 200, { skills: own });
+        }
         const merged = { skills: [...store.list()] };
         // FS-C1 owns /v2/skills; module skills (W4 discovery) ride the same
         // surface so agents see one skill list. Hub unavailable → governed only.
@@ -71,7 +97,8 @@ module.exports = {
       // ── GET /v2/skills/:id ──
       if (req.method === 'GET' && id && !isRun) {
         const skill = store.get(id);
-        if (!skill) return send(res, 404, { error: 'not_found' });
+        // Self-service: 404 (anti-enum) on someone else's or missing skill.
+        if (!skill || (selfService && !isOwnSkill(skill, bot))) return send(res, 404, { error: 'not_found' });
         return send(res, 200, skill);
       }
 
@@ -81,14 +108,19 @@ module.exports = {
         try { body = JSON.parse((await readBody(req)) || '{}'); }
         catch { return send(res, 400, { error: 'invalid_json' }); }
         const { name, version, description, steps, createdBy } = body || {};
-        const creator = createdBy || bot.name;
+        // FS-F1: self-service creates are scoped owner=bot.name — a worker
+        // can never mint a skill that looks like someone else created it.
+        const creator = selfService ? bot.name : (createdBy || bot.name);
         const skill = store.create({ name, version, description, steps, createdBy: creator });
-        gw._audit({ type: 'skill_created', skillId: skill.id, name: skill.name, version: skill.version, createdBy: creator });
+        gw._audit({ type: 'skill_created', skillId: skill.id, name: skill.name, version: skill.version, createdBy: creator, owner: creator });
         return send(res, 201, skill);
       }
 
       // ── PATCH /v2/skills/:id — edit ──
       if (req.method === 'PATCH' && id && !isRun) {
+        const current = store.get(id);
+        // Self-service: 404 (anti-enum) on someone else's or missing skill.
+        if (!current || (selfService && !isOwnSkill(current, bot))) return send(res, 404, { error: 'not_found' });
         let body;
         try { body = JSON.parse((await readBody(req)) || '{}'); }
         catch { return send(res, 400, { error: 'invalid_json' }); }
@@ -98,6 +130,9 @@ module.exports = {
 
       // ── DELETE /v2/skills/:id — remove ──
       if (req.method === 'DELETE' && id && !isRun) {
+        const current = store.get(id);
+        // Self-service: ownership enforced — cannot delete someone else's.
+        if (!current || (selfService && !isOwnSkill(current, bot))) return send(res, 404, { error: 'not_found' });
         const removed = store.remove(id);
         return send(res, 200, { id: removed.id, name: removed.name });
       }
@@ -105,13 +140,21 @@ module.exports = {
       // ── POST /v2/skills/:id/run — governed execution (or ?dry=1 plan) ──
       if (req.method === 'POST' && isRun) {
         const skill = store.get(id);
-        if (!skill) return send(res, 404, { error: 'not_found' });
+        // Self-service: 404 (anti-enum) on someone else's or missing skill.
+        if (!skill || (selfService && !isOwnSkill(skill, bot))) return send(res, 404, { error: 'not_found' });
+
+        const dry = url.searchParams.get('dry') === '1';
+        // FS-F1: self-service runs are dry-only — the approval-gated live run
+        // stays operator/author-only (FS-C1). Refusal is audited.
+        if (selfService && !dry) {
+          gw._audit({ type: 'skill_denied', bot: bot.name, skillId: skill.id, action: 'run' });
+          return send(res, 403, { error: 'dry_run_only' });
+        }
 
         let body;
         try { body = JSON.parse((await readBody(req)) || '{}'); }
         catch { return send(res, 400, { error: 'invalid_json' }); }
         const args = (body && body.args) || {};
-        const dry = url.searchParams.get('dry') === '1';
 
         // Resolve every step's args up-front (placeholder substitution +
         // metachar rejection). Any failure aborts before ANY step runs.
