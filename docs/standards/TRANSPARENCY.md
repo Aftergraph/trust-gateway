@@ -453,6 +453,11 @@ plugins.js) across all files under `src/gateway/`.
 | 116 | `skill_unfederated` | mounts/105-skills.js (FS-G1: {id, by} — owning-tenant operator pulled a skill back to shared; never steps/args) |
 | 116 | `skill_federation_denied` | mounts/105-skills.js (FS-G1: {bot, skillId, action} — cross-tenant write attempt on a federated skill (run/patch/federate/unfederate) refused owner-tenant-only, answered 404 anti-enumeration; TG_SKILLS_FEDERATION=1 only; never args/steps) |
 | 117 | `skill_fed_limited` | mounts/105-skills.js (FS-H2: {runnerTenant, skillId, cap, window, limitKind} — a cross-tenant DRY run of a federated skill refused 429 fed_rate_limited because the runner tenant hit TG_FED_RUNS_PER_HOUR (default 20) or the skill hit TG_FED_RUNS_PER_SKILL_HOUR (default 50); enforced BEFORE the dry-run executes; TG_SKILLS_FEDERATION=1 only; never args/steps) |
+| 118 | `skill_fed_real_requested` | mounts/105-skills.js (FS-I1: {runId, skillId, ownerTenant, runnerTenant, by} — a cross-tenant REAL run was requested; a pending_real_runs row now awaits DUAL approval; TG_SKILLS_FEDERATION=1 only; never args/steps) |
+| 118 | `skill_fed_real_approved_owner` | mounts/105-skills.js (FS-I1: {runId, skillId, by, ownerTenant, runnerTenant} — the OWNING tenant's operator stamped their half of the dual approval; TG_SKILLS_FEDERATION=1 only) |
+| 118 | `skill_fed_real_approved_runner` | mounts/105-skills.js (FS-I1: {runId, skillId, by, ownerTenant, runnerTenant} — the RUNNING tenant's operator stamped their half of the dual approval; TG_SKILLS_FEDERATION=1 only) |
+| 118 | `skill_fed_real_executed` | mounts/105-skills.js (FS-I1: {runId, skillId, ownerTenant, runnerTenant, bot, runChainSeq, status, completed, resultHash} — the dual-approved cross-tenant REAL run executed; resultHash is a sha256 over the bounded step results, never raw payloads; TG_SKILLS_FEDERATION=1 only) |
+| 118 | `skill_fed_real_denied` | mounts/105-skills.js (FS-I1: {bot, runId?, skillId?, reason} — a REAL-run route refused: premature execute without dual approval, wrong tenant side, non-federated skill, or re-execute; nothing executed; TG_SKILLS_FEDERATION=1 only) |
 
 ### `sandbox.js` — optional OS sandbox layer for the harness2 jail (FS-F3)
 - **What it is:** a spike, additive and default-OFF. The jail's real
