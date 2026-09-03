@@ -4,10 +4,11 @@
 //
 // Returns the scalar projection from ../obsv.js snapshot(gw): chain
 // verify scalars, telemetry top-5 type counts (no raw payloads), pending
-// approvals, apikey rate-limit counters, tenant counts, uptime. No
+// approvals, apikey rate-limit counters, tenant counts, skill visibility
+// counts, backup-manifest scalars, events-hub client count, uptime. No
 // caching — computed per call; the ring memory used is bounded (top-5
-// counts only). Audited: observability_read {by} — the operator name
-// only, never token material.
+// counts only; backup section reads at most 10 manifests). Audited:
+// observability_read {by} — the operator name only, never token material.
 //
 // Workers get 403 {error:'operator_required'} + observability_denied.
 

@@ -57,12 +57,18 @@
         : '';
       const ak = o.apikeys || {};
       const tn = o.tenants || {};
+      const sk = o.skills || {};
+      const bp = o.backups || {};
+      const ev = o.events || {};
       row.append(el('div', 'card-reason',
         'chain ' + (o.chain.ok ? 'SEALED ✓' : 'TAMPERED ✖') + ' (' + (o.chain.length || 0) + ')' +
         ' · pending ' + ((o.approvals && o.approvals.pendingCount) || 0) +
         ' · telemetry ' + (tel.total || 0) + (top ? ' [' + top + ']' : '') +
         ' · keys ' + (ak.active || 0) + ' (rate-limited 1h: ' + (ak.rateLimitedLast1h || 0) + ')' +
         ' · tenants ' + (tn.count || 0) + ' (disabled: ' + (tn.disabled || 0) + ')' +
+        ' · skills ' + (sk.total || 0) + ' (shared: ' + (sk.shared || 0) + ', federated: ' + (sk.federated || 0) + ')' +
+        ' · backups ' + (bp.count || 0) + (bp.latestAt ? ' (latest: ' + bp.latestAt + ')' : '') +
+        ' · hub clients ' + (ev.hubClients || 0) +
         ' · uptime ' + (o.uptimeSec || 0) + 's'));
       host.appendChild(row);
     }).catch(() => { /* 403 (non-operator) or unreachable — row stays hidden */ });
