@@ -242,7 +242,13 @@
       whoami = w.name;
       myCaps = w.capabilities || [];
       myScopes = buildScopes(myCaps);
-    }).catch(() => { whoami = null; myCaps = []; myScopes = buildScopes([]); });
+      // FS-E1 slice 3: tenant chip — /v2/me carries the resolved tenant id.
+      // Rendered ONLY when the field exists; hidden silently otherwise
+      // (textContent-only, muted class reuses existing tokens).
+      api('/v2/me').then((me) => {
+        $('tenantChip').textContent = me && typeof me.tenant === 'string' ? me.tenant : '';
+      }).catch(() => { $('tenantChip').textContent = ''; });
+    }).catch(() => { whoami = null; myCaps = []; myScopes = buildScopes([]); $('tenantChip').textContent = ''; });
     api('/v1/audit/verify').then((v) => {
       setPill(v.ok); $('entryCount').textContent = v.length; $('headHash').textContent = String(v.head).slice(0, 12);
       primeStream(); refreshPending(); refreshBots();
