@@ -66,7 +66,7 @@ Vurderet mod: kommerciel værdi × teknisk risiko × slice-størrelse.
 | R3 | **Ekstern API-nøgler** | Middel-høj | Middel | ACCEPTÉR — åbner integration-kundesegmentet |
 | R4 | **Sandbox-hærdelse (C3)** | Middel | Høj | UDSET — kræver OS-arbejde (namespaces/bubblewrap); dokumentér nuancen først |
 | R5 | **Persistente rate-limits** | Middel | Lav | ACCEPTÉR som del af R1 (samme store: persistence) |
-| R6 | **Skills self-service** | Middel | Middel | UDSET — afhænger af R1/R3 (hvem må dele hvad) |
+| R6 | **Skills self-service** | Middel | Middel | UDSET — afhænger af R1/R3 (hvem må dele hvad). FS-F4 marketplace: sharing er per-GATEWAY (global store); cross-TENANT deling er UDEN FOR scope i FS-F4 |
 | R7 | **Backup-automatik** | Middel | Lav | ACCEPTÉR som del af R2 |
 | R8 | **Conformance tier-B** | Lav-middel | Lav | LØBENDE — udvid tier-A med hver ny fase |
 
@@ -158,7 +158,9 @@ Vurderet mod: kommerciel værdi × teknisk risiko × slice-størrelse.
 - **FS-F3**: sandbox hardening spike (bwrap/unshare, env-gated, ærlig
   fallback) — DISPATCHERET.
 - **FS-F4**: skills marketplace/deling mellem tenants (bygger på skills.own
-  + tenants).
+  + tenants). *Leveret i FS-F4-slice: publish/unpublish + delt katalog +
+  cross-bot dry-runs — per-GATEWAY scope; cross-TENANT deling er stadig
+  fremtidigt arbejde.*
 - **FS-F5**: tier-C conformance (chaos/anti-fragility: kill -9 mid-flight,
   disk-full, concurrent writers) + RUNBOOK i docs/.
 - **Ops**: installer systemd-gatewayen på alle miljøer via deploy/install.sh

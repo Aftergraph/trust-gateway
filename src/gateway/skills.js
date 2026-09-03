@@ -80,6 +80,32 @@ function isOwnSkill(skill, bot) {
   return skill.createdBy === bot.name;
 }
 
+// ── FS-F4: skills marketplace (visibility) ──────────────────────
+// A skill's visibility is 'private' (default — every skill created before
+// FS-F4, and every skill created now, behaves exactly as before) or
+// 'shared' (visible to other bots on the SAME gateway for reading and
+// DRY-run; never editable or deletable by non-owners). Cross-TENANT
+// sharing is out of scope for this slice — the store stays per-gateway.
+function isShared(skill) {
+  return !!skill && skill.visibility === 'shared';
+}
+
+// Visibility-aware view check, used where FS-F1 used bare ownership:
+//   • owner → sees its record (unchanged)
+//   • operator/author tiers → see everything (FS-C1, unchanged)
+//   • 'self' tier → additionally sees OTHER owners' records IFF the
+//     record is shared. A private record owned by someone else stays
+//     invisible (404 anti-enumeration, byte-identical FS-F1 behavior).
+// Editing (PATCH/DELETE) and non-dry runs do NOT use this check — they
+// stay strictly isOwnSkill / dry-only.
+function canViewSkill(skill, bot, access) {
+  if (!skill) return false;
+  if (isOwnSkill(skill, bot)) return true;
+  if (access === 'operator' || access === 'author') return true;
+  if (access === 'self' && isShared(skill)) return true;
+  return false;
+}
+
 // Validate an argsTemplate:
 //   • '' → no args ({} at run time)
 //   • otherwise a JSON object template whose string leaves carry
@@ -272,6 +298,21 @@ class SkillStore {
     return { ...next };
   }
 
+  // FS-F4: flip a skill's visibility ('private' ↔ 'shared'). The field is
+  // deliberately NOT settable via create/update — the only path to shared
+  // is the audited publish route, so a marketplace listing can never be
+  // smuggled in through a plain edit.
+  setVisibility(id, visibility) {
+    if (visibility !== 'private' && visibility !== 'shared') {
+      throw err('bad_request', 'skill visibility must be private or shared');
+    }
+    const idx = this.skills.findIndex((s) => s.id === id);
+    if (idx === -1) throw err('not_found', 'skill not found');
+    this.skills[idx] = { ...this.skills[idx], visibility };
+    this._save();
+    return { ...this.skills[idx] };
+  }
+
   remove(id) {
     const idx = this.skills.findIndex((s) => s.id === id);
     if (idx === -1) throw err('not_found', 'skill not found');
@@ -301,6 +342,8 @@ module.exports = {
   isClassifiedInPolicy,
   skillsAccessLevel,
   isOwnSkill,
+  isShared,
+  canViewSkill,
   validateTemplate,
   resolveTemplate,
   METACHAR_RE,

@@ -445,6 +445,8 @@ plugins.js) across all files under `src/gateway/`.
 | 112 | `skill_denied` | mounts/105-skills.js (FS-F1: {bot, skillId?, action} — non-self-service bot touched the skills surface, or a self-service bot attempted a non-dry run; RBAC refusal audited, never args/steps) |
 | 113 | `sandbox_used` | sandbox.js via mounts/106-harness2.js (FS-F3: {id, method: bwrap\|unshare\|none} — optional OS-level wrap, TG_SANDBOX=1 only; method and project id only, never argv/paths) |
 | 113 | `sandbox_fallback` | sandbox.js via mounts/106-harness2.js (FS-F3: {id, method, reason≤60 chars} — wrapped child failed at runtime, run retried unwrapped per the documented same-user discipline) |
+| 114 | `skill_published` | mounts/105-skills.js (FS-F4: {id, by} — operator marked a skill shared; never steps/args) |
+| 114 | `skill_unpublished` | mounts/105-skills.js (FS-F4: {id, by} — operator marked a skill private again; never steps/args) |
 
 ### `sandbox.js` — optional OS sandbox layer for the harness2 jail (FS-F3)
 - **What it is:** a spike, additive and default-OFF. The jail's real
