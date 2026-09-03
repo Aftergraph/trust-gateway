@@ -33,6 +33,18 @@
     return n;
   }
 
+  // ── G12 telemetry (§20.4): fire-and-forget POSTs to /v2/telemetry.
+  // Client-side 400ms/type cap on top of the server's 250ms rate limit;
+  // failures are swallowed — telemetry never blocks or breaks the console.
+  const telLast = {};
+  function tel(event, fields) {
+    const t = Date.now();
+    if (telLast[event] && t - telLast[event] < 400) return;
+    telLast[event] = t;
+    api('/v2/telemetry', { method: 'POST', body: JSON.stringify({ event, fields: fields || {} }) }).catch(() => {});
+  }
+  let paletteOpened = false; // palette_open fires ONCE per session (§18.1)
+
   function setPill(ok) {
     const p = $('chainPill');
     p.textContent = ok ? 'SEALED ✓' : 'TAMPERED ✖';
@@ -350,7 +362,7 @@
       const q = input.value.trim();
       const cmds = PALETTE_COMMANDS
         .filter((c) => !q || c.label.toLowerCase().includes(q.toLowerCase()))
-        .map((c) => ({ label: c.label, kind: 'command', meta: 'jump', run: () => { close(); c.run(); } }));
+        .map((c) => ({ label: c.label, kind: 'command', meta: 'jump', run: () => { tel('palette_command', { label: c.label }); close(); c.run(); } }));
       if (!q) {
         lastResults = cmds; selected = 0; render(); return;
       }
@@ -395,11 +407,12 @@
           label: (h.payload && h.payload.type ? h.payload.type : 'entry') + '  #' + h.seq,
           kind: 'hit',
           meta: ((h.payload && (h.payload.bot || h.payload.tool)) || '') + (fuzzy ? ' fuzzy' : ''),
-          run: () => { close(); jumpToSeq(h.seq); },
+          run: () => { tel('palette_object_resolve', { via: fuzzy ? 'fuzzy' : 'search', seq: h.seq, ok: true }); close(); jumpToSeq(h.seq); },
         }));
+        tel('palette_search', { qlen: q.length, results: hits.length });
         if (!hits.length && rest.length) return runSearch(rest[0], rest.slice(1), true);
         lastResults = idRows.concat(hits, cmds); selected = 0; render();
-      }).catch(() => { lastResults = idRows.concat(cmds); selected = 0; render(); });
+      }).catch(() => { tel('palette_search', { qlen: q.length, results: 0, error: true }); lastResults = idRows.concat(cmds); selected = 0; render(); });
       runSearch(q, fuzzyQueries(q), false);
     }
     input.addEventListener('input', update);
@@ -414,6 +427,7 @@
   }
   function openPalette() {
     const p = ensurePalette();
+    if (!paletteOpened) { paletteOpened = true; tel('palette_open'); }
     p.wrap.classList.add('view-show');
     p.input.value = '';
     p.input.focus();
@@ -457,5 +471,13 @@
     },
     refresh: () => { refreshPending(); refreshBots(); },
     onAudit: (fn) => { window.addEventListener('tg-audit', (ev) => fn(ev.detail)); },
+    // G12: shared fire-and-forget telemetry poster (400ms/type client cap).
+    telemetry: tel,
   };
+
+  // G12 (§20.3): migration_phase fires ONCE at boot — phase 4, and whether
+  // the compose flag is currently on (drives the §5 engine fallback story).
+  let composeFlag = false;
+  try { composeFlag = !!(window.TG_COMPOSE && window.TG_COMPOSE.composeEnabled()); } catch { /* sandboxed */ }
+  tel('migration_phase', { phase: 4, hasFlag: composeFlag });
 })();

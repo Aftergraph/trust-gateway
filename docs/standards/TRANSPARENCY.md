@@ -369,6 +369,34 @@ plugins.js) across all files under `src/gateway/`.
 | 79 | `run_paused` | src/gateway/runs.js (wave F F1: cancellable-state transition — parked approval or operator/owner cancel; emitted by store.cancel() via POST /v2/runs/:id/cancel) |
 | 80 | `adapter_kind_register` | mounts/99-adapter-kinds.js (G9: {kind, fields count} — field names only, never values) |
 | 81 | `adapter_kind_rejected` | mounts/99-adapter-kinds.js (G9: {bot, kind?, errors[]} — validation failures) |
+| 82 | `palette_open` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
+| 83 | `palette_command` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
+| 84 | `palette_search` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
+| 85 | `palette_object_resolve` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
+| 86 | `palette_nl_intent` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
+| 87 | `panel_manifest_validate` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
+| 88 | `capability_filter_hit` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
+| 89 | `compose_engine_render` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
+| 90 | `migration_phase` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
+| 91 | `four_oh2_handled` | telemetry.js (G12 §20.4, renamed from `402_429_handled` — extractor-hostile — telemetry ring buffer, not audit chain) |
+| 92 | `tg_api_raw_fetch_blocked` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
+| 93 | `tg_session_unavailable` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
+| 94 | `search_backend_fts5_swap` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
+
+### `telemetry.js` + `mounts/100-telemetry.js` — post-launch telemetry (G12, §20.4)
+- **Endpoints:** `POST /v2/telemetry` {event, fields?} (bearer; server-side
+  allow-list, unknown event → 400); `GET /v2/telemetry?event=&since=`
+  (operator-only).
+- **Audit events:** rows 82–94 above are TELEMETRY events, deliberately NOT
+  sealed into the hash chain — observability ≠ governance. `gw.telemetry.record()`
+  never calls `_audit`, so `GET /v1/audit/verify` length is unaffected by
+  telemetry traffic.
+- **Storage:** `data/telemetry.json` — bounded ring buffer (max 2000, FIFO),
+  atomic tmp+rename, mode 0600; survives restart. Per-type rate limit 250 ms
+  (silent drop); fields projected to scalars only.
+- **Inspect:** `GET /v2/telemetry` (operator bearer) or read
+  `data/telemetry.json` directly (one JSON object with an `events` array).
+
 ## Documented exceptions
 
 The test compares the table above against a programmatic extraction over
