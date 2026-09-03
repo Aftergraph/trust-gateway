@@ -88,6 +88,16 @@
     return document.querySelector('main.panes') || document.querySelector('main');
   }
 
+  // FE1: an empty #panel-host still had flex:1, so it split the body column
+  // 50/50 with main.panes — the dead band under the header on /now. The host
+  // is "empty" when it has no visible panel-view (or compose note); core.js
+  // toggles .panel-host-empty on every transition, CSS does the hiding.
+  function syncHostEmpty(host) {
+    if (!host) return;
+    const visible = host.querySelector('.panel-view.view-show, .compose-cap-note');
+    host.classList.toggle('panel-host-empty', !visible);
+  }
+
   function ensureShell() {
     const nav = document.getElementById('tabs');
     if (!nav) return null;
@@ -98,9 +108,10 @@
     if (!host) {
       host = document.createElement('section');
       host.id = 'panel-host';
-      host.className = 'panel-host';
+      host.className = 'panel-host panel-host-empty';
       parent.insertBefore(host, main);
     }
+    syncHostEmpty(host);
     return { nav, main, host, parent };
   }
 
@@ -236,6 +247,7 @@
     syncDomainTabs(shell.nav, d.id);
     buildSubtabs(shell, d.id);
     showPanel(shell, d.id, currentPanel(d.id));
+    syncHostEmpty(shell.host);
   }
 
   function showPanel(shell, domain, panelId) {
@@ -253,6 +265,7 @@
       shell.main.classList.remove('view-hide');
       syncSubtabs(document.getElementById('subtabs'), 'console');
       annotateCapability(entry);
+      syncHostEmpty(host);
       return;
     }
     shell.main.classList.add('view-hide');
@@ -265,6 +278,7 @@
     if (re) re.classList.add('view-show');
     syncSubtabs(document.getElementById('subtabs'), panelId);
     annotateCapability(entry);
+    syncHostEmpty(host);
   }
 
   function composedPlan(domain) {
@@ -305,13 +319,14 @@
       const btns = nav.querySelectorAll('.tab:not(.domain)');
       for (const b of btns) b.classList.toggle('active', b.dataset.tab === id);
       const host = document.getElementById('panel-host');
-      if (id === 'console') { clearViews(host); shell.main.classList.remove('view-hide'); return; }
+      if (id === 'console') { clearViews(host); shell.main.classList.remove('view-hide'); syncHostEmpty(host); return; }
       shell.main.classList.add('view-hide');
       clearViews(host);
       const mounted = mountPanel(id);
       const t = document.getElementById('pv-' + id);
       if (t) t.classList.add('view-show');
       if (!mounted) showPlaceholder(host, id);
+      syncHostEmpty(host);
       return;
     }
     const domain = PANEL_TO_DOMAIN[id] || LEGACY_TAB_TO_DOMAIN[id] || (DOMAINS.find((d) => d.id === id) ? id : 'now');
