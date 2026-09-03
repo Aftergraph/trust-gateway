@@ -74,10 +74,20 @@ function scopedStore(gw, key, make) {
 /**
  * Extra audit-payload fields for a tenant-resolved request: main tenant
  * chains stay byte-identical ({}); other tenants get an explicit tag.
+ *
+ * FS-G1: opts.federatedFrom — when a cross-tenant federation run is
+ * audited, the owner-tenant id rides the SAME row: for a non-main running
+ * tenant the returned object gains `federatedFrom: <owner-tenant-id>` on
+ * top of `tenant`; for a MAIN running tenant `{}` shape is preserved, so
+ * the caller adds the field itself (see 105-skills.js) — the existing
+ * tag function's shape for non-federated runs never changes.
  */
-function tenantAuditTag(tenant) {
-  if (!tenant || tenant.id === 'main') return {};
-  return { tenant: tenant.id };
+function tenantAuditTag(tenant, opts = {}) {
+  const base = !tenant || tenant.id === 'main' ? {} : { tenant: tenant.id };
+  if (opts && opts.federatedFrom && base.tenant) {
+    return { ...base, federatedFrom: opts.federatedFrom };
+  }
+  return base;
 }
 
 module.exports = { scopeDir, scopedStore, tenantAuditTag, KINDS };

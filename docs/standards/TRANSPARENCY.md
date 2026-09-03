@@ -428,7 +428,7 @@ plugins.js) across all files under `src/gateway/`.
 | 100 | `chat_user_denied` | mounts/103-chat-user.js (FS-A2: {userId, bot} — grant enforcement; never message text) |
 | 101 | `chat_user_ok` | mounts/103-chat-user.js (FS-A2: {userId, session} — namespaced session name only; never message text) |
 | 102 | `skill_created` | mounts/105-skills.js (FS-C1: {skillId, name, version, createdBy, owner (FS-F1)} — steps/tool detail not in the event) |
-| 103 | `skill_run_started` | mounts/105-skills.js (FS-C1: {skillId, name, bot, steps count, dry, runId} — per-step decisions ride the existing chat_action rows with kind 'skill_step') |
+| 103 | `skill_run_started` | mounts/105-skills.js (FS-C1: {skillId, name, bot, steps count, dry, runId} — per-step decisions ride the existing chat_action rows with kind 'skill_step'; FS-G1: a cross-tenant DRY run of a federated skill adds BOTH tags to this SAME row — `tenant: <running-tenant-id>` via tenantAuditTag AND `federatedFrom: <owner-tenant-id>`; non-federated runs keep the exact FS-C1 payload) |
 | 104 | `harness2_project_created` | mounts/106-harness2.js (FS-C2: {id, fileCount} — file names/contents stay on disk, never in the chain) |
 | 105 | `harness2_run` | mounts/106-harness2.js (FS-C2: {id, ok, exitCode, durationMs} — never stdout/stderr) |
 | 106 | `backup_created` | mounts/110-backup.js (FS-B1: {files, chainHead} — file counts + chain head only, never contents/paths) |
@@ -449,6 +449,9 @@ plugins.js) across all files under `src/gateway/`.
 | 114 | `skill_unpublished` | mounts/105-skills.js (FS-F4: {id, by} — operator marked a skill private again; never steps/args) |
 | 115 | `observability_read` | mounts/114-observability.js (FS-G2: {by} — operator name only; the snapshot body itself carries scalar projections, never raw payloads/token material) |
 | 115 | `observability_denied` | mounts/114-observability.js (FS-G2: {bot} — non-operator touched /v2/observability; RBAC refusal audited) |
+| 116 | `skill_federated` | mounts/105-skills.js (FS-G1: {id, by, ownerTenant} — OWNING-tenant operator marked a skill federated; TG_SKILLS_FEDERATION=1 only; never steps/args) |
+| 116 | `skill_unfederated` | mounts/105-skills.js (FS-G1: {id, by} — owning-tenant operator pulled a skill back to shared; never steps/args) |
+| 116 | `skill_federation_denied` | mounts/105-skills.js (FS-G1: {bot, skillId, action} — cross-tenant write attempt on a federated skill (run/patch/federate/unfederate) refused owner-tenant-only, answered 404 anti-enumeration; TG_SKILLS_FEDERATION=1 only; never args/steps) |
 
 ### `sandbox.js` — optional OS sandbox layer for the harness2 jail (FS-F3)
 - **What it is:** a spike, additive and default-OFF. The jail's real
