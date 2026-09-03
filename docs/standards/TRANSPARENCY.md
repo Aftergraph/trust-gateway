@@ -474,9 +474,11 @@ plugins.js) across all files under `src/gateway/`.
 | 132 | `secret_deleted` | mounts/115-secrets.js (FS-I5: {tenant, key} — key name and tenant only; delete of a missing key is a uniform 404; TG_SECRETS_VAULT=1 only) |
 | 133 | `secret_listed` | mounts/115-secrets.js (FS-I5: {tenant} — the listing route returns KEY NAMES only, never values; there is no API route that reads a secret value back, values are consumed by internal code paths only; TG_SECRETS_VAULT=1 only) |
 | 134 | `secret_denied` | mounts/115-secrets.js (FS-I5: {bot} — non-operator touched a secrets route; RBAC refusal audited, key names and values never in the payload) |
-
-| 131 | `config_reloaded` | mounts/118-config-reload.js, bin/gateway.js SIGHUP (FS-I6: {changed:[key names], errorCount} — config hot-reload accepted; key NAMES only, never values; source data/gateway.env or env) |
-| 132 | `config_reload_failed` | mounts/118-config-reload.js, bin/gateway.js SIGHUP (FS-I6: {changed?, errorCount, error?, bot?, by?} — invalid env value kept the previous value / non-operator touched POST /v2/config/reload / non-reloadable key present in gateway.env; failed keys never take effect) |
+| 135 | `config_reloaded` | mounts/118-config-reload.js, bin/gateway.js SIGHUP (FS-I6: {changed:[key names], errorCount} — config hot-reload accepted; key NAMES only, never values; source data/gateway.env or env) |
+| 136 | `config_reload_failed` | mounts/118-config-reload.js, bin/gateway.js SIGHUP (FS-I6: {changed?, errorCount, error?, bot?, by?} — invalid env value kept the previous value / non-operator touched POST /v2/config/reload / non-reloadable key present in gateway.env; failed keys never take effect) |
+| 137 | `chain_archived` | chain-archive.js via mounts/111-chain-archive.js (FS-I7: {bot, archivedCount, manifestKey, headBefore, headAfter} — counts + hashes only; archived entries never re-enter the chain; TG_CHAIN_ARCHIVE=1 only) |
+| 138 | `chain_archive_listed` | mounts/111-chain-archive.js (FS-I7: {bot, count} — operator listed archive manifests; keys + counts only) |
+| 139 | `chain_archive_refused` | mounts/111-chain-archive.js (FS-I7: {bot, reason, length?} — non-operator touched /v2/chain/archive (RBAC refusal), or archival refused chain_too_short under the <100-entry safety gate; nothing deleted, nothing written) |
 
 ### `hot-reload.js` + mount `118-config-reload.js` — config hot-reload (FS-I6)
 - **Endpoints:** `POST /v2/config/reload` (operator-only — same isOperator
@@ -540,6 +542,33 @@ plugins.js) across all files under `src/gateway/`.
   is still exact: what was backed up is what comes back.
 - **Storage:** `data/backups/backup-<ISO>/` (atomic dir rename, FIFO last
   10).
+
+### `chain-archive.js` + mount `111-chain-archive.js` — chain compaction / archival (FS-I7)
+- **Endpoints:** `POST /v2/chain/archive` {beforeIso?} (operator; triggers
+  archival), `GET /v2/chain/archive` (operator; lists archive manifests).
+  Both audited; worker access → 403 + `chain_archive_refused`.
+- **Gating:** `TG_CHAIN_ARCHIVE=1` enables archival — unset means fully
+  INERT (POST answers 501 `archive_disabled`; the module never reads,
+  writes or deletes anything). `TG_CHAIN_ARCHIVE_DAYS` sets the age
+  threshold (default 90).
+- **Behavior:** entries older than the cutoff move to
+  `data/archive/chain-<date>.jsonl` (append-only; per-run sha256 recorded
+  in the manifest), are deleted from `chain_entries` (genesis seq 0 is
+  never deletable), and the survivors are RE-BASED (seq 1..N,
+  prevHash-linked, hashes recomputed) so `verify()` stays green.
+- **Honest head change:** compaction changes the chain head by design.
+  The kv_store manifest `archive:chain:<date>` records {file, count,
+  headBefore, headAfter, archivedAt, sha256} — headBefore is reproducible
+  by replaying the archived file (every line carries its ORIGINAL
+  seq/hashes and re-verifies). The gap is documented, not hidden (same
+  contract as backup/restore, docs/RUNBOOK.md mode 4).
+- **Safety:** archival REFUSES (`chain_archive_refused`, HTTP 409) while
+  the live chain has fewer than 100 entries — compaction can never wipe a
+  young chain. Re-archiving an already-archived period is an audited
+  no-op (archivedCount 0, no manifest, no file append).
+- **Audit events:** `chain_archived`, `chain_archive_listed`,
+  `chain_archive_refused` — counts, keys and hashes only; entry payloads
+  never re-enter the chain and file contents are never logged.
 
 ### `telemetry.js` + `mounts/100-telemetry.js` — post-launch telemetry (G12, §20.4)
 - **Endpoints:** `POST /v2/telemetry` {event, fields?} (bearer; server-side
