@@ -276,7 +276,20 @@
       const device = (navigator.maxTouchPoints > 0 && innerWidth < 800) ? 'mobile' : 'desktop';
       const sess = (window.TG && window.TG.sessionState) ? window.TG.sessionState() : null;
       const workState = sess && sess.workState ? sess.workState : (pending > 0 ? 'awaiting-approval' : 'idle');
-      return C.composePlan({ domain, capabilities: caps, device, workState, attention: { queueCount: pending } });
+      const t0 = Date.now();
+      const plan = C.composePlan({ domain, capabilities: caps, device, workState, attention: { queueCount: pending } });
+      // G12 (§20.4): compose_engine_render — flag-on renders only (we are
+      // past the composeEnabled() guard). Fire-and-forget, never throws.
+      try {
+        if (window.TG && typeof window.TG.telemetry === 'function') {
+          window.TG.telemetry('compose_engine_render', {
+            latencyMs: Date.now() - t0,
+            domain,
+            surfaceCount: plan && Array.isArray(plan.stack) ? plan.stack.length : 0,
+          });
+        }
+      } catch { /* telemetry never breaks render */ }
+      return plan;
     } catch { return null; }
   }
 
