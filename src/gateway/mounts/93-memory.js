@@ -14,7 +14,21 @@
 // ignore decay. Expired facts are NEVER auto-deleted (spec rule).
 
 const { send, readBody } = require('../server');
-const { getMemoryStore } = require('../memory');
+const path = require('node:path');
+const { getMemoryStore, MemoryStore } = require('../memory');
+const { resolveTenant } = require('../tenant-resolve');
+const { scopeDir, scopedStore, tenantAuditTag } = require('../tenant-scope');
+
+// FS-E1 slice 2: tenant-scoped memory. A non-main tenant gets its own
+// MemoryStore over <TG_DATA_DIR>/data/tenants/<id>/memory/memory.json;
+// the main tenant keeps the shared singleton byte-identically (same file,
+// same shape, same responses — existing tests are the gate).
+function memoryStoreFor(gw, tenant) {
+  if (!tenant || tenant.id === 'main') return getMemoryStore(gw);
+  return scopedStore(gw, `memory:${tenant.id}`, () => new MemoryStore({
+    file: path.join(scopeDir(null, gw, tenant.id, 'memory'), 'memory.json'),
+  }));
+}
 
 function botAllowed(gw, bot, targetBot) {
   if (bot.name === targetBot) return true;
@@ -30,9 +44,16 @@ module.exports = {
     const bot = ctx.bot;
     const pathname = ctx.url.pathname;
     const url = ctx.url;
-    const store = getMemoryStore(gw);
-
     try {
+      // FS-E1 slice 2: resolve the tenant (token prefix claim — bearer auth
+      // itself stays where it is). req.bot is exposed for the resolver's
+      // operator check (same pattern as 02-tenant-healthz). Unknown/disabled
+      // tenant → 404, never 403 (anti-enumeration).
+      req.bot = bot;
+      const { tenant } = resolveTenant(req, gw);
+      if (!tenant) return send(res, 404, { error: 'not_found' });
+      const store = memoryStoreFor(gw, tenant);
+
       // ── GET /v2/memory?bot=<name> — list facts ──
       if (req.method === 'GET' && !hasIdSegment(pathname)) {
         const targetBot = url.searchParams.get('bot');
@@ -78,7 +99,7 @@ module.exports = {
           return send(res, 403, { error: 'forbidden' });
         }
         // Audit first to capture chain seq for sourceChainSeq on the fact
-        const auditEntry = gw._audit({ type: 'memory_added', bot: botName, source: source || 'user' });
+        const auditEntry = gw._audit({ type: 'memory_added', bot: botName, source: source || 'user', ...tenantAuditTag(tenant) });
         const fact = store.create({ bot: botName, text, source: source || 'user', tags, pin, decayAt, sourceChainSeq: auditEntry.seq });
         return send(res, 201, fact);
       }
@@ -96,7 +117,7 @@ module.exports = {
         catch { return send(res, 400, { error: 'invalid_json' }); }
         const { text, tags, pin, decayAt } = body || {};
         const updated = store.edit(id, { text, tags, pin, decayAt });
-        gw._audit({ type: 'memory_edited', id, bot: updated.bot });
+        gw._audit({ type: 'memory_edited', id, bot: updated.bot, ...tenantAuditTag(tenant) });
         return send(res, 200, updated);
       }
 
@@ -112,7 +133,7 @@ module.exports = {
           return send(res, 403, { error: 'forbidden' });
         }
         const removed = store.remove(id);
-        gw._audit({ type: 'memory_removed', id: removed.id, bot: removed.bot, sourceChainSeq: removed.sourceChainSeq || null });
+        gw._audit({ type: 'memory_removed', id: removed.id, bot: removed.bot, sourceChainSeq: removed.sourceChainSeq || null, ...tenantAuditTag(tenant) });
         return send(res, 200, { id: removed.id, bot: removed.bot });
       }
 
