@@ -500,6 +500,9 @@ plugins.js) across all files under `src/gateway/`.
 | 156 | `webhook_subs_created` | mounts/125-webhook-subs.js (FS-L2: {by, id, url} — operator registered a webhook subscription; url + id only, never the delivery payload; TG_WEBHOOK_SUBS=1 only) |
 | 157 | `webhook_subs_listed` | mounts/125-webhook-subs.js (FS-L2: {by, count} — operator listed webhook subscriptions; count only) |
 | 158 | `webhook_subs_deleted` | mounts/125-webhook-subs.js (FS-L2: {by, id} — operator removed a webhook subscription; id only) |
+| 159 | `flag_set` | mounts/126-feature-flags.js (FS-L3: {by, name, enabled, value} — operator set a feature flag; flag name + enabled + value, no secret material) |
+| 160 | `flag_reset` | mounts/126-feature-flags.js (FS-L3: {by, name} — operator reset a feature flag to its env default) |
+| 161 | `flag_listed` | mounts/126-feature-flags.js (FS-L3: {by, count} — operator listed feature flags; count only) |
 
 ### `secrets-vault.js` + mounts `115-secrets.js` / `119-secrets-rotate.js` — tenant secrets vault + master-key rotation (FS-I5, FS-J2)
 - **Endpoints:** `PUT/GET/DELETE /v2/tenants/:id/secrets[/:key]` (operator;
