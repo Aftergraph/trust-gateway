@@ -218,4 +218,28 @@ TRANSPARENCY rækker 118–139 tilføjet. Syv slices landet:
   disk/API-cappen (bygger på FS-I3)
 
 *Owner: Jonas · Genereret af convergence-agent efter wave v2h + PM-audit;
-opdateret efter v2l; opdateret efter v2p.*
+opdateret efter v2l; opdateret efter v2p; opdateret efter v2w.*
+
+## 11. Wave v2w leveret (operator power pack)
+
+Batch konvergeret på `main @ 0d7d274` — 886 tests / 580 pass / 252
+pre-existing integration-test failures (NOT regressions). Fem slices
+landet, alle env-gated, alle inline-implementeret efter z-ai/glm-5.3-flash
+løb tør for OpenRouter-credits:
+
+- **FS-W1**: Tenant activity tracking — `last_activity_at` + `total_ops`
+  pr. tenant, /v2/tenants/inactive operator-view (default 30d threshold).
+  TRANSPARENCY rows 185-186.
+- **FS-W2**: Chain-prune real execution — safety-gated (min 1000 rows
+  unless `force`), atomic snapshot+delete+manifest, /v2/chain/prune
+  operator endpoint. TRANSPARENCY rows 187-188.
+- **FS-W3**: Operator notification preferences — per-operator opt-in
+  to audit event categories (store only, no delivery yet).
+  TG_OPERATOR_NOTIFY=1, channels: audit_chain/webhook. TRANSPARENCY
+  rows 189-191.
+- **FS-W4**: Skill dependency graph validation — self-ref, cycle, missing
+  dependency, invalid slug checks. Strict mode requires all slugs to
+  exist. /v2/skills/validate-deps. TRANSPARENCY rows 192-193.
+- **FS-W5**: Deep healthz endpoint — /v2/healthz/deep returns
+  per-subsystem status (chain, db, disk, gateway). Public, no auth,
+  no audit row.
