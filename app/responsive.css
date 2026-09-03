@@ -1,8 +1,9 @@
 /* Trust Gateway v2 — responsive / mobile shell (W9)
    Loaded after style.css; overrides the 3-pane grid for narrow screens.
-   Uses dvh units + safe-area insets; all tap targets ≥ 44px. */
-
-:root { color-scheme: dark; }
+   Uses dvh units + safe-area insets; all tap targets ≥ 44px.
+   Phase 0 token swap: no color literals lived here; color-scheme is owned
+   by style.css :root (dark-first + light parity), so the old hard-coded
+   `:root { color-scheme: dark; }` was removed to let light parity work. */
 
 /* ── Mobile & tablet: single column, panes stack vertically ── */
 @media (max-width: 800px) {
