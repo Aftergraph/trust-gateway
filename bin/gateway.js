@@ -78,6 +78,23 @@ if (DISPATCH) {
   gw.registerExecutor(/^worktree\.(snapshot|remove|list)/, makeWorktreeExecutor(botsDir, gw));
 }
 
+// FS-I6: SIGHUP hot-reload — re-read operator thresholds (TG_ALERT_*,
+// TG_TENANT_DEFAULT_*, TG_FED_RUNS_*) from data/gateway.env / env without a
+// restart. Never crashes the gateway: reload() captures errors and keeps the
+// previous values in effect. BOT_TOKENS and PORT are restart-only by design.
+const { reload } = require('../src/gateway/hot-reload');
+process.on('SIGHUP', async () => {
+  const r = await reload(gw);
+  const failed = Array.isArray(r.errors) && r.errors.length > 0;
+  // Literal audit types — TRANSPARENCY.md rows 131-132 (docs↔code sync gate
+  // matches quoted literals directly after `type:`).
+  if (failed) {
+    gw._audit({ type: 'config_reload_failed', changed: r.changed, errorCount: r.errors.length });
+  } else {
+    gw._audit({ type: 'config_reloaded', changed: r.changed }); // key names only
+  }
+});
+
 const server = http.createServer((req, res) => gw.handle(req, res));
 server.listen(PORT, () => {
   console.log(`▲ trust-gateway listening on :${PORT} with bots: ${Object.keys(bots).join(', ')}`);
