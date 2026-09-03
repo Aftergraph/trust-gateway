@@ -542,6 +542,9 @@ plugins.js) across all files under `src/gateway/`.
 | 195 | `skill_sandbox_set` | mounts/147-skill-sandbox.js (FS-X2: {by, skillId, network, fsWrite} — operator set a per-skill sandbox profile; TG_SKILL_SANDBOX=1 only) |
 | 196 | `skill_sandbox_reset` | mounts/147-skill-sandbox.js (FS-X2: {by, skillId, removed} — operator removed a sandbox profile; id only) |
 | 197 | `skill_sandbox_listed` | mounts/147-skill-sandbox.js (FS-X2: {by, count} — operator listed sandbox profiles; count only) |
+| 198 | `route_limit_set` | mounts/148-route-limits.js (FS-X3: {by, pattern, maxHits, windowMs} — operator set a per-route rate limit; TG_ROUTE_LIMITS=1 only) |
+| 199 | `route_limit_listed` | mounts/148-route-limits.js (FS-X3: {by, count} — operator listed per-route rate limits; count only) |
+| 200 | `route_limit_removed` | mounts/148-route-limits.js (FS-X3: {by, pattern, removed} — operator removed a per-route rate limit; pattern only) |
 
 ### `secrets-vault.js` + mounts `115-secrets.js` / `119-secrets-rotate.js` — tenant secrets vault + master-key rotation (FS-I5, FS-J2)
 - **Endpoints:** `PUT/GET/DELETE /v2/tenants/:id/secrets[/:key]` (operator;
