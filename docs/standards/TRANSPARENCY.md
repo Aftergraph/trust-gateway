@@ -503,6 +503,9 @@ plugins.js) across all files under `src/gateway/`.
 | 159 | `flag_set` | mounts/126-feature-flags.js (FS-L3: {by, name, enabled, value} — operator set a feature flag; flag name + enabled + value, no secret material) |
 | 160 | `flag_reset` | mounts/126-feature-flags.js (FS-L3: {by, name} — operator reset a feature flag to its env default) |
 | 161 | `flag_listed` | mounts/126-feature-flags.js (FS-L3: {by, count} — operator listed feature flags; count only) |
+| 162 | `tenant_auto_disabled` | mounts/127-tenant-lifecycle.js (FS-M1: {by, tenant, reason, at} — operator auto-disabled a tenant; reason ≤200 chars required) |
+| 163 | `tenant_cleanup_candidates_read` | mounts/127-tenant-lifecycle.js (FS-M1: {by, count} — operator listed cleanup candidates; count only, never deletes) |
+| 164 | `tenant_auto_disable_failed` | mounts/127-tenant-lifecycle.js (FS-M1: {bot, tenant, reason} — non-operator or missing/invalid reason; reason code only) |
 
 ### `secrets-vault.js` + mounts `115-secrets.js` / `119-secrets-rotate.js` — tenant secrets vault + master-key rotation (FS-I5, FS-J2)
 - **Endpoints:** `PUT/GET/DELETE /v2/tenants/:id/secrets[/:key]` (operator;
