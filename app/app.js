@@ -354,16 +354,53 @@
       if (!q) {
         lastResults = cmds; selected = 0; render(); return;
       }
-      // audit search as primary channel (§18: palette search → /v2/search)
-      window.TG.api('/v2/search?q=' + encodeURIComponent(q) + '&limit=8').then((d) => {
+      // ── G3 (§18.5): fuzzy object-id resolution ─────────────────────────
+      // 18.5.1 — bare integer resolves to the audit entry at that chain seq.
+      const SEQ_ID_RE = /^\d+$/;
+      // 18.5.2 — 8-hex transparency token (same regex as mounts/90-transparency.js);
+      // optional sess_ prefix. Format-validated client-side ONLY: the palette
+      // never probes /h for existence — unknown token and missing session are
+      // byte-identical 404s server-side, and the client must not distinguish.
+      const TOKEN_ID_RE = /^(sess_)?[0-9a-f]{8}$/;
+      // 18.5 fuzzy ladder on zero hits: retry last word, then its first 4 chars.
+      function fuzzyQueries(query) {
+        const words = query.split(/\s+/).filter(Boolean);
+        const last = words[words.length - 1];
+        if (!last) return [];
+        const ladder = [last];
+        if (last.length > 4) ladder.push(last.slice(0, 4));
+        return ladder.filter((s) => s.toLowerCase() !== query.toLowerCase());
+      }
+      const idRows = [];
+      if (SEQ_ID_RE.test(q)) {
+        idRows.push({
+          label: 'jump to seq ' + q, kind: 'id', meta: 'seq',
+          run: () => { close(); jumpToSeq(Number(q)); },
+        });
+      }
+      if (TOKEN_ID_RE.test(q)) {
+        // /h expects the bare 8-hex token (mounts/90-transparency.js TOKEN_RE),
+        // so a sess_-prefixed input sheds the prefix for the URL. Navigate
+        // unconditionally — the client never probes for existence.
+        const hex = q.replace(/^sess_/, '');
+        idRows.push({
+          label: 'open transcript /h/' + hex, kind: 'id', meta: 'transcript',
+          run: () => { close(); location.assign('/h/' + hex); },
+        });
+      }
+      // audit search as primary channel (§18: palette search → /v2/search);
+      // G3: on zero hits walk the fuzzy ladder, marking retried rows 'fuzzy'.
+      const runSearch = (query, rest, fuzzy) => window.TG.api('/v2/search?q=' + encodeURIComponent(query) + '&limit=8').then((d) => {
         const hits = (d.hits || []).map((h) => ({
           label: (h.payload && h.payload.type ? h.payload.type : 'entry') + '  #' + h.seq,
           kind: 'hit',
-          meta: (h.payload && (h.payload.bot || h.payload.tool)) || '',
+          meta: ((h.payload && (h.payload.bot || h.payload.tool)) || '') + (fuzzy ? ' fuzzy' : ''),
           run: () => { close(); jumpToSeq(h.seq); },
         }));
-        lastResults = hits.concat(cmds); selected = 0; render();
-      }).catch(() => { lastResults = cmds; selected = 0; render(); });
+        if (!hits.length && rest.length) return runSearch(rest[0], rest.slice(1), true);
+        lastResults = idRows.concat(hits, cmds); selected = 0; render();
+      }).catch(() => { lastResults = idRows.concat(cmds); selected = 0; render(); });
+      runSearch(q, fuzzyQueries(q), false);
     }
     input.addEventListener('input', update);
     input.addEventListener('keydown', (e) => {
