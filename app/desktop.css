@@ -2,35 +2,18 @@
    Loaded after style.css; enhances large displays. Never narrows the
    3-pane grid — the base contract in style.css stays authoritative. */
 
-/* ── Wide screens (≥1400px): roomier 4-column shell.
-   Stream keeps its wide lead column; approvals / workforce / chat dock
-   each get a full column. The chat dock is promoted out of the
-   workforce pane into the grid via display:contents on its parent. */
+/* ── Wide screens (≥1400px): roomier spacing on the same 3-column contract.
+   FE1 fix: the previous ≥1400 rule promoted #paneWorkforce's children
+   directly into the grid — its h2 became a lone grid item in column 3 and the
+   chatdock wrapped to a second grid row, detaching the WORKFORCE title from
+   its body and squeezing the pane. The pane now stays one unit at every
+   width: title + pane-body + chatdock in a single flex column. */
 @media (min-width: 1400px) {
   .panes {
-    grid-template-columns: 1.4fr 1fr 1fr 1fr;
+    grid-template-columns: 1.2fr 1fr 1fr;
     grid-template-rows: minmax(0, 1fr);
     gap: 14px;
     padding: 14px 20px;
-  }
-
-  /* workforce pane carries the chat dock; split it into its own column */
-  #paneWorkforce {
-    display: contents;
-  }
-  #paneWorkforce > .pane-body,
-  #paneWorkforce > .chatdock {
-    background: #11151f;
-    border: 1px solid #21262d;
-    border-radius: 10px;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-  }
-  #paneWorkforce > .pane-body { overflow-y: auto; }
-  #paneWorkforce > .chatdock {
-    border-top: 0;
-    height: auto;
   }
 }
 

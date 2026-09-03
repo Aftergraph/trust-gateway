@@ -104,9 +104,12 @@ test('responsive.css: mobile rules, dvh units, 44px tap targets, safe-area', () 
   assert.match(css, /@media/, 'has responsive breakpoints');
 });
 
-test('desktop.css: wide-screen 4-col grid + keyboard hints', () => {
+test('desktop.css: wide-screen grid keeps the 3-pane contract + keyboard hints', () => {
   const css = fs.readFileSync(path.join(APP, 'desktop.css'), 'utf8');
-  assert.match(css, /grid-template-columns:\s*1\.4fr 1fr 1fr 1fr/, '4-col grid');
+  // FE1: wide screens must NOT promote #paneWorkforce children out of the
+  // pane (display:contents detached the WORKFORCE title from its body).
+  assert.ok(!/display:\s*contents/.test(css), 'no display:contents pane splitting');
+  assert.match(css, /grid-template-columns:\s*1\.2fr 1fr 1fr/, '3-col grid (base contract)');
   assert.match(css, /kbd/, 'keyboard hints');
 });
 

@@ -109,6 +109,17 @@ header {
   display: flex; align-items: center; gap: var(--tg-space-5); flex-wrap: wrap;
   padding: var(--tg-space-3) var(--tg-space-5); border-bottom: 1px solid var(--tg-border); background: var(--tg-bg-surface);
 }
+/* FE1 header density: above 1280px the header stays on ONE row — the NOW
+ * queue strip sits inline right after the domain rail (order ties resolve
+ * by DOM order: #tabs, then .now-queue), statusbar/tokenbox right-aligned.
+ * Wrapping is capped at ≤1280px where the narrow shell needs stacked rows. */
+@media (min-width: 1281px) {
+  header { flex-wrap: nowrap; }
+  #tabs { order: 1; flex: 1 1 auto; min-width: 0; flex-wrap: nowrap; overflow-x: auto; }
+  .now-queue { order: 1; }
+  .statusbar { order: 2; flex: 0 0 auto; margin-left: auto; }
+  .tokenbox { order: 3; }
+}
 .brand { font-size: var(--tg-text-lg); font-weight: 700; color: var(--tg-text-bright); }
 .ver { color: var(--tg-risk-read); font-size: var(--tg-text-sm); vertical-align: super; }
 .statusbar { display: flex; align-items: center; gap: var(--tg-space-2); flex: 1; }
@@ -196,6 +207,14 @@ header {
 .tab.active { background: var(--tg-bg-elevated); color: var(--tg-risk-read); border-color: var(--tg-border-accent); border-bottom-color: var(--tg-bg-elevated); }
 .view-hide { display: none !important; }
 .panel-host { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: var(--tg-space-3) var(--tg-space-4); }
+/* FE1 fix: an empty #panel-host kept flex:1 and split the body column 50/50
+ * with main.panes — the ~340px dead band under the header on /now. core.js
+ * (syncHostEmpty) toggles .panel-host-empty whenever the host has no visible
+ * panel-view; the :has() rule below is the progressive-enhancement twin. */
+.panel-host.panel-host-empty { display: none; }
+@supports selector(.panel-host:has(.panel-view.view-show)) {
+  .panel-host:not(:has(.panel-view.view-show)):not(:has(.compose-cap-note)) { display: none; }
+}
 /* Phase 1 fix: the router toggles .view-show, but no rule used to show/hide
  * by it — mounted panels and modals were permanently visible. Show only the
  * active panel-view; modals hidden until view-show (history detail, palette). */
