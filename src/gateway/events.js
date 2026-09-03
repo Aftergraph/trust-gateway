@@ -23,6 +23,12 @@ class EventHub {
   constructor(gateway) {
     this.gateway = gateway;
     this.clients = new Set();
+    // FS-E1d: per-client scope filter (tenant-scoped /v2/events). A client
+    // registered WITH a filter receives only audit frames whose entry passes
+    // the filter; broadcast() frames (artifact/computer/room projections,
+    // which carry no tenant tag) are never delivered to filtered clients.
+    // No filter (main / default) → byte-identical behavior.
+    this._filters = new Map(); // res -> filter(entry)
     this._heartbeat = setInterval(() => {
       // Best-effort write to every client. A dead socket throws on write;
       // we ignore here and let the response's 'close' handler remove it.
@@ -43,6 +49,7 @@ class EventHub {
     this._heartbeat = null;
     if (this._onAudit) this.gateway.off('audit', this._onAudit);
     this._onAudit = null;
+    this._filters.clear();
     for (const res of this.clients) {
       try { res.end(); } catch { /* ignore */ }
     }
@@ -56,6 +63,8 @@ class EventHub {
   _broadcastAudit(entry) {
     const frame = `event: audit\ndata: ${JSON.stringify(entry)}\n\n`;
     for (const res of this.clients) {
+      const filter = this._filters.get(res);
+      if (filter && !filter(entry)) continue; // tenant-scoped client: entry not theirs
       try { res.write(frame); } catch { /* dead socket; 'close' handler will remove */ }
     }
   }
@@ -71,7 +80,8 @@ class EventHub {
     }
   }
 
-  addClient(res) {
+  addClient(res, filter) {
+    if (typeof filter === 'function') this._filters.set(res, filter);
     // SSE response headers. X-Accel-Buffering:no tells nginx (and any other
     // reverse proxy) to flush each frame immediately rather than buffering.
     res.writeHead(200, {

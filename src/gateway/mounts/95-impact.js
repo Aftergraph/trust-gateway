@@ -9,6 +9,8 @@
 // only carries {approvalId, risk, confidence}).
 
 const { send, readBody } = require('../server');
+const { resolveTenant } = require('../tenant-resolve');
+const { approvalsStoreFor } = require('./09-approvals');
 
 module.exports = {
   name: 'v2-impact',
@@ -16,8 +18,16 @@ module.exports = {
   path: /^\/v2\/approvals\/([^/]+)\/impact$/,
   auth: 'bearer',
   handle: async (gw, req, res, ctx) => {
+    // FS-E1d: tenant scope — the impact surface reads the SAME per-tenant
+    // approvals store the /v1 routes park into. Main keeps gw.approvals
+    // (byte-identical); non-main tenants get their scoped store. Unknown/
+    // disabled tenant → 404 (anti-enumeration).
+    req.bot = ctx.bot;
+    const { tenant } = resolveTenant(req, gw);
+    if (!tenant) return send(res, 404, { error: 'not_found' });
     const [, id] = ctx.params.matches;
-    const approval = gw.approvals.get(id);
+    const store = approvalsStoreFor(gw, tenant);
+    const approval = store.get(id);
     if (!approval) {
       return send(res, 404, { error: 'not_found' });
     }
