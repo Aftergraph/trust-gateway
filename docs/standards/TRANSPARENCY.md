@@ -483,6 +483,8 @@ plugins.js) across all files under `src/gateway/`.
 | 141 | `secret_master_rotate_failed` | mounts/119-secrets-rotate.js (FS-J2: {failedCount, errors:[{tenant, key, error}]} on an aborted rotation — any row that failed to decrypt under the current master aborted the WHOLE rotation (tx rollback, zero rows written; the listed rows keep their old ciphertext), or {bot} on a non-operator touching POST /v2/secrets/rotate-master; key NAMES only, no values, no master key material) |
 | 142 | `chain_restored` | chain-archive.js via mounts/111-chain-archive.js (FS-J3: {bot, manifestKey, restoredCount, skippedDuplicates, newHead} — operator POST /v2/chain/archive/:date/restore succeeded; counts + hashes only, archived payloads are re-verified (sha256 + re-hash) BEFORE insertion and never logged; TG_CHAIN_ARCHIVE=1 only) |
 | 143 | `chain_restore_refused` | mounts/111-chain-archive.js (FS-J3: {bot, manifestKey, reason, length?, archiveEntries?} — restore refused: non-operator (RBAC), manifest missing/corrupt, checksum_mismatch, or bloat_guard (live >1000 AND would exceed 10000); the live DB is untouched on every refusal path) |
+| 144 | `federation_audit_read` | mounts/120-fed-audit.js (FS-K1: {by, filters} — operator queried /v2/federation/audit; filter keys only, never row payloads; TG_SKILLS_FEDERATION=1 only) |
+| 145 | `federation_audit_denied` | mounts/120-fed-audit.js (FS-K1: {bot} — non-operator touched /v2/federation/audit; RBAC refusal audited; TG_SKILLS_FEDERATION=1 only) |
 
 ### `secrets-vault.js` + mounts `115-secrets.js` / `119-secrets-rotate.js` — tenant secrets vault + master-key rotation (FS-I5, FS-J2)
 - **Endpoints:** `PUT/GET/DELETE /v2/tenants/:id/secrets[/:key]` (operator;
