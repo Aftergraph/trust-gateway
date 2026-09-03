@@ -14,6 +14,15 @@
 //   getSecret(tenant, key)            → string|null
 //   listKeys(tenant)                  → [key]     keys only, never values
 //   deleteSecret(tenant, key)         → bool      true when a row was removed
+//   rotateMasterKey(newMasterKey)     → {ok, rotatedCount, failedKeys}
+//                                     FS-J2: re-encrypts EVERY row under the
+//                                     new master in ONE tx — any row that
+//                                     fails to decrypt aborts the whole
+//                                     rotation (rollback, zero writes), so
+//                                     rotation is never partial. On success
+//                                     this.master AND process.env
+//                                     .TG_SECRETS_MASTER_KEY move to the new
+//                                     key so subsequent ops use it.
 //
 // ENV GATE: everything is inert unless TG_SECRETS_VAULT=1 AND a
 // TG_SECRETS_MASTER_KEY is configured. Unset → setSecret throws
@@ -178,6 +187,65 @@ class SecretsVault {
         .run(tenant, key);
       return r.changes > 0;
     });
+  }
+
+  /**
+   * FS-J2 — master-key rotation: re-encrypt EVERY row under newMasterKey in a
+   * single transaction. ALL-OR-NOTHING: if any row fails to decrypt under the
+   * current master (corrupt row / stale master / foreign writer), the tx
+   * rolls back — zero rows written — and the failure list is returned so the
+   * operator can heal the row(s) and retry. Never partial: a vault that
+   * rotated half-way is strictly worse than one that did not rotate at all
+   * (the old master would silently stop working for half the rows).
+   *
+   * On success this.master and process.env.TG_SECRETS_MASTER_KEY are moved to
+   * newMasterKey so every subsequent op (and the derived-key cache, keyed by
+   * master) uses the new key.
+   *
+   * @param {string} newMasterKey
+   * @returns {{ok: boolean, rotatedCount: number,
+   *            failedKeys?: {tenant: string, key: string, error: string}[]}}
+   */
+  rotateMasterKey(newMasterKey) {
+    this._writeGuard(); // vault_disabled / vault_master_key_missing
+    if (typeof newMasterKey !== 'string' || newMasterKey.length < 16) {
+      throw new Error('vault: new master key too short (min 16 chars)');
+    }
+    if (newMasterKey === this.master) {
+      throw new Error('vault: new master key equals current master key');
+    }
+
+    // Snapshot + decrypt OUTSIDE the tx first: a failed decrypt must abort
+    // BEFORE we open the write window, and tx() must stay short. Encryption
+    // of the snapshots is pure — same inputs give the same ciphertext shape —
+    // so doing it inside the tx is only the INSERTs, not the scrypt work.
+    const rows = this.db.prepare(`SELECT tenant, key, value_enc FROM ${TABLE}`).all();
+    const failedKeys = [];
+    const reEncrypted = [];
+    for (const row of rows) {
+      const plain = decrypt(this.master, row.tenant, row.value_enc);
+      if (plain === null) {
+        failedKeys.push({ tenant: row.tenant, key: row.key, error: 'decrypt_failed_under_current_master' });
+        continue;
+      }
+      reEncrypted.push({ tenant: row.tenant, key: row.key, enc: encrypt(newMasterKey, row.tenant, plain) });
+    }
+    if (failedKeys.length > 0) {
+      return { ok: false, rotatedCount: 0, failedKeys };
+    }
+
+    tx(() => {
+      const upd = this.db.prepare(
+        `UPDATE ${TABLE} SET value_enc = ?, updated_at = ? WHERE tenant = ? AND key = ?`
+      );
+      for (const r of reEncrypted) upd.run(r.enc, this.now(), r.tenant, r.key);
+      return true;
+    });
+
+    // Commit succeeded → adopt the new master for every subsequent op.
+    this.master = newMasterKey;
+    process.env.TG_SECRETS_MASTER_KEY = newMasterKey;
+    return { ok: true, rotatedCount: reEncrypted.length };
   }
 }
 

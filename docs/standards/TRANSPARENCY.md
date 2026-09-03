@@ -479,6 +479,28 @@ plugins.js) across all files under `src/gateway/`.
 | 137 | `chain_archived` | chain-archive.js via mounts/111-chain-archive.js (FS-I7: {bot, archivedCount, manifestKey, headBefore, headAfter} — counts + hashes only; archived entries never re-enter the chain; TG_CHAIN_ARCHIVE=1 only) |
 | 138 | `chain_archive_listed` | mounts/111-chain-archive.js (FS-I7: {bot, count} — operator listed archive manifests; keys + counts only) |
 | 139 | `chain_archive_refused` | mounts/111-chain-archive.js (FS-I7: {bot, reason, length?} — non-operator touched /v2/chain/archive (RBAC refusal), or archival refused chain_too_short under the <100-entry safety gate; nothing deleted, nothing written) |
+| 140 | `secret_master_rotated` | mounts/119-secrets-rotate.js via secrets-vault.js rotateMasterKey (FS-J2: {rotatedCount} — count only; the new master key itself is NEVER logged, audited, or echoed; every tenant_secrets row was re-encrypted under the new master in a single all-or-nothing tx; TG_SECRETS_VAULT=1 only) |
+| 141 | `secret_master_rotate_failed` | mounts/119-secrets-rotate.js (FS-J2: {failedCount, errors:[{tenant, key, error}]} on an aborted rotation — any row that failed to decrypt under the current master aborted the WHOLE rotation (tx rollback, zero rows written; the listed rows keep their old ciphertext), or {bot} on a non-operator touching POST /v2/secrets/rotate-master; key NAMES only, no values, no master key material) |
+
+### `secrets-vault.js` + mounts `115-secrets.js` / `119-secrets-rotate.js` — tenant secrets vault + master-key rotation (FS-I5, FS-J2)
+- **Endpoints:** `PUT/GET/DELETE /v2/tenants/:id/secrets[/:key]` (operator;
+  FS-I5), `POST /v2/secrets/rotate-master` {newMasterKey} (operator; FS-J2).
+  Worker access → 403 + refusal audited.
+- **Rotation semantics (FS-J2):** reads EVERY tenant_secrets row, decrypts
+  under the current TG_SECRETS_MASTER_KEY, re-encrypts under the new master,
+  writes back in a single transaction. ALL-OR-NOTHING: any row that fails to
+  decrypt (corrupt / stale master) aborts the whole rotation — tx rollback,
+  ZERO rows written, `409 rotate_failed` with the failing (tenant, key,
+  error) list so the operator can heal and retry. Never partial: a
+  half-rotated vault would silently lock the old master out of some rows.
+  On success process.env.TG_SECRETS_MASTER_KEY is updated in-process, so
+  subsequent ops use the new key without a restart. Guards: vault off →
+  404 vault_disabled; newMasterKey === current → 400 same_key;
+  newMasterKey < 16 chars → 400 weak_key.
+- **Audit events:** `secret_master_rotated` {rotatedCount};
+  `secret_master_rotate_failed` {failedCount, errors[]} (names only) or
+  {bot} on RBAC refusal. The master key material itself is NEVER logged,
+  audited, or echoed in any response.
 
 ### `hot-reload.js` + mount `118-config-reload.js` — config hot-reload (FS-I6)
 - **Endpoints:** `POST /v2/config/reload` (operator-only — same isOperator
