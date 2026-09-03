@@ -481,6 +481,8 @@ plugins.js) across all files under `src/gateway/`.
 | 139 | `chain_archive_refused` | mounts/111-chain-archive.js (FS-I7: {bot, reason, length?} — non-operator touched /v2/chain/archive (RBAC refusal), or archival refused chain_too_short under the <100-entry safety gate; nothing deleted, nothing written) |
 | 140 | `secret_master_rotated` | mounts/119-secrets-rotate.js via secrets-vault.js rotateMasterKey (FS-J2: {rotatedCount} — count only; the new master key itself is NEVER logged, audited, or echoed; every tenant_secrets row was re-encrypted under the new master in a single all-or-nothing tx; TG_SECRETS_VAULT=1 only) |
 | 141 | `secret_master_rotate_failed` | mounts/119-secrets-rotate.js (FS-J2: {failedCount, errors:[{tenant, key, error}]} on an aborted rotation — any row that failed to decrypt under the current master aborted the WHOLE rotation (tx rollback, zero rows written; the listed rows keep their old ciphertext), or {bot} on a non-operator touching POST /v2/secrets/rotate-master; key NAMES only, no values, no master key material) |
+| 142 | `chain_restored` | chain-archive.js via mounts/111-chain-archive.js (FS-J3: {bot, manifestKey, restoredCount, skippedDuplicates, newHead} — operator POST /v2/chain/archive/:date/restore succeeded; counts + hashes only, archived payloads are re-verified (sha256 + re-hash) BEFORE insertion and never logged; TG_CHAIN_ARCHIVE=1 only) |
+| 143 | `chain_restore_refused` | mounts/111-chain-archive.js (FS-J3: {bot, manifestKey, reason, length?, archiveEntries?} — restore refused: non-operator (RBAC), manifest missing/corrupt, checksum_mismatch, or bloat_guard (live >1000 AND would exceed 10000); the live DB is untouched on every refusal path) |
 
 ### `secrets-vault.js` + mounts `115-secrets.js` / `119-secrets-rotate.js` — tenant secrets vault + master-key rotation (FS-I5, FS-J2)
 - **Endpoints:** `PUT/GET/DELETE /v2/tenants/:id/secrets[/:key]` (operator;
@@ -567,8 +569,12 @@ plugins.js) across all files under `src/gateway/`.
 
 ### `chain-archive.js` + mount `111-chain-archive.js` — chain compaction / archival (FS-I7)
 - **Endpoints:** `POST /v2/chain/archive` {beforeIso?} (operator; triggers
-  archival), `GET /v2/chain/archive` (operator; lists archive manifests).
-  Both audited; worker access → 403 + `chain_archive_refused`.
+  archival), `GET /v2/chain/archive` (operator; lists archive manifests),
+  `GET /v2/chain/archive/:date` (operator; manifest details BEFORE a
+  restore — FS-J3), `POST /v2/chain/archive/:date/restore` (operator;
+  checksummed re-import — FS-J3).
+  All audited; worker access → 403 + `chain_archive_refused` or
+  `chain_restore_refused`.
 - **Gating:** `TG_CHAIN_ARCHIVE=1` enables archival — unset means fully
   INERT (POST answers 501 `archive_disabled`; the module never reads,
   writes or deletes anything). `TG_CHAIN_ARCHIVE_DAYS` sets the age
@@ -587,10 +593,20 @@ plugins.js) across all files under `src/gateway/`.
 - **Safety:** archival REFUSES (`chain_archive_refused`, HTTP 409) while
   the live chain has fewer than 100 entries — compaction can never wipe a
   young chain. Re-archiving an already-archived period is an audited
-  no-op (archivedCount 0, no manifest, no file append).
+  no-op (archivedCount 0, no manifest, no file append). Restore (FS-J3)
+  re-verifies the archive sha256 + per-entry re-hash BEFORE touching the
+  live DB and refuses (`chain_restore_refused`, HTTP 409, module THROWs)
+  on manifest missing/corrupt, file missing, or checksum mismatch; a
+  bloat guard refuses when the live chain is >1000 entries and the
+  restore would push it past 10000. Restore is idempotent: duplicates
+  are skipped by content identity (ts+payload), so a re-run is a clean
+  no-op. Restored entries are re-appended at the CURRENT head with
+  recomputed seq/hashes — the chain verifies GREEN and never
+  time-travels.
 - **Audit events:** `chain_archived`, `chain_archive_listed`,
-  `chain_archive_refused` — counts, keys and hashes only; entry payloads
-  never re-enter the chain and file contents are never logged.
+  `chain_archive_refused`, `chain_restored`, `chain_restore_refused` —
+  counts, keys and hashes only; entry payloads never logged and file
+  contents never logged.
 
 ### `telemetry.js` + `mounts/100-telemetry.js` — post-launch telemetry (G12, §20.4)
 - **Endpoints:** `POST /v2/telemetry` {event, fields?} (bearer; server-side

@@ -196,10 +196,200 @@ function archiveChain(beforeTimestamp, opts = {}) {
   return { archivedCount: manifest.count, manifestKey, manifest };
 }
 
+// FS-J3 — archive restore drill. restoreArchive(manifestKey) re-imports an
+// archived chain file into the live DB, checksummed and fail-closed:
+//
+//   1. manifest must exist in kv_store and carry file+sha256 (else THROW);
+//   2. the on-disk file must match the manifest sha256 exactly (else THROW —
+//      a corrupt/tampered archive must never touch the live chain);
+//   3. every line must re-hash + link (verifyArchiveFile, else THROW);
+//   4. bloat guard: if the live chain is already > BLOAT_GUARD_LENGTH entries
+//      AND the restore would push it past BLOAT_GUARD_TOTAL, REFUSE
+//      (reason 'bloat_guard') — prevents an accidental 10k-row import;
+//   5. entries are re-appended at the CURRENT head with recomputed
+//      seq/prevHash/hash (the chain never time-travels; verify() stays
+//      GREEN). Idempotent BY HASH: a would-be entry whose recomputed hash
+//      already exists in chain_entries is skipped, so re-running a restore
+//      against the same chain state is a clean no-op.
+//
+// Returns {restoredCount, skippedDuplicates, newHead}.
+
+const BLOAT_GUARD_LENGTH = 1000;
+const BLOAT_GUARD_TOTAL = 10000;
+
+function restoreError(code, message) {
+  const err = new Error(message);
+  err.code = code;
+  return err;
+}
+
+/**
+ * Restore an archived chain file (see header for the contract).
+ *
+ * @param {string} manifestKey     kv_store key, `archive:chain:<date>`
+ * @param {object} opts
+ * @param {object} opts.chain      the live SqlChain instance (REQUIRED)
+ * @param {object} [opts.kv]       KV store for the manifest (default: over
+ *                                 the chain's own connection)
+ * @returns {{inert?}|{refused?, reason?, length?, archiveEntries?}|
+ *          {restoredCount, skippedDuplicates, newHead}}
+ */
+function restoreArchive(manifestKey, opts = {}) {
+  // Env gate FIRST — unset TG_CHAIN_ARCHIVE means restore is inert too
+  // (same switch that enabled the archival; nothing is read or written).
+  if (!archiveEnabled())
+    return { inert: true, restoredCount: 0, skippedDuplicates: 0 };
+
+  const chain = opts.chain;
+  if (!chain || !chain.db)
+    return { refused: true, reason: 'sql_chain_required' };
+
+  if (typeof manifestKey !== 'string' || !manifestKey.startsWith('archive:chain:'))
+    throw restoreError(
+      'invalid_manifest_key',
+      `chain_restore: manifest key must look like archive:chain:<date>, got: ${JSON.stringify(manifestKey)}`
+    );
+
+  const kv = opts.kv || new KV({ db: chain.db, table: 'kv_store' });
+  const manifest = kv.get(manifestKey);
+  if (!manifest || typeof manifest !== 'object' || !manifest.file || !manifest.sha256)
+    throw restoreError(
+      'manifest_missing',
+      `chain_restore: no readable manifest at ${manifestKey} (absent, or missing file/sha256 fields)`
+    );
+  if (!fs.existsSync(manifest.file))
+    throw restoreError(
+      'archive_file_missing',
+      `chain_restore: archive file recorded in the manifest does not exist: ${manifest.file}`
+    );
+
+  // Checksum BEFORE anything else touches the live DB: what the manifest
+  // recorded is what must be on disk, byte for byte.
+  const onDisk = fs.readFileSync(manifest.file);
+  const actualSha = sha256Buf(onDisk);
+  if (actualSha !== manifest.sha256)
+    throw restoreError(
+      'checksum_mismatch',
+      `chain_restore: sha256 mismatch for ${manifest.file} — manifest ${manifest.sha256}, disk ${actualSha}. ` +
+        'REFUSING: the archive is corrupt or tampered; the live chain was not touched.'
+    );
+
+  // Parse lines (structural) — full re-hash/link verification comes after
+  // the bloat guard, which only needs the entry count.
+  const lines = onDisk
+    .toString('utf8')
+    .split('\n')
+    .filter((l) => l.trim().length > 0);
+  let entries;
+  try {
+    entries = lines.map((l) => JSON.parse(l));
+  } catch {
+    throw restoreError(
+      'archive_corrupt',
+      `chain_restore: ${manifest.file} contains a line that is not JSON — REFUSING.`
+    );
+  }
+  if (entries.some((e) => !e || typeof e !== 'object' || typeof e.ts !== 'number' || e.payload === undefined))
+    throw restoreError(
+      'archive_corrupt',
+      `chain_restore: ${manifest.file} contains a malformed entry (missing ts/payload) — REFUSING.`
+    );
+
+  // Bloat guard — refuse BEFORE verifying hashes: a >1000-entry live chain
+  // must not be pushed past 10000 entries by one accidental restore.
+  const length = chain.length;
+  if (length > BLOAT_GUARD_LENGTH && length + entries.length > BLOAT_GUARD_TOTAL)
+    return {
+      refused: true,
+      reason: 'bloat_guard',
+      length,
+      archiveEntries: entries.length,
+    };
+
+  // Full integrity: every entry re-hashes to its own hash and links to the
+  // previous one — the same bar the archiver held the file to.
+  const v = verifyArchiveFile(manifest.file);
+  if (!v.ok)
+    throw restoreError(
+      'archive_corrupt',
+      `chain_restore: archive failed re-hash verification (${v.reason}) — REFUSING.`
+    );
+
+  const db = chain.db;
+  let restored = 0;
+  let skipped = 0;
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const headRow =
+      db
+        .prepare('SELECT seq, hash FROM chain_entries ORDER BY seq DESC LIMIT 1')
+        .get() || { seq: -1, hash: '0'.repeat(64) };
+    let seq = headRow.seq;
+    let prevHash = headRow.hash;
+    // Idempotency is BY CONTENT, not by position: restored entries are
+    // re-appended at the current head with RECOMPUTED hashes (the chain
+    // never time-travels), so a re-run cannot match on hash alone. The
+    // invariant that survives re-hashing is (ts, payload) — the exact
+    // identity the archiver preserved in the file. A would-be entry whose
+    // (ts, payload) is already in chain_entries is a duplicate → skipped,
+    // making restore-then-restore a clean no-op.
+    const fingerprint = (ts, payloadText) => `${ts}|${payloadText}`;
+    const existing = new Set(
+      db
+        .prepare('SELECT ts, payload FROM chain_entries')
+        .all()
+        .map((r) => fingerprint(r.ts, r.payload))
+    );
+    const ins = db.prepare(
+      'INSERT INTO chain_entries(seq, ts, prev_hash, hash, payload) VALUES(?,?,?,?,?)'
+    );
+    for (const e of entries) {
+      const payloadText = JSON.stringify(e.payload);
+      const fp = fingerprint(e.ts, payloadText);
+      if (existing.has(fp)) {
+        skipped += 1;
+        continue;
+      }
+      const h = entryHash(seq + 1, prevHash, e.ts, e.payload);
+      seq += 1;
+      ins.run(seq, e.ts, prevHash, h, payloadText);
+      chain._insertFts(seq, e.payload);
+      existing.add(fp);
+      prevHash = h;
+      restored += 1;
+    }
+    // Honesty bookkeeping: record what the restore did on the manifest
+    // itself (counts + resulting head — no payloads, same contract).
+    kv.set(manifestKey, {
+      ...manifest,
+      lastRestore: {
+        at: new Date().toISOString(),
+        restoredCount: restored,
+        skippedDuplicates: skipped,
+        newHead: prevHash,
+      },
+    });
+    db.exec('COMMIT');
+  } catch (err) {
+    try { db.exec('ROLLBACK'); } catch { /* already rolled back */ }
+    throw err;
+  }
+
+  const head = chain.head;
+  return {
+    restoredCount: restored,
+    skippedDuplicates: skipped,
+    newHead: head ? head.hash : null,
+  };
+}
+
 module.exports = {
   archiveChain,
+  restoreArchive,
   verifyArchiveFile,
   archiveEnabled,
   archiveDays,
   MIN_CHAIN_LENGTH,
+  BLOAT_GUARD_LENGTH,
+  BLOAT_GUARD_TOTAL,
 };
