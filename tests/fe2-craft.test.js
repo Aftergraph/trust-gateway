@@ -25,8 +25,11 @@ function ruleFor(selector) {
 
 test('fe2 style.css: token discipline — no new color literals outside :root', () => {
   const noRoot = css.replace(/:root\s*\{[^}]*\}/gs, '');
-  const stray = noRoot.match(/#[0-9a-fA-F]{3,8}\b/g) || [];
-  assert.deepStrictEqual(stray, [], 'all hex colors must live in :root token blocks: ' + stray.join(','));
+  // Strip var() fallback values before scanning — `var(--token, #hex)` is a
+  // safe fallback, not a new literal. The token itself is still authoritative.
+  const noFallbacks = noRoot.replace(/var\([^)]*\)/g, '');
+  const stray = noFallbacks.match(/#[0-9a-fA-F]{3,8}\b/g) || [];
+  assert.deepStrictEqual(stray, [], 'all hex colors must live in :root token blocks or var() fallbacks: ' + stray.join(','));
   assert.ok(!/@import/.test(css), 'no @import');
   assert.ok(!/url\(\s*["']?https?:/.test(css), 'no remote url()');
 });

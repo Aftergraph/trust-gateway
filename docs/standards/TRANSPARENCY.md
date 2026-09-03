@@ -431,6 +431,23 @@ plugins.js) across all files under `src/gateway/`.
 | 103 | `skill_run_started` | mounts/105-skills.js (FS-C1: {skillId, name, bot, steps count, dry, runId} — per-step decisions ride the existing chat_action rows with kind 'skill_step') |
 | 104 | `harness2_project_created` | mounts/106-harness2.js (FS-C2: {id, fileCount} — file names/contents stay on disk, never in the chain) |
 | 105 | `harness2_run` | mounts/106-harness2.js (FS-C2: {id, ok, exitCode, durationMs} — never stdout/stderr) |
+| 106 | `backup_created` | mounts/110-backup.js (FS-B1: {files, chainHead} — file counts + chain head only, never contents/paths) |
+| 107 | `backup_restored` | mounts/110-backup.js (FS-B1: {name, files, chainHead} — restore success, counts only) |
+| 108 | `backup_restore_refused` | mounts/110-backup.js (FS-B1: {name, reason} — fail-closed on sha256 mismatch/missing file; live data untouched) |
+| 109 | `backup_denied` | mounts/110-backup.js (FS-B1: {bot} — non-operator touched a backup route; RBAC refusal audited) |
+
+### `backup.js` + mount `110-backup.js` — verified backup/restore (FS-B1)
+- **Endpoints:** `GET /v2/backup` (list, operator), `POST /v2/backup`
+  (create, operator), `POST /v2/backup/restore` {name} (operator).
+- **Manifest:** {files:[{name,size,sha256}], chainHead, chainId, createdAt}
+  — every file sha256-verified BEFORE restore replaces anything; restore
+  fails closed on any mismatch/missing/corrupt manifest.
+- **Honest limitation:** backups are byte copies (no consistent-snapshot
+  window across multiple files); the SQLite db is copied with the same
+  window risk as JSON — documented in backup.js header. Restore integrity
+  is still exact: what was backed up is what comes back.
+- **Storage:** `data/backups/backup-<ISO>/` (atomic dir rename, FIFO last
+  10).
 
 ### `telemetry.js` + `mounts/100-telemetry.js` — post-launch telemetry (G12, §20.4)
 - **Endpoints:** `POST /v2/telemetry` {event, fields?} (bearer; server-side
