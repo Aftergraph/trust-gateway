@@ -488,6 +488,9 @@ plugins.js) across all files under `src/gateway/`.
 | 145 | `federation_audit_denied` | mounts/120-fed-audit.js (FS-K1: {bot} — non-operator touched /v2/federation/audit; RBAC refusal audited; TG_SKILLS_FEDERATION=1 only) |
 | 146 | `telemetry_tenant_read` | mounts/123-telemetry-tenant.js (FS-K2: {by, tenant, count} — operator queried /v2/tenants/:id/telemetry; payloadSummary only, never raw args/steps/text; TG_TELEMETRY_TENANT_SCOPED=1 only) |
 | 147 | `telemetry_tenant_denied` | mounts/123-telemetry-tenant.js (FS-K2: {bot, tenant, reason} — non-operator touched a tenant telemetry route, or cross-tenant query refused 404 anti-enumeration; tenant id + reason only) |
+| 148 | `obsv_snapshot_captured` | mounts/121-obsv-history.js (FS-K3: {by, id} — operator triggered a manual capture; id is the obsv_snapshots row id; TG_OBSV_HISTORY=1 only) |
+| 149 | `obsv_history_read` | mounts/121-obsv-history.js (FS-K3: {by, count} — operator queried historical snapshots; count only, no raw payloads) |
+| 150 | `obsv_snapshot_cleanup` | mounts/121-obsv-history.js (FS-K3: {by, deletedCount} — operator pruned snapshots older than retention) |
 
 ### `secrets-vault.js` + mounts `115-secrets.js` / `119-secrets-rotate.js` — tenant secrets vault + master-key rotation (FS-I5, FS-J2)
 - **Endpoints:** `PUT/GET/DELETE /v2/tenants/:id/secrets[/:key]` (operator;

@@ -4,7 +4,7 @@
 // Inert (404) when TG_SKILLS_FEDERATION unset.
 
 const { listFederatedRuns, federationEnabled } = require('../fed-audit');
-const { isOperator } = require('./auth-helpers');
+const { isOperator } = require('../tenants');
 const { audit } = require('../events');
 
 module.exports = function mountFedAudit(gw) {
