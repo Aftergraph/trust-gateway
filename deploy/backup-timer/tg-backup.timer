@@ -1,0 +1,18 @@
+# FS-E2 — timer that fires tg-backup.service daily at 04:00 local time.
+# Install alongside tg-backup.service:
+#   sudo cp deploy/backup-timer/tg-backup.timer /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now tg-backup.timer
+#   systemctl list-timers tg-backup.timer   # verify next fire
+# Persistent=true catches up a missed 04:00 run (machine was off).
+
+[Unit]
+Description=Trust Gateway — daily 04:00 backup timer
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+Persistent=true
+Unit=tg-backup.service
+
+[Install]
+WantedBy=timers.target

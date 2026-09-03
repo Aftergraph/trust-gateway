@@ -89,13 +89,18 @@ for (const [name, text] of Object.entries(SCRIPTS)) {
   });
 }
 
-test('install.sh: idempotent install path (copy -f, daemon-reload, enable, restart)', () => {
+test('install.sh: idempotent install path (copy -f, sed rewrite, daemon-reload, enable, restart-if-active)', () => {
   const t = SCRIPTS['install.sh'];
-  assert.match(t, /cp -f "\$UNIT_SRC" "\$UNIT_DST"/);
+  assert.match(t, /cp -f "\$UNIT_SRC" "\$UNIT_DST\.tmp"/);
+  assert.match(t, /sed -i "s#\/root\/agent-workforce#\$REPO#g" "\$UNIT_DST\.tmp"/);
   assert.match(t, /UNIT_DST=\/etc\/systemd\/system\/tg-gateway\.service/);
   assert.match(t, /systemctl daemon-reload/);
   assert.match(t, /systemctl enable .*tg-gateway\.service/);
   assert.match(t, /systemctl restart .*tg-gateway\.service/);
+  // FS-E2: restart only when already active (enable --now handles first start)
+  assert.match(t, /systemctl enable --now tg-gateway\.service/);
+  assert.match(t, /systemctl is-active tg-gateway\.service/);
+  assert.ok(t.indexOf('is-active tg-gateway.service') < t.indexOf('systemctl restart'));
 });
 
 test('install.sh: refuses when node missing or env file unreadable (fail closed)', () => {
@@ -109,10 +114,10 @@ test('install.sh: refuses when node missing or env file unreadable (fail closed)
   assert.match(t, /exit 1/);
 });
 
-test('install.sh: health-gates /healthz within 10s and prints tailscale URL', () => {
+test('install.sh: health-gates /healthz within 30s and prints tailscale URL', () => {
   const t = SCRIPTS['install.sh'];
   assert.match(t, /\/healthz/);
-  assert.match(t, /seq 1 10/); // 10 attempts × 1s ≈ 10s gate
+  assert.match(t, /seq 1 30/); // FS-E2: 30 attempts × 1s = 30s gate
   assert.match(t, /tailscale/);
 });
 
