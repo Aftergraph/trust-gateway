@@ -120,6 +120,18 @@ test('probeAll: voice reachable', async () => {
   }
 });
 
+test('probeAll: voice ok when TG_TTS_CMD set (boolean only, no network)', async () => {
+  const gw = makeGateway();
+  const env = { TG_TTS_CMD: 'edge-tts --voice da-DK --text %TEXT% --write-media %OUT%' };
+  const results = await probeAll(gw, { env });
+  const voice = results.find((r) => r.name === 'voice');
+  assert.equal(voice.ok, true);
+  assert.equal(voice.detail, 'cmd_configured');
+  // No env value leaks.
+  const dump = JSON.stringify(results);
+  assert.ok(!dump.includes('da-DK'), 'no env value leak in probe results');
+});
+
 test('probeAll: telegram token present/missing', async () => {
   const gw = makeGateway();
   let results = await probeAll(gw, { env: { TG_TELEGRAM_TOKEN: 'fake-token' } });

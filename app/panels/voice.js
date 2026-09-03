@@ -77,7 +77,9 @@
             });
             status.textContent = 'playing (' + (d.backend || 'remote') + ')';
           } else if (d && d.backend === 'echo') {
-            status.textContent = 'no voice backend configured — echo';
+            status.textContent = 'echo (no backend configured)';
+          } else if (d && d.backend === 'cmd') {
+            status.textContent = 'cmd backend — no audio returned';
           } else {
             status.textContent = 'no audio returned';
           }

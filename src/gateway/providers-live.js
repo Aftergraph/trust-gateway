@@ -76,16 +76,21 @@ async function probeLlm(env) {
 
 async function probeVoice(env) {
   const url = env.TG_TTS_URL;
-  if (!url) return { name: 'voice', ok: false, detail: 'not_configured' };
-  const r = await httpProbe(url, { method: 'HEAD' });
-  const ok = !r.error && r.status >= 200 && r.status < 400;
-  return {
-    name: 'voice',
-    ok,
-    httpStatus: r.status,
-    detail: ok ? 'reachable' : (r.error ? 'unreachable' : 'error_' + r.status),
-    ms: r.ms,
-  };
+  const cmd = env.TG_TTS_CMD;
+  if (!url && !cmd) return { name: 'voice', ok: false, detail: 'not_configured' };
+  if (url) {
+    const r = await httpProbe(url, { method: 'HEAD' });
+    const ok = !r.error && r.status >= 200 && r.status < 400;
+    return {
+      name: 'voice',
+      ok,
+      httpStatus: r.status,
+      detail: ok ? 'reachable' : (r.error ? 'unreachable' : 'error_' + r.status),
+      ms: r.ms,
+    };
+  }
+  // TG_TTS_CMD set — cmd backend available (no network probe needed).
+  return { name: 'voice', ok: true, detail: 'cmd_configured', ms: 0 };
 }
 
 function probeTelegram(env) {

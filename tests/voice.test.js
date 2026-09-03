@@ -5,7 +5,9 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
 const http = require('node:http');
+const os = require('node:os');
 const { Gateway } = require('../src/gateway/server');
 const { voiceRouter, getVoice, MAX_TEXT_CHARS } = require('../src/gateway/voice');
 
@@ -385,3 +387,149 @@ test('response time guard: tts answers within 15s even when backend hangs', asyn
     await s.close();
   }
 }, { timeout: 30000 });
+
+// ── cmd backend tests ───────────────────────────────────────────
+
+// Build a cmd template using process.execPath + an inline -e script
+// that writes a tiny WAV file to the %OUT% path.  %TEXT% and %OUT%
+// are kept as separate argv tokens (argv-safe, no shell).
+// process.argv[1] = text, process.argv[2] = output file (node -e consumes script).
+const CMD_SCRIPT = "require('fs').writeFileSync(process.argv[2],Buffer.from('RIFF-'+process.argv[1]))";
+const CMD_TEMPLATE = process.execPath + ' -e ' + CMD_SCRIPT + ' %TEXT% %OUT%';
+
+test('cmd backend: fake encoder writes wav → audioB64 + backend cmd', async () => {
+  const orig = process.env.TG_TTS_CMD;
+  process.env.TG_TTS_CMD = CMD_TEMPLATE;
+  try {
+    const vr = voiceRouter({ ttsUrl: '' }); // no URL → cmd path
+    const out = await vr.tts('hello cmd');
+    assert.equal(out.backend, 'cmd');
+    assert.ok(typeof out.audioB64 === 'string' && out.audioB64.length > 0, 'audioB64 present');
+    assert.equal(out.contentType, 'audio/mpeg');
+    // Verify the decoded WAV bytes contain the substituted text.
+    const raw = Buffer.from(out.audioB64, 'base64');
+    assert.ok(raw.includes(Buffer.from('RIFF-hello cmd')), 'encoder output verified with substituted text');
+  } finally {
+    if (orig === undefined) delete process.env.TG_TTS_CMD;
+    else process.env.TG_TTS_CMD = orig;
+  }
+});
+
+test('cmd backend: %TEXT% and %OUT% placeholder substitution', async () => {
+  const orig = process.env.TG_TTS_CMD;
+  process.env.TG_TTS_CMD = CMD_TEMPLATE;
+  try {
+    const vr = voiceRouter({ ttsUrl: '' });
+    const text = 'substitution-check';
+    const out = await vr.tts(text);
+    assert.equal(out.backend, 'cmd');
+    assert.ok(typeof out.audioB64 === 'string');
+    const raw = Buffer.from(out.audioB64, 'base64');
+    assert.ok(raw.includes(Buffer.from('RIFF-' + text)), '%TEXT% substituted into encoder output');
+  } finally {
+    if (orig === undefined) delete process.env.TG_TTS_CMD;
+    else process.env.TG_TTS_CMD = orig;
+  }
+});
+
+test('cmd backend: metacharacters rejected → falls back echo, audited', async () => {
+  const orig = process.env.TG_TTS_CMD;
+  process.env.TG_TTS_CMD = 'edge-tts ; rm -rf /'; // contains ';'
+  try {
+    const gw = makeGateway();
+    const s = buildServer(gw);
+    const base = await listen(s.server);
+    try {
+      const secret = SECRET_PHRASE + ' cmd-metachar';
+      const ttsRes = await post(base, '/v2/voice/tts', { text: secret }, 'tok-forge');
+      assert.equal(ttsRes.status, 200);
+      assert.equal(ttsRes.json.backend, 'echo');
+      assert.equal(ttsRes.json.echo, secret);
+      // Audited as echo — no text in chain.
+      const hay = allChainText(gw);
+      assert.equal(hay.split(SECRET_PHRASE).length - 1, 0, 'secret phrase appears 0 times in chain');
+      const a = gw.chain.entries.map((e) => e.payload).find((p) => p.type === 'voice_tts');
+      assert.ok(a, 'voice_tts audited');
+      assert.equal(a.backend, 'echo');
+      assert.equal(a.chars, secret.length);
+    } finally {
+      await s.close();
+    }
+  } finally {
+    if (orig === undefined) delete process.env.TG_TTS_CMD;
+    else process.env.TG_TTS_CMD = orig;
+  }
+});
+
+test('cmd backend: temp file cleaned up after success', async () => {
+  const orig = process.env.TG_TTS_CMD;
+  process.env.TG_TTS_CMD = CMD_TEMPLATE;
+  try {
+    const vr = voiceRouter({ ttsUrl: '' });
+    await vr.tts('cleanup-test');
+    // Find any leftover voice-*.mp3 in os.tmpdir().
+    const files = fs.readdirSync(os.tmpdir()).filter((f) => f.startsWith('voice-') && f.endsWith('.mp3'));
+    assert.equal(files.length, 0, 'no leftover temp .mp3 files');
+  } finally {
+    if (orig === undefined) delete process.env.TG_TTS_CMD;
+    else process.env.TG_TTS_CMD = orig;
+  }
+});
+
+test('cmd backend: timeout kill → degrades to echo', async () => {
+  const orig = process.env.TG_TTS_CMD;
+  // A script that sleeps long enough to be killed by the 15s execFile timeout.
+  process.env.TG_TTS_CMD = process.execPath + ' -e setTimeout(function(){},100000) %OUT%';
+  try {
+    const vr = voiceRouter({ ttsUrl: '' });
+    const t0 = Date.now();
+    const out = await vr.tts('timeout test');
+    const dt = Date.now() - t0;
+    assert.equal(out.backend, 'echo');
+    assert.ok(dt < 20000, 'timed out within ~15s guard, got ' + dt + 'ms');
+  } finally {
+    if (orig === undefined) delete process.env.TG_TTS_CMD;
+    else process.env.TG_TTS_CMD = orig;
+  }
+}, { timeout: 30000 });
+
+test('cmd backend: env unset → untouched echo path', async () => {
+  const orig = process.env.TG_TTS_CMD;
+  delete process.env.TG_TTS_CMD;
+  try {
+    const vr = voiceRouter({ ttsUrl: '' });
+    const out = await vr.tts('no cmd env');
+    assert.equal(out.backend, 'echo');
+    assert.equal(out.echo, 'no cmd env');
+  } finally {
+    if (orig === undefined) delete process.env.TG_TTS_CMD;
+    else process.env.TG_TTS_CMD = orig;
+  }
+});
+
+test('cmd backend: no text content in audit chain', async () => {
+  const orig = process.env.TG_TTS_CMD;
+  process.env.TG_TTS_CMD = CMD_TEMPLATE;
+  try {
+    const gw = makeGateway();
+    const s = buildServer(gw);
+    const base = await listen(s.server);
+    try {
+      const secret = SECRET_PHRASE + ' cmd-chain';
+      const ttsRes = await post(base, '/v2/voice/tts', { text: secret }, 'tok-forge');
+      assert.equal(ttsRes.status, 200);
+      assert.equal(ttsRes.json.backend, 'cmd');
+      const hay = allChainText(gw);
+      assert.equal(hay.split(SECRET_PHRASE).length - 1, 0, 'secret phrase appears 0 times in chain');
+      const a = gw.chain.entries.map((e) => e.payload).find((p) => p.type === 'voice_tts');
+      assert.ok(a, 'voice_tts audited');
+      assert.equal(a.backend, 'cmd');
+      assert.equal(a.chars, secret.length);
+    } finally {
+      await s.close();
+    }
+  } finally {
+    if (orig === undefined) delete process.env.TG_TTS_CMD;
+    else process.env.TG_TTS_CMD = orig;
+  }
+});
