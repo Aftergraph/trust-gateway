@@ -282,7 +282,7 @@ below is missing one.
 
 ## Full audit-event table
 
-79 event types emitted from `src/gateway/**`. Extraction rule: every string
+81 event types emitted from `src/gateway/**`. Extraction rule: every string
 matched by `{type: '…'}` (including the `enabled ? 'a' : 'b'` ternary in
 plugins.js) across all files under `src/gateway/`.
 
@@ -367,6 +367,8 @@ plugins.js) across all files under `src/gateway/`.
 | 77 | `run_started` | src/gateway/runs.js (wave F F1: a governed Run opened — engine, bot, session, goalId; no args/results, ids only) |
 | 78 | `run_completed` | src/gateway/runs.js (wave F F1: run closed — state + exitCode; per-step detail stays in the existing chat_action/approval entries) |
 | 79 | `run_paused` | src/gateway/runs.js (wave F F1: cancellable-state transition — parked approval or operator/owner cancel; emitted by store.cancel() via POST /v2/runs/:id/cancel) |
+| 80 | `adapter_kind_register` | mounts/99-adapter-kinds.js (G9: {kind, fields count} — field names only, never values) |
+| 81 | `adapter_kind_rejected` | mounts/99-adapter-kinds.js (G9: {bot, kind?, errors[]} — validation failures) |
 ## Documented exceptions
 
 The test compares the table above against a programmatic extraction over

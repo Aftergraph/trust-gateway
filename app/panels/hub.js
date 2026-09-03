@@ -239,6 +239,68 @@
     return { node: sec, refresh };
   }
 
+  // ── Audit trail section (G8) ───────────────────────────────────────
+  // Every install/enable/disable/uninstall + rejection, straight from the
+  // sealed chain. Values are chain payloads: ids/versions/errors only.
+  function auditSection() {
+    const sec = el('div', 'hub-section');
+    sec.append(el('h3', null, 'audit trail'));
+    const list = el('div', 'hub-list');
+    function refresh() {
+      api('/v1/audit?since=0')
+        .then((d) => {
+          list.textContent = '';
+          const hits = (d.entries || []).filter((e) => {
+            const t = e.payload && e.payload.type;
+            return t === 'plugin_installed' || t === 'plugin_uninstalled'
+              || t === 'plugin_enabled' || t === 'plugin_disabled'
+              || t === 'plugin_rejected' || t === 'adapter_kind_register'
+              || t === 'adapter_kind_rejected';
+          }).slice(-25).reverse();
+          if (!hits.length) { list.append(el('div', 'empty', 'no hub events yet')); return; }
+          for (const e of hits) {
+            const p = e.payload || {};
+            const row = el('div', 'hub-row');
+            row.append(el('span', 'tag other', p.type));
+            row.append(el('b', null, p.id || p.kind || '?'));
+            const meta = [p.version, p.errors ? 'errors: ' + p.errors.join(',') : null]
+              .filter(Boolean).join(' · ');
+            if (meta) row.append(el('span', 'muted', meta));
+            row.append(el('span', 'hash', '#' + e.seq));
+            list.append(row);
+          }
+        })
+        .catch(() => { list.textContent = ''; list.append(el('div', 'empty', 'audit trail unavailable')); });
+    }
+    sec.append(list);
+    return { node: sec, refresh };
+  }
+
+  // ── Adapter kinds section (G9) — data-driven form registry ─────────
+  function adapterKindsSection() {
+    const sec = el('div', 'hub-section');
+    sec.append(el('h3', null, 'adapter kinds'));
+    const list = el('div', 'hub-list');
+    function refresh() {
+      api('/v2/adapters/kinds')
+        .then((d) => {
+          list.textContent = '';
+          const kinds = (d && d.kinds) || [];
+          if (!kinds.length) { list.append(el('div', 'empty', 'no kinds registered')); return; }
+          for (const k of kinds) {
+            const row = el('div', 'hub-row');
+            row.append(el('b', null, k.kind));
+            row.append(el('span', 'muted', k.builtin ? 'builtin' : 'custom'));
+            row.append(el('span', 'muted', (k.fields || []).length + ' fields: ' + (k.fields || []).map((f) => f.name + (f.type === 'secret' ? ' (secret)' : '')).join(', ')));
+            list.append(row);
+          }
+        })
+        .catch(() => { list.textContent = ''; list.append(el('div', 'empty', 'kinds unavailable')); });
+    }
+    sec.append(list);
+    return { node: sec, refresh };
+  }
+
   // ── render ─────────────────────────────────────────────────────────
 
   function render(hostEl) {
@@ -248,16 +310,18 @@
     const plugins = pluginsSection(refreshAll);
     const skills = skillsSection();
     const mcp = mcpSection(refreshAll);
+    const audit = auditSection();
+    const kinds = adapterKindsSection();
 
-    function refreshAll() { plugins.refresh(); skills.refresh(); mcp.refresh(); }
+    function refreshAll() { plugins.refresh(); skills.refresh(); mcp.refresh(); audit.refresh(); kinds.refresh(); }
 
-    // plugin_* audit events (install/enable/disable/uninstall) → refresh all
+    // plugin_* + adapter_kind_* audit events → refresh all
     window.TG.onAudit((e) => {
       const t = e && e.payload && e.payload.type;
-      if (typeof t === 'string' && t.indexOf('plugin_') === 0) refreshAll();
+      if (typeof t === 'string' && (t.indexOf('plugin_') === 0 || t.indexOf('adapter_kind_') === 0)) refreshAll();
     });
 
-    wrap.append(plugins.node, skills.node, mcp.node);
+    wrap.append(plugins.node, skills.node, mcp.node, kinds.node, audit.node);
     hostEl.append(wrap);
     refreshAll();
   }

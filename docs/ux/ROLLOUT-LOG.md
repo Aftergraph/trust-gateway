@@ -175,6 +175,61 @@ full suite is green on the phase's head commit. Entries are append-only.
 
 ---
 
+## 2026-09-03 — Phase 4 (extensions + capability-scoped API): **COMPLETE**
+
+- **Head**: `feat(phase4)` commit below (main, pushed)
+- **Entry gate**: Phase 3 complete ✓ (tier-A 9/9 at 3fc3233)
+- **Work**:
+  - **G6 — capability-scoped `TG.api`** (§19.2): the console binds the
+    identity's grants from `/v2/whoami` into a scope object;
+    `TG.api.scope(['goal.create'])` returns a fetch-like wrapper that
+    refuses verbs outside the grants BEFORE any request leaves the page
+    (`capability_missing:<cap>` refusal). Route→capability map mirrors
+    server policy (approvals→approval.decide, plugins→plugin.install,
+    adapters→adapter.manage, memory→memory.write, runs-cancel/computer→
+    control.take, goals→goal.create, providers→provider.select);
+    read-only routes (GET plugins/kinds/runs/memory) explicitly cap-free.
+    Extensions no longer have any reason to touch raw fetch with the
+    operator token — the wrapped surface is the sanctioned path.
+  - **G9 — data-driven adapter kinds** (§19.6): new mount
+    `GET/POST /v2/adapters/kinds`. 5 built-in kinds seeded with field
+    schemas (secret fields marked); operator POSTs register new kinds into
+    `data/adapter-kinds.json` (atomic+0600) — no code change; enum/string/
+    number/boolean/url/secret field kinds validated; builtin override
+    rejected; every register/reject audited
+    (`adapter_kind_register`/`adapter_kind_rejected`, TRANSPARENCY 79→81).
+    Route-shadowing bug fixed on the way: 70-adapters' id segment
+    previously swallowed `/v2/adapters/kinds` (negative lookahead now
+    reserves `kinds`).
+  - **G8 — hub audit trail** (§19.5): the Hub panel now renders the hub
+    event history straight from the sealed chain (installed/enabled/
+    disabled/uninstalled/rejected + kind events, last 25, ids/versions/
+    error-lists only) and live-refreshes on `plugin_*`/`adapter_kind_*`
+    SSE events. Server-side lifecycle audit set verified end-to-end in
+    tests (real hub install → enable → disable → uninstall → 4 chain
+    types present).
+  - **Extension manifest schema (§19.3)** was already closed in Phase 3
+    (G7); Phase 4's install surface rides the existing
+    `/v2/plugins` install/enable/disable/uninstall + secrets endpoints —
+    no new endpoints needed, the Hub UI just surfaces them.
+- **Exit gate**:
+  - Full suite: **727/727 pass** (+5 phase-4 tests: kinds registry RBAC +
+    validation + persistence, client scope source-contract, hub sections,
+    plugin lifecycle audit set)
+  - Conformance tier-A: **9/9 ALL PASS** (live gateway restarted on this code)
+  - Live probes: `/v2/adapters/kinds` → 5 builtin kinds with field schemas;
+    `/v2/adapters` unshadowed → 200.
+- **Kill-switch**: kinds registry is additive (GET-only unless operator);
+  `TG.api.scope` refusals fail closed — extensions falling back to raw
+  fetch are a policy violation surfaced in review, not a runtime hole
+  (server RBAC still enforces everything).
+- **Gates after Phase 4**: G1 ✓ G2 ✓ G4 ✓ G6 ✓ G7 ✓ G8 ✓ G9 ✓ G10 ✓ G11 ✓.
+  Open: **G3** (fuzzy token/seq resolution part 2: palette prefix lookup),
+  **G5** (full keyboard map + conflict check), **G12** (roll-up: needs
+  telemetry infra — the last BACKEND GAP).
+
+---
+
 ## Next gate targets (open)
 
 - BACKEND GAPs still open after wave F: TG.api operator tokens, TG.session,

@@ -11,6 +11,7 @@
   let chatOk = null; // feature-detect /v2/chat once
   let whoami = null;  // identity name from GET /v2/whoami (phase 3)
   let myCaps = [];    // capabilities of whoami (phase 3 composition input)
+  let myScopes = {};  // G6: capability-scoped API surface (phase 4)
   const sessionId = 'web-' + Math.random().toString(36).slice(2, 10);
 
   function authed() { return token && token.length > 0; }
@@ -168,12 +169,68 @@
     chat(v);
   });
 
+  // ── Phase 4 (G6): capability-scoped API surface ──────────────────────
+  // Extensions MUST NOT call fetch() directly with the operator token
+  // (§19.2). TG.api.scope(requiredCaps) returns a fetch-like wrapper that
+  // refuses verbs outside the identity's grants BEFORE any request leaves
+  // the page. Route → required-capability map mirrors server-side policy;
+  // '*' grants everything. Grant state is the whoami projection — never
+  // guessed, never mutated by panels.
+  const ROUTE_CAPS = [
+    { re: /^\/v1\/approvals\/[^/]+\/(approve|deny)$/, cap: 'approval.decide' },
+    { re: /^\/v2\/plugins(\/|$)/, method: 'GET', cap: null },
+    { re: /^\/v2\/plugins/, cap: 'plugin.install' },
+    { re: /^\/v2\/adapters\/kinds$/, method: 'GET', cap: null },
+    { re: /^\/v2\/adapters/, cap: 'adapter.manage' },
+    { re: /^\/v2\/memory/, method: 'GET', cap: null },
+    { re: /^\/v2\/memory/, cap: 'memory.write' },
+    { re: /^\/v2\/runs\/[^/]+\/cancel$/, cap: 'control.take' },
+    { re: /^\/v2\/runs/, method: 'GET', cap: null },
+    { re: /^\/v1\/actions$/, cap: 'action.run' },
+    { re: /^\/v2\/computer/, cap: 'control.take' },
+    { re: /^\/v2\/goals/, cap: 'goal.create' },
+    { re: /^\/v2\/providers/, cap: 'provider.select' },
+  ];
+  function requiredCap(path, method) {
+    for (const r of ROUTE_CAPS) {
+      if (r.re.test(path)) {
+        if (r.cap === null) return null; // explicitly read-only route
+        if (r.method && r.method !== method) continue;
+        return r.cap;
+      }
+    }
+    return null; // unmapped routes: allowed (server RBAC still enforces)
+  }
+  function buildScopes(caps) {
+    const granted = caps.indexOf('*') !== -1;
+    const has = (c) => granted || caps.indexOf(c) !== -1;
+    return {
+      can: (cap) => has(cap),
+      // fetch-like wrapper: (path, opts) → Promise<Response-like>
+      fetch: function (path, opts) {
+        const method = ((opts && opts.method) || 'GET').toUpperCase();
+        const need = requiredCap(String(path), method);
+        if (need && !has(need)) {
+          return Promise.reject(Object.assign(new Error('capability_missing:' + need), { capabilityMissing: need, status: 403 }));
+        }
+        return api(path, opts);
+      },
+    };
+  }
+
   function connect() {
     saveToken();
     if (es) es.close();
     $('liveDot').className = 'dot on';
     // Phase 3: resolve identity before the composition inputs are read.
-    api('/v2/whoami').then((w) => { whoami = w.name; myCaps = w.capabilities || []; }).catch(() => { whoami = null; myCaps = []; });
+    // Phase 4 (G6): capability-scoped API surface — the console binds the
+    // identity's capability grants; extension panels call TG.api.scope()
+    // and get fetch wrappers that refuse verbs beyond the grants.
+    api('/v2/whoami').then((w) => {
+      whoami = w.name;
+      myCaps = w.capabilities || [];
+      myScopes = buildScopes(myCaps);
+    }).catch(() => { whoami = null; myCaps = []; myScopes = buildScopes([]); });
     api('/v1/audit/verify').then((v) => {
       setPill(v.ok); $('entryCount').textContent = v.length; $('headHash').textContent = String(v.head).slice(0, 12);
       primeStream(); refreshPending(); refreshBots();
@@ -332,6 +389,16 @@
     // here; empty until the identity resolves (never guesses ['*']).
     capabilities: () => myCaps,
     whoami: () => whoami,
+    // phase 4 (G6): capability-scoped API for extension panels.
+    // TG.api.scope(['goal.create']) → {fetch, can} bound to the identity.
+    scope: (requiredCaps) => {
+      const need = Array.isArray(requiredCaps) ? requiredCaps : [];
+      const missing = need.filter((c) => !myScopes.can || !myScopes.can(c));
+      if (missing.length) {
+        return { ok: false, missing, fetch: () => Promise.reject(Object.assign(new Error('capability_missing:' + missing.join(',')), { capabilityMissing: missing, status: 403 })), can: () => false };
+      }
+      return Object.assign({ ok: true, missing: [] }, myScopes);
+    },
     refresh: () => { refreshPending(); refreshBots(); },
     onAudit: (fn) => { window.addEventListener('tg-audit', (ev) => fn(ev.detail)); },
   };

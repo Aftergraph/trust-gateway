@@ -52,7 +52,9 @@ function auditTarget(def) {
 module.exports = {
   name: 'v2-adapters',
   method: '*',
-  path: /^\/v2\/adapters(\/[\w-]+)?(\/test|\/secret)?$/,
+  // 'kinds' is owned by 99-adapter-kinds (G9 data-driven registry) — the
+  // id segment here must not swallow it.
+  path: /^\/v2\/adapters(\/(?!kinds(?:\/|$))[\w-]+)?(\/test|\/secret)?$/,
   auth: 'bearer',
   handle: async (gw, req, res, ctx) => {
     const reg = getAdapters(gw);
