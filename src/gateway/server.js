@@ -10,6 +10,7 @@ const { HashChain } = require('./hash-chain');
 const { classify, decide } = require('./policy');
 const { computeImpact } = require('./impact');
 const { ApprovalStore } = require('./approvals');
+const { getApprovals } = require('./approvals-db'); // FS-A5: env-gated DB variant
 const { MemoryStore, getMemoryStore } = require('./memory');
 const disk = require('./disk-audit');
 const { TelemetryRing, DEFAULT_FILE: DEFAULT_TELEMETRY_FILE } = require('./telemetry');
@@ -72,7 +73,9 @@ class Gateway extends EventEmitter {
     } else {
       this.chain = chain ?? new HashChain();
     }
-    this.approvals = approvals ?? new ApprovalStore({ now, file: approvalsFile, gw: this });
+    // FS-A5: env-gated SQLite approvals (TG_APPROVALS_DB=1); env unset → the
+    // legacy JSON-backed ApprovalStore, byte-identical (WeakMap-cached per gw).
+    this.approvals = approvals ?? getApprovals(this, { now, file: approvalsFile, gw: this });
     this.memory = getMemoryStore(this);
     // G12 (§20.4): telemetry ring — observability, NOT the audit chain.
     this.telemetry = new TelemetryRing({ file: telemetryFile !== undefined ? telemetryFile : DEFAULT_TELEMETRY_FILE, now });
