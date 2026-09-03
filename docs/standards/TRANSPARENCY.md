@@ -447,6 +447,8 @@ plugins.js) across all files under `src/gateway/`.
 | 113 | `sandbox_fallback` | sandbox.js via mounts/106-harness2.js (FS-F3: {id, method, reason≤60 chars} — wrapped child failed at runtime, run retried unwrapped per the documented same-user discipline) |
 | 114 | `skill_published` | mounts/105-skills.js (FS-F4: {id, by} — operator marked a skill shared; never steps/args) |
 | 114 | `skill_unpublished` | mounts/105-skills.js (FS-F4: {id, by} — operator marked a skill private again; never steps/args) |
+| 115 | `observability_read` | mounts/114-observability.js (FS-G2: {by} — operator name only; the snapshot body itself carries scalar projections, never raw payloads/token material) |
+| 115 | `observability_denied` | mounts/114-observability.js (FS-G2: {bot} — non-operator touched /v2/observability; RBAC refusal audited) |
 
 ### `sandbox.js` — optional OS sandbox layer for the harness2 jail (FS-F3)
 - **What it is:** a spike, additive and default-OFF. The jail's real
@@ -493,6 +495,28 @@ plugins.js) across all files under `src/gateway/`.
   (silent drop); fields projected to scalars only.
 - **Inspect:** `GET /v2/telemetry` (operator bearer) or read
   `data/telemetry.json` directly (one JSON object with an `events` array).
+
+### `obsv.js` + mount `114-observability.js` — operator observability snapshot (FS-G2)
+- **Endpoints:** `GET /v2/observability` (bearer; operator-only, same
+  isOperator gate as 110-backup/112-apikeys/113-tenants). Workers get
+  403 + `observability_denied`.
+- **Audit events:** `observability_read` {by} (operator name only),
+  `observability_denied` {bot}.
+- **What it returns:** ONE scalar object — chain {ok, length, head},
+  telemetry {total, byType top-5 counts, lastAt}, approvals
+  {pendingCount}, apikeys {active, rateLimitedLast1h}, tenants {count,
+  disabled}, uptimeSec, generatedAt. No caching (computed per call); no
+  raw telemetry payloads, no tenant rows, no token material — scalar
+  projections only.
+- **Honest limitation:** `rateLimitedLast1h` counts keys whose recorded
+  `rate_hits` window (within the last hour) reached their configured
+  max — blocked attempts are not persisted by `apikeys.verify()`, so it
+  is a best-effort signal, not an exact block log.
+- **Storage:** none (pure projection of live state; read-only SQL over
+  the shared gateway.db connection).
+- **Inspect:** `GET /v2/observability` with an operator bearer; the
+  console System panel renders the same scalars as a 'System health'
+  row (hidden for non-operators).
 
 Note (FS-C1): per-step skill governance deliberately does NOT add a new
 event type — every step emits a standard `chat_action` row tagged
