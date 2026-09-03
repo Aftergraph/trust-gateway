@@ -18,7 +18,9 @@
 // runner validates the token against gw.bots before this handler runs).
 
 const { send } = require('../server');
-const { getRegistry } = require('../providers-singleton');
+// FS-A4: env-gated SQLite-backed registry. Env unset → byte-identical
+// legacy providers-singleton path (same cached instance per gateway).
+const { getProviders: getRegistry } = require('../providers-db');
 
 const MAX_BODY = 64 * 1024;
 
