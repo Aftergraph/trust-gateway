@@ -514,6 +514,8 @@ plugins.js) across all files under `src/gateway/`.
 | 169 | `tenant_flag_set` | mounts/130-tenant-flags.js (FS-N1: {by, tenant, name, enabled, value} — operator set a per-tenant feature flag override; flag name + enabled + value, no secret material; TG_TENANT_FLAGS=1 only) |
 | 170 | `tenant_flag_reset` | mounts/130-tenant-flags.js (FS-N1: {by, tenant, name} — operator reset a per-tenant feature flag to global default) |
 | 171 | `tenant_flag_listed` | mounts/130-tenant-flags.js (FS-N1: {by, tenant, count} — operator listed per-tenant feature flags; tenant id + count only) |
+| 172 | `audit_search_read` | mounts/131-audit-search.js (FS-N2: {by, filters, count} — operator searched audit_chain; filter keys + count only, never raw payloads; TG_AUDIT_SEARCH=1 only) |
+| 173 | `audit_search_denied` | mounts/131-audit-search.js (FS-N2: {bot} — non-operator touched /v2/audit/search; RBAC refusal audited) |
 
 ### `secrets-vault.js` + mounts `115-secrets.js` / `119-secrets-rotate.js` — tenant secrets vault + master-key rotation (FS-I5, FS-J2)
 - **Endpoints:** `PUT/GET/DELETE /v2/tenants/:id/secrets[/:key]` (operator;
