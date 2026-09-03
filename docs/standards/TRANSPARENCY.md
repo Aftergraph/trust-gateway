@@ -518,6 +518,9 @@ plugins.js) across all files under `src/gateway/`.
 | 173 | `audit_search_denied` | mounts/131-audit-search.js (FS-N2: {bot} — non-operator touched /v2/audit/search; RBAC refusal audited) |
 | 174 | `chain_prune_preview_read` | mounts/132-chain-prune-preview.js (FS-N3: {by, beforeTs, wouldRemove} — operator previewed chain pruning; counts + timestamps only, no row payloads; TG_CHAIN_PRUNE_PREVIEW=1 only) |
 | 175 | `chain_prune_preview_denied` | mounts/132-chain-prune-preview.js (FS-N3: {bot} — non-operator touched /v2/chain/prune-preview; RBAC refusal audited) |
+| 176 | `impersonation_issued` | mounts/134-tenant-impersonation.js (FS-O2: {by, targetTenant, expiresAt, reason} — operator issued a tenant-impersonation token; max ttl 1h; TG_TENANT_IMPERSONATION=1 only) |
+| 177 | `impersonation_revoked` | mounts/134-tenant-impersonation.js (FS-O2: {by, token, removed} — operator revoked an impersonation token; token shown as first 8 chars only) |
+| 178 | `impersonation_listed` | mounts/134-tenant-impersonation.js (FS-O2: {by, count} — operator listed active impersonation tokens) |
 
 ### `secrets-vault.js` + mounts `115-secrets.js` / `119-secrets-rotate.js` — tenant secrets vault + master-key rotation (FS-I5, FS-J2)
 - **Endpoints:** `PUT/GET/DELETE /v2/tenants/:id/secrets[/:key]` (operator;
