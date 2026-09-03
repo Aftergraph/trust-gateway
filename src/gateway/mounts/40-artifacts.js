@@ -20,9 +20,24 @@
 // (projections only — no content bodies on the global firehose).
 
 const crypto = require('node:crypto');
+const path = require('node:path');
 const { send, readBody, canApprove } = require('../server');
 const { getHub } = require('../events');
 const { ArtifactStore, KINDS, getArtifactStore } = require('../artifacts');
+const { resolveTenant } = require('../tenant-resolve');
+const { scopeDir, scopedStore, tenantAuditTag } = require('../tenant-scope');
+
+// FS-E1 slice 2: tenant-scoped artifacts. A non-main tenant gets its own
+// ArtifactStore over <TG_DATA_DIR>/data/tenants/<id>/artifacts/artifacts.json;
+// the main tenant keeps the shared singleton (TG_ARTIFACTS_FILE / default
+// data/artifacts.json) byte-identically.
+function artifactStoreFor(gw, tenant) {
+  if (!tenant || tenant.id === 'main') return getArtifactStore(gw);
+  return scopedStore(gw, `artifacts:${tenant.id}`, () => new ArtifactStore({
+    file: path.join(scopeDir(null, gw, tenant.id, 'artifacts'), 'artifacts.json'),
+    now: () => (gw && gw.now ? gw.now() : Date.now()),
+  }));
+}
 
 function authBot(gw, req, url) {
   const h = req.headers['authorization'] || '';
@@ -91,8 +106,14 @@ async function route(gw, req, res, ctx, pathname) {
     gw._audit({ type: 'auth_rejected', path: pathname });
     return send(res, 401, { error: 'unauthorized' });
   }
+  // FS-E1 slice 2: tenant resolve AFTER bearer auth (the prefix is a claim,
+  // never an auth decision). Unknown/disabled tenant → 404 (anti-enumeration).
+  req.bot = bot;
+  const { tenant } = resolveTenant(req, gw);
+  if (!tenant) return send(res, 404, { error: 'not_found' });
+  const tag = tenantAuditTag(tenant);
   const seg = pathname.split('/').filter(Boolean); // ['v2','artifacts',id?,sub?]
-  const store = getArtifactStore(gw);
+  const store = artifactStoreFor(gw, tenant);
   const method = req.method;
 
   // ── collection ──
@@ -108,6 +129,7 @@ async function route(gw, req, res, ctx, pathname) {
     gw._audit({
       type: 'artifact_created', artifactId: art.id, kind: art.kind,
       bot: art.bot, version: 1, title: art.title, sessionRef: art.sessionRef,
+      ...tag,
     });
     getHub(gw).broadcast('artifact', {
       action: 'created', artifact: ArtifactStore.project(art),
@@ -155,7 +177,7 @@ async function route(gw, req, res, ctx, pathname) {
     if (!art) return send(res, 404, { error: 'not_found' });
     // Only the creating bot — or an operator — may ship a new version.
     if (art.bot !== bot.name && !canApprove(bot)) {
-      gw._audit({ type: 'artifact_update_denied', artifactId: id, bot: bot.name, owner: art.bot });
+      gw._audit({ type: 'artifact_update_denied', artifactId: id, bot: bot.name, owner: art.bot, ...tag });
       return send(res, 403, { error: 'forbidden' });
     }
     let body;
@@ -168,6 +190,7 @@ async function route(gw, req, res, ctx, pathname) {
     gw._audit({
       type: 'artifact_updated', artifactId: id, bot: bot.name,
       version: out.version.v, title: out.version.title,
+      ...tag,
     });
     getHub(gw).broadcast('artifact', {
       action: 'updated', artifact: ArtifactStore.project(out.artifact),
