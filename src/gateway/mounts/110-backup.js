@@ -14,6 +14,8 @@
 const path = require('node:path');
 const { send, readBody } = require('../server');
 const backup = require('../backup');
+// FS-G3: out-of-band alarmering — module-level sink (server.js is untouched).
+const { getAlertSink } = require('../alerting');
 
 function isOperator(bot) {
   if (!bot) return false;
@@ -86,7 +88,12 @@ module.exports = {
         });
         return send(res, 200, { restored: out.restored, chainHead: out.manifest.chainHead });
       } catch (e) {
-        gw._audit({ type: 'backup_restore_refused', name, reason: String(e && e.message).slice(0, 120) });
+        const reason = String(e && e.message).slice(0, 120);
+        gw._audit({ type: 'backup_restore_refused', name, reason });
+        // FS-G3: restore refused is an operator-grade signal — the audit
+        // entry alone is not enough. Best-effort webhook alert, counts +
+        // types only (name/reason are already in the audit chain).
+        getAlertSink(gw).alert('backup_restore_refused', { name, reason });
         return send(res, 409, { error: 'restore_refused', detail: String(e && e.message) });
       }
     }
