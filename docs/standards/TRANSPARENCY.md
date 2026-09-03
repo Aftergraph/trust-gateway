@@ -454,6 +454,40 @@ plugins.js) across all files under `src/gateway/`.
 | 116 | `skill_federation_denied` | mounts/105-skills.js (FS-G1: {bot, skillId, action} — cross-tenant write attempt on a federated skill (run/patch/federate/unfederate) refused owner-tenant-only, answered 404 anti-enumeration; TG_SKILLS_FEDERATION=1 only; never args/steps) |
 | 117 | `skill_fed_limited` | mounts/105-skills.js (FS-H2: {runnerTenant, skillId, cap, window, limitKind} — a cross-tenant DRY run of a federated skill refused 429 fed_rate_limited because the runner tenant hit TG_FED_RUNS_PER_HOUR (default 20) or the skill hit TG_FED_RUNS_PER_SKILL_HOUR (default 50); enforced BEFORE the dry-run executes; TG_SKILLS_FEDERATION=1 only; never args/steps) |
 
+| 131 | `config_reloaded` | mounts/118-config-reload.js, bin/gateway.js SIGHUP (FS-I6: {changed:[key names], errorCount} — config hot-reload accepted; key NAMES only, never values; source data/gateway.env or env) |
+| 132 | `config_reload_failed` | mounts/118-config-reload.js, bin/gateway.js SIGHUP (FS-I6: {changed?, errorCount, error?, bot?, by?} — invalid env value kept the previous value / non-operator touched POST /v2/config/reload / non-reloadable key present in gateway.env; failed keys never take effect) |
+
+### `hot-reload.js` + mount `118-config-reload.js` — config hot-reload (FS-I6)
+- **Endpoints:** `POST /v2/config/reload` (operator-only — same isOperator
+  gate as 110-backup/112-apikeys/113-tenants; workers get 403 +
+  `config_reload_failed` {bot, error:'operator_required'}). `kill -HUP` on
+  bin/gateway.js runs the exact same reload.
+- **Reloadable keys** (thresholds + routing only): `TG_ALERT_URLS`,
+  `TG_ALERT_RATELIMIT_THRESHOLD`, `TG_ALERT_CHAIN_STALL_SEC`,
+  `TG_TENANT_DEFAULT_DISK_MB`, `TG_TENANT_DEFAULT_API_PER_HOUR`,
+  `TG_FED_RUNS_PER_HOUR`, `TG_FED_RUNS_PER_SKILL_HOUR`.
+- **NOT reloadable (restart required, by design):** `BOT_TOKENS`
+  (credentials are read once at boot — a reload must never swap identities)
+  and `PORT` (the socket is bound at boot). Present in `gateway.env` →
+  refused with error `not_reloadable`, old value kept.
+- **Source:** `data/gateway.env` (`$TG_DATA_DIR` respected; KEY=VALUE
+  lines, `#` comments, optional quotes) when present — file entries
+  override `process.env`, keys absent from the file fall back to
+  `process.env`; no file → `process.env` only.
+- **Semantics:** `changed` lists only keys whose effective value actually
+  differs (unchanged keys are never listed); an invalid value (non-integer
+  / <= 0) is an `errors` entry (`invalid_value`) and the PREVIOUS value
+  stays in effect — fail-safe, never fail-open. On change both
+  `gw.config[key]` and `process.env[key]` are updated so live consumers
+  (`skills-federation.capFromEnv`, the AlertSink) pick the value up on
+  their next read. `reload()` NEVER throws — the gateway cannot crash on a
+  bad reload.
+- **Audit hygiene:** audit rows carry changed key NAMES and an error COUNT
+  only — never secret values (the only raw value ever recorded is an
+  invalid numeric literal, truncated to 60 chars).
+- **Inspect:** `GET /v1/audit?q=config_reloaded` (chain rows), or read
+  `data/gateway.env` directly.
+
 ### `sandbox.js` — optional OS sandbox layer for the harness2 jail (FS-F3)
 - **What it is:** a spike, additive and default-OFF. The jail's real
   guarantee remains the same-user process discipline documented under
