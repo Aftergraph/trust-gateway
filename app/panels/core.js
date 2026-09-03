@@ -6,7 +6,25 @@
 // TG_PANELS being empty or growing later (rescan on each tab switch).
 (function () {
   // Ordered tab spec. 'console' is the original 3-pane grid.
-  const TABS = [
+  // Phase 1 (§20): History pinned right after Console (NOW-domain priority —
+  // it carries the audit stream + search). Kill-switch: ?tabs=legacy restores
+  // the Phase-0 order verbatim. Tab ids NEVER change (redirect guarantee).
+  const TABS_NOW = [
+    { id: 'console', title: 'Console' },
+    { id: 'history', title: 'History' },
+    { id: 'rooms', title: 'Rooms' },
+    { id: 'artifacts', title: 'Artifacts' },
+    { id: 'goals', title: 'Goals' },
+    { id: 'builder', title: 'Builder' },
+    { id: 'hub', title: 'Hub' },
+    { id: 'providers', title: 'Providers' },
+    { id: 'providers-live', title: 'Live' },
+    { id: 'computer', title: 'Computer' },
+    { id: 'playground', title: 'Playground' },
+    { id: 'voice', title: 'Voice' },
+    { id: 'integrations', title: 'Integrations' },
+  ];
+  const TABS_LEGACY = [
     { id: 'console', title: 'Console' },
     { id: 'rooms', title: 'Rooms' },
     { id: 'artifacts', title: 'Artifacts' },
@@ -21,6 +39,12 @@
     { id: 'voice', title: 'Voice' },
     { id: 'integrations', title: 'Integrations' },
   ];
+  const TABS = (function () {
+    try {
+      if (/[?&]tabs=legacy\b/.test(location.search)) return TABS_LEGACY;
+    } catch { /* non-browser env */ }
+    return TABS_NOW;
+  })();
 
   const TAB_IDS = TABS.map((t) => t.id);
 
@@ -109,6 +133,19 @@
   }
 
   function switchTab(shell, id) {
+    // 'console' is the original 3-pane <main>, not a TG_PANELS panel:
+    // un-hide it and hide any mounted panel-views. (Phase 1 fix — previously
+    // it fell through to showPlaceholder('console') and hid the stream.)
+    if (id === 'console') {
+      const hostC = document.getElementById('panel-host');
+      const viewsC = hostC ? hostC.querySelectorAll('.panel-view') : [];
+      for (const v of viewsC) v.classList.remove('view-show');
+      const stale = document.getElementById('pv-console');
+      if (stale && stale.parentNode) stale.parentNode.removeChild(stale);
+      shell.main.classList.remove('view-hide');
+      syncTabs(shell.nav, 'console');
+      return;
+    }
     // Defensive rescan: TG_PANELS may have grown since last switch.
     const mounted = mountPanel(id);
     const host = document.getElementById('panel-host');
@@ -147,8 +184,9 @@
     buildTabs(shell);
     // Default to Console.
     switchTab(shell, 'console');
-    // Expose internals for testing.
-    window.TG_CORE = { TABS: TAB_IDS, switchTab, mountPanel, scanPanels };
+    // Expose internals for testing + cross-panel jumps. switchTab is bound to
+    // the shell so callers only pass a tab id (Phase 1 palette/queue-strip).
+    window.TG_CORE = { TABS: TAB_IDS, switchTab: (id) => switchTab(shell, id), mountPanel, scanPanels };
   }
 
   ready(init);

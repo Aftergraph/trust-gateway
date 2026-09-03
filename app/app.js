@@ -192,6 +192,129 @@
   tokenEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { token = tokenEl.value.replace(/•/g, '') || token; connect(); } });
   if (authed()) connect(); else $('stream').appendChild(el('div', 'empty', 'enter a token to connect'));
 
+  // ── Phase 1 (§20): NOW queue strip — pending approvals visible from EVERY
+  // tab without navigating. Renders the same store as the Console pane; the
+  // strip is a summary + jump affordance, not a second decision surface.
+  let stripCount = null;
+  function ensureStrip() {
+    if (document.getElementById('nowQueue')) return;
+    const strip = el('div', 'now-queue');
+    strip.id = 'nowQueue';
+    const label = el('span', 'now-queue-label', 'NOW · pending');
+    stripCount = el('b', 'now-queue-count', '0');
+    const open = el('button', 'btn now-queue-open', 'open queue');
+    open.addEventListener('click', () => {
+      jumpTab('console');
+      const pending = document.getElementById('pending');
+      if (pending) pending.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    strip.append(label, stripCount, open);
+    const header = document.querySelector('header');
+    if (header) header.appendChild(strip);
+  }
+  function refreshStrip() {
+    if (!stripCount) return;
+    const n = Number(document.getElementById('pendingCount') && document.getElementById('pendingCount').textContent) || 0;
+    stripCount.textContent = n;
+    const strip = document.getElementById('nowQueue');
+    if (strip) strip.classList.toggle('has-pending', n > 0);
+  }
+
+  // ── Phase 1 (§18.1): palette (⌘K / Ctrl+K) — one input, context-aware:
+  // audit search (GET /v2/search, primary channel) + tab jumps. Enter on a
+  // result jumps History to that seq (§18.3 chain-seq jump).
+  const PALETTE_COMMANDS = [
+    { label: 'Console (NOW)', run: () => jumpTab('console') },
+    { label: 'History (search & audit)', run: () => jumpTab('history') },
+    { label: 'Rooms', run: () => jumpTab('rooms') },
+    { label: 'Artifacts', run: () => jumpTab('artifacts') },
+    { label: 'Goals', run: () => jumpTab('goals') },
+    { label: 'Live providers', run: () => jumpTab('providers-live') },
+    { label: 'Refresh', run: () => { primeStream(); refreshPending(); refreshBots(); } },
+  ];
+  function jumpTab(id) {
+    const core = window.TG_CORE;
+    if (core && typeof core.switchTab === 'function') {
+      try { core.switchTab(id); } catch { /* noop */ }
+    }
+  }
+  let paletteEl = null;
+  function ensurePalette() {
+    if (paletteEl) return paletteEl;
+    const wrap = el('div', 'modal palette-modal');
+    wrap.id = 'palette';
+    const box = el('div', 'palette-box');
+    const input = el('input', 'palette-input', '');
+    input.type = 'text';
+    input.placeholder = 'search audit · jump to tab… (Enter to open top result, ↑↓ select, Esc close)';
+    const list = el('div', 'palette-results');
+    box.append(input, list);
+    wrap.append(box);
+    document.body.appendChild(wrap);
+    paletteEl = { wrap, input, list };
+
+    let lastResults = [];
+    let selected = 0;
+
+    function render() {
+      list.textContent = '';
+      lastResults.slice(0, 12).forEach((r, i) => {
+        const row = el('div', 'palette-row' + (i === selected ? ' sel' : ''));
+        row.append(el('span', 'palette-row-label', r.label));
+        if (r.meta) row.append(el('span', 'palette-row-meta', r.meta));
+        row.addEventListener('click', () => r.run());
+        list.appendChild(row);
+      });
+    }
+    function update() {
+      const q = input.value.trim();
+      const cmds = PALETTE_COMMANDS
+        .filter((c) => !q || c.label.toLowerCase().includes(q.toLowerCase()))
+        .map((c) => ({ label: c.label, kind: 'command', meta: 'jump', run: () => { close(); c.run(); } }));
+      if (!q) {
+        lastResults = cmds; selected = 0; render(); return;
+      }
+      // audit search as primary channel (§18: palette search → /v2/search)
+      window.TG.api('/v2/search?q=' + encodeURIComponent(q) + '&limit=8').then((d) => {
+        const hits = (d.hits || []).map((h) => ({
+          label: (h.payload && h.payload.type ? h.payload.type : 'entry') + '  #' + h.seq,
+          kind: 'hit',
+          meta: (h.payload && (h.payload.bot || h.payload.tool)) || '',
+          run: () => { close(); jumpToSeq(h.seq); },
+        }));
+        lastResults = hits.concat(cmds); selected = 0; render();
+      }).catch(() => { lastResults = cmds; selected = 0; render(); });
+    }
+    input.addEventListener('input', update);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { close(); e.preventDefault(); return; }
+      if (e.key === 'ArrowDown') { selected = Math.min(selected + 1, lastResults.length - 1); render(); e.preventDefault(); return; }
+      if (e.key === 'ArrowUp') { selected = Math.max(selected - 1, 0); render(); e.preventDefault(); return; }
+      if (e.key === 'Enter') { const r = lastResults[selected]; close(); if (r) r.run(); e.preventDefault(); return; }
+    });
+    wrap.addEventListener('click', (e) => { if (e.target === wrap) close(); });
+    return paletteEl;
+  }
+  function openPalette() {
+    const p = ensurePalette();
+    p.wrap.classList.add('view-show');
+    p.input.value = '';
+    p.input.focus();
+  }
+  function close() { if (paletteEl) paletteEl.wrap.classList.remove('view-show'); }
+  document.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); openPalette(); }
+  });
+
+  function jumpToSeq(seq) {
+    const h = window.TG_HISTORY;
+    if (h && typeof h.jumpToSeq === 'function') { h.jumpToSeq(seq); return; }
+    jumpTab('history');
+  }
+
+  ensureStrip();
+  setInterval(refreshStrip, 1500);
+
   // shared surface for /panels/*.js (wave B UI modules)
   window.TG = {
     api, el,

@@ -22,16 +22,22 @@ test('XSS policy: no innerHTML assignment in core.js', () => {
   assert.ok(!/\.innerHTML\s*[+]?=/.test(src), 'core.js must never assign innerHTML');
 });
 
-test('core.js builds the expected tab ids in order', () => {
-  const expected = ['console', 'rooms', 'artifacts', 'goals', 'builder', 'hub', 'providers', 'providers-live', 'history', 'computer', 'playground', 'voice', 'integrations'];
+test('core.js builds the expected tab ids in order (phase 1: history pinned after console)', () => {
+  const expected = ['console', 'history', 'rooms', 'artifacts', 'goals', 'builder', 'hub', 'providers', 'providers-live', 'computer', 'playground', 'voice', 'integrations'];
   for (const id of expected) {
     assert.match(src, new RegExp("id:\\s*'" + id + "'", 'i'), 'tab id present: ' + id);
   }
-  // Verify ordering via TABS literal block.
-  const m = src.match(/const TABS\s*=\s*\[([\s\S]*?)\];/);
-  assert.ok(m, 'TABS array defined');
+  // Verify ordering via the TABS_NOW literal block (phase 1 order).
+  const m = src.match(/const TABS_NOW\s*=\s*\[([\s\S]*?)\];/);
+  assert.ok(m, 'TABS_NOW array defined');
   const ids = m[1].match(/id:\s*'([^']+)'/g).map((s) => s.match(/'([^']+)'/)[1]);
   assert.deepEqual(ids, expected, 'tab order matches spec');
+  // Kill-switch: legacy order preserved verbatim + selected via ?tabs=legacy.
+  const lm = src.match(/const TABS_LEGACY\s*=\s*\[([\s\S]*?)\];/);
+  assert.ok(lm, 'TABS_LEGACY array defined (kill-switch)');
+  const legacyIds = lm[1].match(/id:\s*'([^']+)'/g).map((s) => s.match(/'([^']+)'/)[1]);
+  assert.deepEqual(legacyIds, ['console', 'rooms', 'artifacts', 'goals', 'builder', 'hub', 'providers', 'providers-live', 'history', 'computer', 'playground', 'voice', 'integrations'], 'legacy order = phase 0');
+  assert.match(src, /tabs=legacy/, 'kill-switch query honored');
 });
 
 test('core.js hides .panes via view-hide and mounts panel-view', () => {

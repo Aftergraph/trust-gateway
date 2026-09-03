@@ -140,6 +140,35 @@
     modal.classList.add('view-show');
   }
 
+  // Phase 1 (§18.3): chain-seq jump — land on a specific audit seq (from the
+  // ⌘K palette). Mounts History if needed, loads a window around the seq,
+  // renders it, and highlights + opens the target row.
+  function jumpToSeq(seq) {
+    seq = Number(seq);
+    if (!Number.isFinite(seq) || seq < 0) return;
+    if (window.TG_CORE && typeof window.TG_CORE.switchTab === 'function') {
+      window.TG_CORE.switchTab('history');
+    }
+    const since = Math.max(0, seq - 40);
+    fetchAudit(since).then((entries) => {
+      const windowed = entries.filter((e) => e.seq >= since && e.seq <= seq + 20);
+      if (searchInput) searchInput.value = '';
+      setRows(windowed);
+      const rows = listEl ? listEl.querySelectorAll('.row') : [];
+      for (const r of rows) {
+        const m = String(r.firstChild && r.firstChild.textContent || '').match(/#(\d+)/);
+        if (m && Number(m[1]) === seq) {
+          r.classList.add('hist-jump');
+          r.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          const idx = Array.prototype.indexOf.call(rows, r);
+          const e = windowed[idx];
+          if (e) showDetail(e);
+          break;
+        }
+      }
+    }).catch(() => {});
+  }
+
   function closeDetail() {
     if (modal) modal.classList.remove('view-show');
   }
@@ -209,5 +238,6 @@
   window.TG_HISTORY = {
     matchesFilters, fetchSearch, fetchAudit, LIMIT,
     setFilters: (t, b) => { currentType = t; currentBot = b; },
+    jumpToSeq,
   };
 })();

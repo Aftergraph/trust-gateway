@@ -196,13 +196,18 @@ header {
 .tab.active { background: var(--tg-bg-elevated); color: var(--tg-risk-read); border-color: var(--tg-border-accent); border-bottom-color: var(--tg-bg-elevated); }
 .view-hide { display: none !important; }
 .panel-host { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: var(--tg-space-3) var(--tg-space-4); }
-.panel-view { background: var(--tg-bg-elevated); border: 1px solid var(--tg-border); border-radius: var(--tg-radius-lg); flex: 1; overflow-y: auto; padding: var(--tg-space-4); }
+/* Phase 1 fix: the router toggles .view-show, but no rule used to show/hide
+ * by it — mounted panels and modals were permanently visible. Show only the
+ * active panel-view; modals hidden until view-show (history detail, palette). */
+.panel-view { background: var(--tg-bg-elevated); border: 1px solid var(--tg-border); border-radius: var(--tg-radius-lg); flex: 1; overflow-y: auto; padding: var(--tg-space-4); display: none; }
+.panel-view.view-show { display: block; }
 .panel-view h3 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--tg-text-muted); }
 .panel-placeholder { color: var(--tg-text-muted); font-style: italic; padding: var(--tg-space-5); }
 .modal {
   position: fixed; inset: 0; background: var(--tg-elev-modal); z-index: 50;
-  display: flex; align-items: center; justify-content: center;
+  display: none; align-items: center; justify-content: center;
 }
+.modal.view-show { display: flex; }
 .modal pre {
   background: var(--tg-bg-surface); border: 1px solid var(--tg-border-accent); border-radius: var(--tg-radius-lg);
   padding: var(--tg-space-5); max-width: 80vw; max-height: 80vh; overflow: auto;
@@ -211,6 +216,39 @@ header {
 
 .foot { padding: var(--tg-space-1) var(--tg-space-5); }
 .foot a { color: var(--tg-risk-read); text-decoration: none; }
+
+/* Phase 1 (§20): NOW queue strip — pending count always visible in header */
+.now-queue {
+  display: flex; align-items: center; gap: var(--tg-space-2);
+  padding: 2px var(--tg-space-2); border: 1px solid var(--tg-border);
+  border-radius: var(--tg-radius-pill); font-size: var(--tg-text-sm); color: var(--tg-text-muted);
+}
+.now-queue.has-pending { border-color: var(--tg-risk-write); color: var(--tg-risk-write); background: var(--tg-risk-write-bg); }
+.now-queue .now-queue-count { color: var(--tg-text-bright); }
+.now-queue .now-queue-open { font-size: var(--tg-text-xs); padding: 2px var(--tg-space-2); }
+
+/* Phase 1 (§18): palette (⌘K) */
+.palette-modal { align-items: flex-start; padding-top: 12vh; }
+.palette-box {
+  background: var(--tg-bg-surface); border: 1px solid var(--tg-border-strong);
+  border-radius: var(--tg-radius-lg); width: min(600px, 92vw); overflow: hidden;
+}
+.palette-input {
+  width: 100%; border: 0; border-bottom: 1px solid var(--tg-border);
+  background: var(--tg-bg-elevated); color: var(--tg-text);
+  padding: var(--tg-space-3) var(--tg-space-4); font-family: var(--tg-text-mono); font-size: var(--tg-text-md);
+}
+.palette-results { max-height: 52vh; overflow-y: auto; padding: var(--tg-space-1) 0; }
+.palette-row {
+  display: flex; gap: var(--tg-space-2); align-items: baseline;
+  padding: 6px var(--tg-space-4); cursor: pointer; font-size: var(--tg-text-base); color: var(--tg-text);
+}
+.palette-row.sel, .palette-row:hover { background: var(--tg-bg-hover); }
+.palette-row-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.palette-row-meta { color: var(--tg-text-muted); font-size: var(--tg-text-sm); }
+
+/* Phase 1 (§18.3): history row targeted by a palette seq-jump */
+.hist-jump { outline: 2px solid var(--tg-risk-read); background: var(--tg-risk-read-bg); }
 
 @media (max-width: 800px) {
   .panes { grid-template-columns: 1fr; overflow-y: auto; }
