@@ -195,6 +195,13 @@ below is missing one.
 - **Inspect:** `GET /v2/providers?probe=<n>`; lane notes state real
   constraints (free lanes, exhausted paid lanes).
 
+### mount `92-providers-live.js` — live provider observability (D5)
+- **Endpoints:** `GET /v2/providers/live` (bearer; operator-only).
+- **Audit events:** `provider_live_access_denied` (worker attempt),
+  `provider_live_probed` (successful probe by operator).
+- **Storage:** none (ephemeral probe results).
+- **Inspect:** the endpoint returns `{providers: [{name, ok, httpStatus?, detail, ms}]}`.
+
 ### `continuity.js` + mount `50-continuity.js` — goals, slash, loops
 - **Endpoints:** `/v2/goals` (create/list), `/v2/goals/:id/step|resume`,
   pause/clear/complete via the same surface, `/v2/slash` (bearer).
@@ -240,7 +247,7 @@ below is missing one.
 
 ## Full audit-event table
 
-66 event types emitted from `src/gateway/**`. Extraction rule: every string
+68 event types emitted from `src/gateway/**`. Extraction rule: every string
 matched by `{type: '…'}` (including the `enabled ? 'a' : 'b'` ternary in
 plugins.js) across all files under `src/gateway/`.
 
@@ -313,6 +320,8 @@ plugins.js) across all files under `src/gateway/`.
 | 65 | `deploy_artifact` | mounts/75-deploy.js (wave C: rendered service/launcher downloads) |
 | 66 | `openai_request` | mounts/85-openai.js (counts only: model, bot, msgCount, charsIn/Out, streaming — no message content) |
 | 67 | `trust_scan` | mounts/91-trust.js (D4: metadata ONLY — chars, hits, rule names; scanned text is NEVER stored or logged) |
+| 68 | `provider_live_access_denied` | mounts/92-providers-live.js (D5: worker attempted access to live probe) |
+| 69 | `provider_live_probed` | mounts/92-providers-live.js (D5: operator successfully probed providers) |
 ## Documented exceptions
 
 The test compares the table above against a programmatic extraction over
