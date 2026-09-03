@@ -250,6 +250,17 @@ header {
 /* Phase 1 (§18.3): history row targeted by a palette seq-jump */
 .hist-jump { outline: 2px solid var(--tg-risk-read); background: var(--tg-risk-read-bg); }
 
+/* Phase 2 (§20.3): domain rail + per-domain subnav */
+.tab.domain { text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
+.subtabs { display: flex; gap: var(--tg-space-1); flex-wrap: wrap; padding: 0 var(--tg-space-4); }
+.subtab {
+  background: transparent; border: 0; border-bottom: 2px solid transparent;
+  color: var(--tg-text-muted); padding: var(--tg-space-1) var(--tg-space-2);
+  cursor: pointer; font-family: inherit; font-size: var(--tg-text-sm);
+}
+.subtab:hover { color: var(--tg-text); }
+.subtab.active { color: var(--tg-risk-read); border-bottom-color: var(--tg-risk-read); }
+
 @media (max-width: 800px) {
   .panes { grid-template-columns: 1fr; overflow-y: auto; }
   body { height: auto; }

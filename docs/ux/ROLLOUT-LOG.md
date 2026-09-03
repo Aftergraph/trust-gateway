@@ -79,9 +79,62 @@ full suite is green on the phase's head commit. Entries are append-only.
 
 ---
 
+## 2026-09-03 — Phase 2 (domain rail + deep-link URIs): **COMPLETE**
+
+- **Head**: see commit `feat(phase2)` below (main, pushed)
+- **Entry gate**: Phase 1 complete ✓ (tier-A 9/9 at 746b146)
+- **Work**:
+  - **9-domain rail** (§2.1): the nav now shows NOW · CHAT · WORK · AGENTS ·
+    BRAIN · OUTPUT · CONTROL · CONNECT · SYSTEM. The 13 panels keep their
+    ids and become sub-panels inside their owning domain (subnav strip when
+    a domain has >1 panel; landing panel per domain remembered across visits
+    — §2.3 revisit semantics).
+  - **Deep-link URIs**:
+    - Bare domains `/now … /system` serve the console shell (server static
+      route) — bookmarkable, zero 404 windows.
+    - Object links `GET /d/<DOMAIN>/o/<type>/<id>` (new mount 97-deeplink):
+      run, approval, goal, artifact, adapter, room, message,
+      computersession, memory, session (sess_<transparency-token>),
+      auditentry (seq_N) — each resolves to its canonical store with the
+      owning surface's RBAC (worker = own objects, operator = all).
+      Browser Accept:text/html gets the shell; JSON Accept gets the
+      resolver answer. Unknown type / wrong domain namespace → 404 with a
+      stable reason, never a silent redirect (§2.2 rule).
+    - Client boot: on `/d/...` the console resolves via TG.api, opens the
+      owning panel; auditentry links reuse the phase-1 seq-jump (§18.3).
+  - **G11 redirect map** (§20.3, verbatim from the spec table): `console →
+    now`, `history → output`, `goals/builder → work`, `hub/voice/
+    integrations → connect`, `providers/providers-live → brain`,
+    `computer → control`, `playground/artifacts → output`, `rooms → now`.
+    Old `#hash` links land on their domain; `?tabs=legacy` kill-switch
+    restores the full 13-tab Phase-1 rail.
+  - **New panels**: AGENTS (bots × live run counts via /v2/runs) and SYSTEM
+    (health, chain seal, entries, bots) — the two domains that had no
+    surface. app/panels/agents-system.js.
+- **Anti-enumeration (G3, session tokens)**: unknown/missing session tokens
+  answer byte-identical (same 404 body, token replaced by `sess_********`,
+  constant-time comparison against transparency tokens). Test asserts
+  equality of raw bodies for two different unknown tokens.
+- **Exit gate**:
+  - Full suite: **710/710 pass** (10 deeplink resolver tests + 4 phase-2
+    rail/redirect tests + updated core expectations)
+  - Conformance tier-A: **9/9 ALL PASS** (live gateway, post-restart)
+  - Live probes: all 9 domain URIs → 200 shell; `/d/NOW/o/run/r_e9464705` →
+    200 resolved (engine/bot/state/steps); `/d/CONTROL/o/auditentry/seq_418`
+    → 200; unknown type → 404; browser nav → shell without leaking object
+    data pre-auth.
+- **Kill-switch**: `?tabs=legacy` (rail) — redirect map is a plain object in
+  core.js; deleting it falls back to flat 13-tab behavior per spec.
+- **Known gap (honest)**: the merged wave-F llm-loop keeps deepTurn's return
+  shape strictly (no runId in the reply body — spec-compliant), so clients
+  discover runs via `GET /v2/runs?limit=…` (or by watching SSE run_started).
+  Deep-link boot for a run therefore needs the id from the runs list, not
+  from a chat reply.
+
+---
+
 ## Next gate targets (open)
 
-- **Phase 2** (deep-link URIs `/d/<domain>/o/<type>/<id>`): candidate next.
 - BACKEND GAPs still open after wave F: TG.api operator tokens, TG.session,
   manifest validation harness, /model mount, /interrupt endpoint, FTS5 live,
   token prefix lookup, telemetry infra (cost-preview and runs/conformance

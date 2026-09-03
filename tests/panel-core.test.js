@@ -22,22 +22,38 @@ test('XSS policy: no innerHTML assignment in core.js', () => {
   assert.ok(!/\.innerHTML\s*[+]?=/.test(src), 'core.js must never assign innerHTML');
 });
 
-test('core.js builds the expected tab ids in order (phase 1: history pinned after console)', () => {
-  const expected = ['console', 'history', 'rooms', 'artifacts', 'goals', 'builder', 'hub', 'providers', 'providers-live', 'computer', 'playground', 'voice', 'integrations'];
-  for (const id of expected) {
-    assert.match(src, new RegExp("id:\\s*'" + id + "'", 'i'), 'tab id present: ' + id);
+test('core.js exposes the 9-domain rail (phase 2) and keeps the legacy 13-tab order for the kill-switch', () => {
+  const expectedDomains = ['now', 'chat', 'work', 'agents', 'brain', 'output', 'control', 'connect', 'system'];
+  for (const id of expectedDomains) {
+    assert.match(src, new RegExp("id:\\s*'" + id + "'"), 'domain id present: ' + id);
   }
-  // Verify ordering via the TABS_NOW literal block (phase 1 order).
-  const m = src.match(/const TABS_NOW\s*=\s*\[([\s\S]*?)\];/);
-  assert.ok(m, 'TABS_NOW array defined');
-  const ids = m[1].match(/id:\s*'([^']+)'/g).map((s) => s.match(/'([^']+)'/)[1]);
-  assert.deepEqual(ids, expected, 'tab order matches spec');
-  // Kill-switch: legacy order preserved verbatim + selected via ?tabs=legacy.
-  const lm = src.match(/const TABS_LEGACY\s*=\s*\[([\s\S]*?)\];/);
+  const dm = src.match(/const DOMAINS\s*=\s*\[([\s\S]*?)\n  \];/);
+  assert.ok(dm, 'DOMAINS array defined');
+  const domainIds = dm[1].match(/id:\s*'([^']+)'/g).map((s) => s.match(/'([^']+)'/)[1]);
+  assert.deepEqual(domainIds, expectedDomains, 'domain rail order matches §2.1');
+  // Kill-switch: Phase-1 order preserved verbatim + selected via ?tabs=legacy.
+  const lm = src.match(/const TABS_LEGACY\s*=\s*\[([\s\S]*?)\n  \];/);
   assert.ok(lm, 'TABS_LEGACY array defined (kill-switch)');
   const legacyIds = lm[1].match(/id:\s*'([^']+)'/g).map((s) => s.match(/'([^']+)'/)[1]);
-  assert.deepEqual(legacyIds, ['console', 'rooms', 'artifacts', 'goals', 'builder', 'hub', 'providers', 'providers-live', 'history', 'computer', 'playground', 'voice', 'integrations'], 'legacy order = phase 0');
+  assert.deepEqual(legacyIds, ['console', 'history', 'rooms', 'artifacts', 'goals', 'builder', 'hub', 'providers', 'providers-live', 'computer', 'playground', 'voice', 'integrations'], 'legacy order = phase 1');
   assert.match(src, /tabs=legacy/, 'kill-switch query honored');
+});
+
+test('core.js redirect map covers every legacy tab id (G11: no broken URLs)', () => {
+  const rm = src.match(/const LEGACY_TAB_TO_DOMAIN\s*=\s*\{([\s\S]*?)\n  \};/);
+  assert.ok(rm, 'redirect map defined');
+  const map = {};
+  for (const line of rm[1].split('\n')) {
+    const m = line.match(/'?([\w-]+)'?:\s*'(\w+)'/);
+    if (m) map[m[1]] = m[2];
+  }
+  // §20.3 table, verbatim.
+  assert.deepEqual(map, {
+    console: 'now', rooms: 'now', history: 'output', artifacts: 'output',
+    playground: 'output', goals: 'work', builder: 'work', hub: 'connect',
+    voice: 'connect', integrations: 'connect', providers: 'brain',
+    'providers-live': 'brain', computer: 'control',
+  }, 'redirect map matches §20.3');
 });
 
 test('core.js hides .panes via view-hide and mounts panel-view', () => {

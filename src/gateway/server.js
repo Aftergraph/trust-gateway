@@ -137,6 +137,10 @@ class Gateway extends EventEmitter {
 
     // ── v2 static SPA (dashboard) + PWA assets + panels ──
     if (this.staticDir && req.method === 'GET') {
+      // Phase 2 (§20.3): the 9 domain URIs resolve to the console shell.
+      if (/^\/(now|chat|work|agents|brain|output|control|connect|system)\/?$/.test(pathname)) {
+        return this._serveStatic(res, 'index.html');
+      }
       const rel = pathname === '/' ? 'index.html'
         : /^\/(app\.js|style\.css|index\.html|sw\.js|offline\.html|pwa-head\.html|manifest\.webmanifest|responsive\.css|desktop\.css|favicon\.svg)$/.test(pathname) ? pathname.slice(1)
         : /^\/icons\/[\w.-]+\.svg$/.test(pathname) ? pathname.slice(1)
