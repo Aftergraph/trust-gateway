@@ -261,6 +261,13 @@ header {
 .subtab:hover { color: var(--tg-text); }
 .subtab.active { color: var(--tg-risk-read); border-bottom-color: var(--tg-risk-read); }
 
+/* Phase 3 (§5): compose-mode capability-filter note */
+.compose-cap-note {
+  font-size: var(--tg-text-sm); color: var(--tg-risk-write);
+  background: var(--tg-risk-write-bg); border: 1px solid var(--tg-border-write-accent);
+  border-radius: var(--tg-radius-sm); padding: var(--tg-space-1) var(--tg-space-2); margin-bottom: var(--tg-space-2);
+}
+
 @media (max-width: 800px) {
   .panes { grid-template-columns: 1fr; overflow-y: auto; }
   body { height: auto; }

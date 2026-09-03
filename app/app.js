@@ -9,6 +9,8 @@
   tokenEl.value = token ? '••••••••' : '';
   let es = null;
   let chatOk = null; // feature-detect /v2/chat once
+  let whoami = null;  // identity name from GET /v2/whoami (phase 3)
+  let myCaps = [];    // capabilities of whoami (phase 3 composition input)
   const sessionId = 'web-' + Math.random().toString(36).slice(2, 10);
 
   function authed() { return token && token.length > 0; }
@@ -118,6 +120,10 @@
 
   function refreshBots() {
     Promise.all([api('/v2/bots'), api('/v2/stats')]).then(([b, s]) => {
+      // Phase 3: remember this identity's capabilities for the composition
+      // engine (the bot matching our token's name; '*' passes through).
+      const mine = (b.bots || []).find((x) => x.name === whoami);
+      myCaps = mine && Array.isArray(mine.capabilities) ? mine.capabilities : [];
       const box = $('bots');
       box.textContent = '';
       b.bots.forEach((bot) => {
@@ -166,6 +172,8 @@
     saveToken();
     if (es) es.close();
     $('liveDot').className = 'dot on';
+    // Phase 3: resolve identity before the composition inputs are read.
+    api('/v2/whoami').then((w) => { whoami = w.name; myCaps = w.capabilities || []; }).catch(() => { whoami = null; myCaps = []; });
     api('/v1/audit/verify').then((v) => {
       setPill(v.ok); $('entryCount').textContent = v.length; $('headHash').textContent = String(v.head).slice(0, 12);
       primeStream(); refreshPending(); refreshBots();
@@ -320,6 +328,10 @@
     api, el,
     token: () => token,
     authed,
+    // phase 3 composition inputs (§5.1): the engine reads permissions from
+    // here; empty until the identity resolves (never guesses ['*']).
+    capabilities: () => myCaps,
+    whoami: () => whoami,
     refresh: () => { refreshPending(); refreshBots(); },
     onAudit: (fn) => { window.addEventListener('tg-audit', (ev) => fn(ev.detail)); },
   };

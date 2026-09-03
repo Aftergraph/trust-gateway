@@ -241,11 +241,18 @@
   function showPanel(shell, domain, panelId) {
     domainLastPanel[domain] = panelId;
     const host = document.getElementById('panel-host');
+    // Phase 3 (§5): when the compose flag is on, the engine decides whether
+    // this panel's surfaces are available for the current context. A panel
+    // that the engine omits with reason 'capability' still mounts but shows
+    // the 'capability missing' placeholder (§19.3 filter semantics).
+    const plan = composedPlan(domain);
+    const entry = plan && plan.stack.find((s) => s.panel === panelId);
     if (panelId === 'console') {
       // 'console' is the original 3-pane grid, not a TG_PANELS panel.
       clearViews(host);
       shell.main.classList.remove('view-hide');
       syncSubtabs(document.getElementById('subtabs'), 'console');
+      annotateCapability(entry);
       return;
     }
     shell.main.classList.add('view-hide');
@@ -257,6 +264,35 @@
     const re = document.getElementById('pv-' + panelId);
     if (re) re.classList.add('view-show');
     syncSubtabs(document.getElementById('subtabs'), panelId);
+    annotateCapability(entry);
+  }
+
+  function composedPlan(domain) {
+    try {
+      const C = window.TG_COMPOSE;
+      if (!C || !C.composeEnabled()) return null;
+      const caps = (window.TG && typeof window.TG.capabilities === 'function') ? window.TG.capabilities() : [];
+      const pending = Number(document.getElementById('pendingCount') && document.getElementById('pendingCount').textContent) || 0;
+      const device = (navigator.maxTouchPoints > 0 && innerWidth < 800) ? 'mobile' : 'desktop';
+      const sess = (window.TG && window.TG.sessionState) ? window.TG.sessionState() : null;
+      const workState = sess && sess.workState ? sess.workState : (pending > 0 ? 'awaiting-approval' : 'idle');
+      return C.composePlan({ domain, capabilities: caps, device, workState, attention: { queueCount: pending } });
+    } catch { return null; }
+  }
+
+  function annotateCapability(entry) {
+    // Compose-mode only: surface a small 'capability missing' strip on the
+    // active panel when the engine filtered its action surfaces (§19.3).
+    const note = document.getElementById('compose-cap-note');
+    if (!entry) { if (note) note.remove(); return; }
+    const hidden = entry.actionSurfacesHidden || [];
+    if (!hidden.length && !entry.capabilityMissing) { if (note) note.remove(); return; }
+    let el2 = note || document.createElement('div');
+    el2.id = 'compose-cap-note';
+    el2.className = 'compose-cap-note';
+    el2.textContent = 'compose mode · action surfaces hidden (capability filter): ' + hidden.join(', ');
+    const host = document.getElementById('panel-host');
+    if (host && !note) host.insertBefore(el2, host.firstChild);
   }
 
   // Legacy-compatible entry: switchTab(anyPanelId) resolves the id to its

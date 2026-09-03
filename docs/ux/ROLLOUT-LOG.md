@@ -133,6 +133,48 @@ full suite is green on the phase's head commit. Entries are append-only.
 
 ---
 
+## 2026-09-03 — Phase 3 (composition engine behind flag): **COMPLETE**
+
+- **Head**: `feat(phase3)` commit below (main, pushed)
+- **Entry gate**: Phase 2 complete ✓ (tier-A 9/9 at 42f503e)
+- **Work**:
+  - **`app/compose.js`** — the §5 decision function as a pure, deterministic
+    module: kernel surface vocabulary (12), intent enum (7), §5.2 MUST-rule
+    order implemented exactly: risk override (destructive → Modal/Drawer
+    gate at stack 0 + background dim + inline Composer/Queue stripped),
+    awaiting-approval Queue pin (regardless of intent), unknown-intent →
+    Feed fallback, mobile Detail→Summary density collapse with surface
+    *class* preserved. Learned-preference re-ranking deliberately NOT
+    implemented (MAY; §4.6 determinism is the safer default). Every omit
+    carries `omittedBecause ∈ {risk,capability,intent,device}` — asserted
+    across a combo matrix (rule 28).
+  - **§19.3 manifests** for all 15 built-in panels + `validateManifest()` —
+    **closes the spec-named BACKEND GAP "panel-manifest validation harness"
+    (G7)**: `tests/panel-manifest.test.js` validates every shipped manifest,
+    rejects 7 crafted invalid ones with useful errors, and pins engine
+    behavior (12 tests, all green).
+  - **Capability filter (§19.3)**: action surfaces hidden for ungranted
+    verbs, panel itself never removed (dim, never hide).
+  - **`GET /v2/whoami`** (new mount 98-whoami): identity →
+    {name, role, capabilities} allow-list projection (strict, no token
+    material — same pattern as /v2/bots). Minimal closure of BACKEND GAP
+    "TG.session/identity"; scopes/extra roles stay future work.
+  - **Flagged integration**: `showPanel()` consults
+    `TG_COMPOSE.composePlan(domain)` only when `?compose=true` or
+    `localStorage['tg-compose']='true'`; a capability-filtered panel shows
+    the "action surfaces hidden" strip. Old tab-router path is untouched —
+    instant fallback (§20 Phase 3 exit criterion). `/compose.js` served +
+    added to the PWA shell (sw cache bump w9.1.0).
+- **Exit gate**:
+  - Full suite: **722/722 pass** (+12 manifest/engine tests)
+  - Conformance tier-A: **9/9 ALL PASS** (live gateway restarted on this code)
+  - Live probes: `/compose.js` → 200; `/v2/whoami` →
+    `{"name":"atlas","role":"operator","capabilities":["*"]}`
+- **Kill-switch**: drop `?compose=true` / clear localStorage → Phase-2
+  router behavior restored instantly. No state touched.
+
+---
+
 ## Next gate targets (open)
 
 - BACKEND GAPs still open after wave F: TG.api operator tokens, TG.session,
