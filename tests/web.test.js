@@ -363,20 +363,19 @@ function makeGateway({ botsDir }) {
   return gw;
 }
 
-test('executor: unknown web.fetch tool classifies destructive → needs_approval (no execution before approval)', async () => {
+test('executor: web.fetch tool classifies read → allow (pre-approved)', async () => {
   const botsDir = tmpBotsDir();
   try {
     const gw = makeGateway({ botsDir });
     assert.ok(gw._findExecutor('web.fetch:example.com/foo'));
     assert.ok(gw._findExecutor('web.extract:api.example.com/v1'));
 
-    // Synthesize a _postAction call by hand (mirrors what /v1/actions does).
-    // web.fetch:example.com is unclassified → destructive → needs_approval.
+    // web.fetch:example.com is now classified as read → pre-approved.
     const { classify, decide } = require('../src/gateway/policy');
     const cls = classify('web.fetch:example.com/foo');
-    assert.equal(cls, 'destructive');
+    assert.equal(cls, 'read');
     const verdict = decide({ tool: 'web.fetch:example.com/foo', cls, bot: { name: 'scout', role: 'worker', capabilities: ['fs.read', 'web.get'] } });
-    assert.equal(verdict.decision, 'needs_approval');
+    assert.equal(verdict.decision, 'allow');
   } finally { cleanup(botsDir); }
 });
 

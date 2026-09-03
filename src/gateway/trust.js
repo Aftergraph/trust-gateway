@@ -195,6 +195,8 @@ const SOURCE_TIER = {
   harness_output: 'external',
   harness_build: 'external',
   harness_run: 'external',
+  adapter_probe: 'external',
+  adapter_test: 'external',
   artifact_read: 'internal',
   artifact_read_content: 'internal',
   chat_user_message: 'operator-adjacent',

@@ -100,20 +100,28 @@ below is missing one.
 - **Inspect:** audit search on `chat_action` (payload carries `source: 'llm'`).
 
 ### `llm-loop.js` + mount `23-chat-llm-live.js` — multi-iteration LLM tool-call loop
-- **Endpoints:** `POST /v2/chat/llm/deep` {session, message, bot?} (bearer).
+|- **Endpoints:** `POST /v2/chat/llm/deep` {session, message, bot?} (bearer).
   Up to 3 iterations; allowed-tools list is built from
   `ROLE_CAPABILITIES + classify` (read/write classes only — destructive
   and secret never make it into the prompt). Reuses the same brain as
   `llm-brain.js` via `getBrain(gw)`. Degrades to `{fallback:true, reply:
   'llm not configured'}` when the brain is unset.
-- **Audit events:** `chat_action`, `chat_action_executed`,
-  `approval_requested` — same types as the single-turn brain, with
-  `source: 'llm-live'` to distinguish the loop-driven path. Parked
-  approvals return `{reply, pending_approval:{id,tool}, iterations}`.
-- **Tool execution:** routed through `gw._run(bot, tool, args)` — the
+|- **Audit events:** `chat_action`, `chat_action_executed`,
+  `approval_requested`, `observation_scanned` — same types as the
+  single-turn brain, with `source: 'llm-live'` to distinguish the
+  loop-driven path. `observation_scanned` carries `{tool, hits, chars}`
+  metadata only (scanned text is never stored). Parked approvals
+  return `{reply, pending_approval:{id,tool}, iterations}`.
+|- **Tool execution:** routed through `gw._run(bot, tool, args)` — the
   SAME path the deterministic ChatPlanner and the v1 `_postAction`
   handler use. No second dispatch route.
-- **Inspect:** audit search `q=chat_action source:llm-live`.
+|- **Inspect:** audit search `q=chat_action source:llm-live`.
+|- **Observation formatting (D4):** external tool results (web.fetch,
+  web.extract, adapter probes, harness.run) are quarantined via
+  `quarantineWrap` and scanned via `scanForInjection` before entering
+  the brain. A `[security: N hits]` integrity notice is prepended when
+  injection patterns are detected. Internal tool results pass through
+  raw. The response carries `observationsTrusted: true`.
 
 ### `events.js` + mount `10-events.js` — SSE hub
 - **Endpoints:** `GET /v2/events?token=…` (auth: query — EventSource can't
@@ -247,7 +255,7 @@ below is missing one.
 
 ## Full audit-event table
 
-71 event types emitted from `src/gateway/**`. Extraction rule: every string
+72 event types emitted from `src/gateway/**`. Extraction rule: every string
 matched by `{type: '…'}` (including the `enabled ? 'a' : 'b'` ternary in
 plugins.js) across all files under `src/gateway/`.
 
@@ -324,6 +332,7 @@ plugins.js) across all files under `src/gateway/`.
 | 69 | `provider_live_probed` | mounts/92-providers-live.js (D5: operator successfully probed providers) |
 | 70 | `telegram_notify` | mounts/71-telegram.js (D2: chat_id + chars + outcome only — never text, never token) |
 | 71 | `telegram_notify_rejected` | mounts/71-telegram.js (D2: non-operator attempt; reason + bot name only) |
+| 72 | `observation_scanned` | src/gateway/llm-loop.js (D4: metadata ONLY — tool, hits, chars; scanned text is NEVER stored or logged) |
 ## Documented exceptions
 
 The test compares the table above against a programmatic extraction over

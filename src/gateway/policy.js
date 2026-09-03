@@ -5,12 +5,12 @@
 
 const CLASSIFICATIONS = [
   // reads
-  { match: ['fs.read:*', 'fs.read', 'web.get', 'web.search', 'db.read:*'], cls: 'read' },
+  { match: ['fs.read:*', 'fs.read', 'web.get', 'web.get:*', 'web.search', 'web.search:*', 'web.fetch', 'web.fetch:*', 'web.extract', 'web.extract:*', 'db.read:*', 'adapter_probe:*', 'adapter_test:*'], cls: 'read' },
   // writes
   { match: ['fs.write:*', 'fs.write', 'fs.mkdir', 'db.write:*', 'http.post'], cls: 'write' },
   // destructive
   {
-    match: ['shell.run', 'shell.run:*', 'fs.delete:*', 'fs.delete', 'db.drop:*', 'deploy:*', 'payment:*'],
+    match: ['shell.run', 'shell.run:*', 'fs.delete:*', 'fs.delete', 'db.drop:*', 'deploy:*', 'payment:*', 'harness.run:*', 'harness.build:*'],
     cls: 'destructive',
   },
   // secrets
