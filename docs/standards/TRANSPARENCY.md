@@ -503,6 +503,8 @@ plugins.js) across all files under `src/gateway/`.
 | 159 | `flag_set` | mounts/126-feature-flags.js (FS-L3: {by, name, enabled, value} — operator set a feature flag; flag name + enabled + value, no secret material) |
 | 160 | `flag_reset` | mounts/126-feature-flags.js (FS-L3: {by, name} — operator reset a feature flag to its env default) |
 | 161 | `flag_listed` | mounts/126-feature-flags.js (FS-L3: {by, count} — operator listed feature flags; count only) |
+| 162 | `skill_version_read` | mounts/128-skill-versions.js (FS-M2: {by, skillId, version?, count?} — operator listed/read a skill version; version + count only, never step bodies) |
+| 163 | `skill_rolled_back` | mounts/128-skill-versions.js (FS-M2: {by, skillId, version} — operator rolled a skill back to a prior version; the steps themselves are NEVER logged, audited, or returned in the audit row) |
 
 ### `secrets-vault.js` + mounts `115-secrets.js` / `119-secrets-rotate.js` — tenant secrets vault + master-key rotation (FS-I5, FS-J2)
 - **Endpoints:** `PUT/GET/DELETE /v2/tenants/:id/secrets[/:key]` (operator;
