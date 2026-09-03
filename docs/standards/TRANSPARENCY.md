@@ -435,6 +435,9 @@ plugins.js) across all files under `src/gateway/`.
 | 107 | `backup_restored` | mounts/110-backup.js (FS-B1: {name, files, chainHead} — restore success, counts only) |
 | 108 | `backup_restore_refused` | mounts/110-backup.js (FS-B1: {name, reason} — fail-closed on sha256 mismatch/missing file; live data untouched) |
 | 109 | `backup_denied` | mounts/110-backup.js (FS-B1: {bot} — non-operator touched a backup route; RBAC refusal audited) |
+| 110 | `apikey_created` | mounts/112-apikeys.js (FS-E3: {id, name, scopes} — NEVER the plaintext, never the hash) |
+| 110 | `apikey_revoked` | mounts/112-apikeys.js (FS-E3: {id, by} — key id and operator name only) |
+| 110 | `apikey_denied` | mounts/112-apikeys.js (FS-E3: {bot} — non-operator touched a key route; RBAC refusal audited) |
 
 ### `backup.js` + mount `110-backup.js` — verified backup/restore (FS-B1)
 - **Endpoints:** `GET /v2/backup` (list, operator), `POST /v2/backup`
