@@ -157,3 +157,26 @@ Every module, endpoint, audit-event type and storage file is documented in
 `tests/standards.test.js` fails the suite if the docs drift from the code.
 If a doc and the code disagree, that is a bug in one of them — fix it in the
 same commit.
+
+## 9. Known limitations (audited 2026-09-03)
+
+Audited against `main @ 56765dd` (916/916 tests green). Stated plainly, with
+the dispatched/planned work that resolves each:
+
+- **The jail is process discipline, not an OS sandbox.** `dispatcher.js`
+  canonicalizes paths and refuses traversal/symlink escapes, and each bot is
+  rooted at its own directory — but bots still share the host OS (the honest
+  limit in §4, and the FS-C2 harness2 header says the same). OS-level
+  sandboxing (namespaces/bubblewrap, gVisor) is roadmap v3 R4, UDSET.
+- **Rate limits are in-process (in-memory).** FS-A2's per-user limits reset
+  on gateway restart, so enforcement is per process, not durable. A
+  persistent rate store arrives with the external API-key work (FS-E3,
+  roadmap §v2i-3 — dispatched; `apikeys` rate table), which also closes
+  roadmap gap item 2.
+- **Backups are manual.** FS-B1's verified backup/restore (sha256 manifest +
+  chain-head binding, `tests/backup.test.js`) exists, but nothing on main
+  schedules `createBackup()` — the systemd backup timer + restore drill land
+  with FS-E2 (roadmap §v2i-2 — dispatched).
+- **Single-tenant.** One gateway process, one data-dir, one bot roster. The
+  multi-tenant foundation (tenant store, namespaced chains/stores) is FS-E1
+  (roadmap §v2i-1 — planned).

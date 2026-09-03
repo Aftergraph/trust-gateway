@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Trust Gateway — a governed AI workforce you can actually let near your systems</title>
-<meta name="description" content="Specialist bots with persistent memory, each with its own isolated computer, behind one governing gateway: every action decided before it happens, sealed after.">
+<meta name="description" content="Specialist bots with persistent memory, each jailed in its own process island, behind one governing gateway: every action decided before it happens, sealed after.">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -53,11 +53,12 @@
     </article>
 
     <article class="feature">
-      <h3><span class="idx">02</span> A computer per bot. Not one for all.</h3>
-      <p>Bots don't share a desktop or your sign-ins. Each bot works in its own
-      isolated computer session — its own browser profile, its own file space,
-      its own tool access. What one bot does can't contaminate another, and your
-      own sign-ins stay yours.</p>
+      <h3><span class="idx">02</span> A jailed island per bot. Not one for all.</h3>
+      <p>Bots don't share a desktop or your sign-ins. Each bot runs in a
+      jailed process island — its own directory, its own file space, its own
+      tool access. What one bot does can't contaminate another, and your
+      own sign-ins stay yours. (Process-level jail today; an OS-level sandbox
+      is on the roadmap.)</p>
     </article>
 
     <article class="feature">
@@ -138,7 +139,7 @@
         </tr>
         <tr>
           <th scope="row">A computer per bot</th>
-          <td>Shared across bots</td><td>Isolated per bot</td><td class="good">Isolated per bot</td>
+          <td>Shared across bots</td><td>Isolated per bot</td><td class="good">Jailed process island per bot (OS-level sandbox on roadmap)</td>
         </tr>
         <tr>
           <th scope="row">Actions gated before + audited after</th>
@@ -162,7 +163,7 @@
         </tr>
         <tr>
           <th scope="row">Self-host / data ownership</th>
-          <td>No</td><td>Yes</td><td class="good">Hosted, tenant-isolated</td>
+          <td>No</td><td>Yes</td><td class="good">Hosted (single-tenant today; multi-tenant foundation on roadmap v3)</td>
         </tr>
         <tr>
           <th scope="row">Ops burden</th>
@@ -182,6 +183,8 @@
         </tr>
       </tbody>
     </table>
+    <p class="muted">Claims audited against the codebase 2026-09-03; see
+    docs/standards/ for evidence.</p>
     <p class="foot">The gap we occupy: OpenBot's guarantees without the self-host
     ops, Grok Bot's polish without the black box. Hosted workforce, governing
     gateway included.</p>
