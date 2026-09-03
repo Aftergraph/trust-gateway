@@ -14,7 +14,7 @@
 //   DELETE /v2/plugins/:id             uninstall (removes running copy)
 //   PUT    /v2/plugins/:id/secrets/:n  write-only secret; echo = length only
 //   DELETE /v2/plugins/:id/secrets/:n  remove a secret
-//   GET    /v2/skills                  parse skills from installed modules
+//   GET    /v2/skills                  FS-C1 handover: governed skills (mounts/105-skills.js)
 //   GET    /v2/mcp                     MCP registry (env values never shown)
 //   POST   /v2/mcp                     register {name, transport, ...}
 //   DELETE /v2/mcp/:name               unregister
@@ -26,7 +26,6 @@ const { canApprove } = require('../rbac');
 const { getPluginsHub } = require('../plugins');
 
 const PLUGINS_RE = /^\/v2\/plugins(?:\/([^/]+)(?:\/([^/]+)(?:\/([^/]+))?)?)?\/?$/;
-const SKILLS_RE = /^\/v2\/skills\/?$/;
 const MCP_RE = /^\/v2\/mcp(?:\/([^/]+))?\/?$/;
 
 async function readJson(req) {
@@ -66,18 +65,9 @@ module.exports = {
       return send(res, 403, { error: 'operator_required' });
     }
 
-    // ── /v2/skills ──
-    if (SKILLS_RE.test(pathname)) {
-      if (method !== 'GET') return send(res, 405, { error: 'method_not_allowed' });
-      const { skills, rejected } = hub.discoverSkills();
-      return send(res, 200, {
-        skills: skills.map((s) => ({
-          module: s.module, file: s.file, name: s.name,
-          description: s.description, trigger: s.trigger,
-        })),
-        rejected,
-      });
-    }
+    // ── /v2/skills ── (FS-C1: governed skill CRUD+run lives in mounts/105-skills.js,
+    // which loads first and owns the whole /v2/skills surface, incl. the merged
+    // module-skill listing. Nothing to do here anymore.)
 
     // ── /v2/mcp ──
     let m = MCP_RE.exec(pathname);

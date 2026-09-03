@@ -282,7 +282,9 @@ below is missing one.
 
 ## Full audit-event table
 
-81 event types emitted from `src/gateway/**`. Extraction rule: every string
+83 event types emitted from `src/gateway/**` (rows are numbered in slice
+order across workstreams — 82/83/84… land as 104/105 etc.; the count test
+checks the number of distinct types, not row numbers). Extraction rule: every string
 matched by `{type: '…'}` (including the `enabled ? 'a' : 'b'` ternary in
 plugins.js) across all files under `src/gateway/`.
 
@@ -369,6 +371,14 @@ plugins.js) across all files under `src/gateway/`.
 | 79 | `run_paused` | src/gateway/runs.js (wave F F1: cancellable-state transition — parked approval or operator/owner cancel; emitted by store.cancel() via POST /v2/runs/:id/cancel) |
 | 80 | `adapter_kind_register` | mounts/99-adapter-kinds.js (G9: {kind, fields count} — field names only, never values) |
 | 81 | `adapter_kind_rejected` | mounts/99-adapter-kinds.js (G9: {bot, kind?, errors[]} — validation failures) |
+| 104 | `skill_created` | mounts/105-skills.js (FS-C1: {skillId, name, version, createdBy} — steps/tool detail not in the event) |
+| 105 | `skill_run_started` | mounts/105-skills.js (FS-C1: {skillId, name, bot, steps count, dry, runId} — per-step decisions ride the existing chat_action rows with kind 'skill_step') |
+
+Note (FS-C1): per-step skill governance deliberately does NOT add a new
+event type — every step emits a standard `chat_action` row tagged
+`kind: 'skill_step'` ({skillId, seq, tool, decision}), so skill runs are
+auditable with the exact same chain vocabulary as chat proposals.
+
 ## Documented exceptions
 
 The test compares the table above against a programmatic extraction over
