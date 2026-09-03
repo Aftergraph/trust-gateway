@@ -93,6 +93,7 @@
 // — no raw args ever enter the chain (argsLength only).
 
 const { send, readBody } = require('../server');
+const crypto = require('node:crypto');
 const { getSkillStore, resolveTemplate, skillsAccessLevel, isOwnSkill, isShared, isFederated, isSharedLike, federationEnabled, canViewSkill } = require('../skills');
 const { getFedRunLedger, fedRunsPerHour, fedRunsPerSkillHour, WINDOW_MS } = require('../skills-federation');
 const { classify, decide } = require('../policy');
@@ -132,6 +133,29 @@ function fedLimited(res, gw, tenant, skillId, cap, kind) {
     limitKind: kind,
   });
   return send(res, 429, { error: 'fed_rate_limited' });
+}
+
+// FS-I1: sha256 result hash for a cross-tenant REAL run — a correlation
+// digest over the (bounded) step results, so the chain never stores raw
+// result payloads but an operator can still verify what ran.
+function resultHashOf(results) {
+  return crypto.createHash('sha256').update(JSON.stringify(results)).digest('hex');
+}
+
+// FS-I1: camelCase projection returned by the approve endpoints.
+function pendingProjection(row) {
+  if (!row) return null;
+  return {
+    runId: row.id,
+    skillId: row.skillId,
+    ownerTenant: row.ownerTenant,
+    runnerTenant: row.runnerTenant,
+    runnerBot: row.runnerBot,
+    approvedByOwner: row.approvedByOwner,
+    approvedByRunner: row.approvedByRunner,
+    executedAt: row.executedAt,
+    status: row.executedAt !== null ? 'executed' : (row.approvedByOwner !== null && row.approvedByRunner !== null ? 'approved' : 'pending'),
+  };
 }
 
 module.exports = {
@@ -356,6 +380,214 @@ module.exports = {
           gw._audit({ type: 'skill_unfederated', id: updated.id, by: bot.name });
         }
         return send(res, 200, { id: updated.id, name: updated.name, visibility: updated.visibility });
+      }
+
+      // ── FS-I1: cross-tenant REAL runs — DUAL-approval federation ─────
+      // A cross-tenant REAL (non-dry) run of a federated skill requires the
+      // explicit approval of BOTH the OWNING tenant's operator AND the
+      // RUNNING tenant's operator, BEFORE anything executes. Routes:
+      //   POST /v2/skills/federated/runs/request          {skillId, runnerTenant}
+      //   POST /v2/skills/federated/runs/:id/approve-owner
+      //   POST /v2/skills/federated/runs/:id/approve-runner
+      //   POST /v2/skills/federated/runs/:id/execute
+      // All operator-only, all env-gated (TG_SKILLS_FEDERATION=1 → else 404,
+      // the byte-identical off-switch). Every attempt is audited; a premature
+      // execute is 403 + skill_fed_real_denied and executes NOTHING.
+      if (req.method === 'POST' && id === 'federated' && segs[3] === 'runs') {
+        if (!federationEnabled()) return send(res, 404, { error: 'not_found' });
+        if (!isSkillOperator(bot)) {
+          gw._audit({ type: 'skill_denied', bot: bot.name, skillId: null, action: 'fed_real_runs' });
+          return send(res, 403, { error: 'operator_required' });
+        }
+        const ledger = getFedRunLedger();
+        // /v2/skills/federated/runs/request → action at segs[4];
+        // /v2/skills/federated/runs/:id/<action> → id at segs[4], action at segs[5].
+        const seg4 = segs[4] || null;
+        const action = seg4 === 'request' ? 'request' : (segs[5] || null);
+        const runIdNum = action === 'request' ? null : Number(seg4);
+
+        // ── request: EITHER operator (owner-side or runner-side) may open a
+        // pending dual-approval row. The body names the skill + the runner
+        // tenant; ownerTenant is derived from the SKILL record — the
+        // caller cannot forge it.
+        if (action === 'request') {
+          let body;
+          try { body = JSON.parse((await readBody(req)) || '{}'); }
+          catch { return send(res, 400, { error: 'invalid_json' }); }
+          const skillId = body && body.skillId;
+          const runnerTenantId = body && body.runnerTenant;
+          const skill = skillId ? store.get(skillId) : null;
+          if (!skill || !isFederated(skill)) {
+            gw._audit({ type: 'skill_fed_real_denied', bot: bot.name, skillId: skillId || null, reason: 'skill_not_federated' });
+            return send(res, 404, { error: 'not_found' });
+          }
+          const ownerTenantId = skill.ownerTenant || 'main';
+          if (!runnerTenantId || runnerTenantId === ownerTenantId) {
+            gw._audit({ type: 'skill_fed_real_denied', bot: bot.name, skillId: skill.id, reason: 'bad_runner_tenant' });
+            return send(res, 400, { error: 'bad_request', detail: 'runnerTenant must differ from the owning tenant' });
+          }
+          // Approval-side scoping: the CALLING operator may open the request
+          // only from its OWN side of the pair — the owner-tenant operator
+          // (tenant matches ownerTenant) or the runner-tenant operator
+          // (tenant matches runnerTenant). Anyone else learns nothing (404).
+          if (tenant.id !== ownerTenantId && tenant.id !== runnerTenantId) {
+            gw._audit({ type: 'skill_fed_real_denied', bot: bot.name, skillId: skill.id, reason: 'not_a_party' });
+            return send(res, 403, { error: 'operator_required' });
+          }
+          const rowId = ledger.requestRealRun({
+            skillId: skill.id,
+            ownerTenant: ownerTenantId,
+            runnerTenant: runnerTenantId,
+            runnerBot: bot.name,
+          });
+          gw._audit({ type: 'skill_fed_real_requested', runId: rowId, skillId: skill.id, ownerTenant: ownerTenantId, runnerTenant: runnerTenantId, by: bot.name });
+          return send(res, 201, { runId: rowId, skillId: skill.id, ownerTenant: ownerTenantId, runnerTenant: runnerTenantId, status: 'pending' });
+        }
+
+        // ── approve-owner: the OWNING tenant's operator stamps the row.
+        if (action === 'approve-owner') {
+          const row = ledger.getPending(runIdNum);
+          if (!row) return send(res, 404, { error: 'not_found' });
+          if (tenant.id !== row.ownerTenant) {
+            gw._audit({ type: 'skill_fed_real_denied', bot: bot.name, runId: row.id, skillId: row.skillId, reason: 'not_owner_tenant' });
+            return send(res, 403, { error: 'owner_tenant_required' });
+          }
+          const updated = ledger.approveByOwner(row.id, bot.name);
+          gw._audit({ type: 'skill_fed_real_approved_owner', runId: row.id, skillId: row.skillId, by: bot.name, ownerTenant: row.ownerTenant, runnerTenant: row.runnerTenant });
+          return send(res, 200, pendingProjection(updated));
+        }
+
+        // ── approve-runner: the RUNNING tenant's operator stamps the row.
+        if (action === 'approve-runner') {
+          const row = ledger.getPending(runIdNum);
+          if (!row) return send(res, 404, { error: 'not_found' });
+          if (tenant.id !== row.runnerTenant) {
+            gw._audit({ type: 'skill_fed_real_denied', bot: bot.name, runId: row.id, skillId: row.skillId, reason: 'not_runner_tenant' });
+            return send(res, 403, { error: 'runner_tenant_required' });
+          }
+          const updated = ledger.approveByRunner(row.id, bot.name);
+          gw._audit({ type: 'skill_fed_real_approved_runner', runId: row.id, skillId: row.skillId, by: bot.name, ownerTenant: row.ownerTenant, runnerTenant: row.runnerTenant });
+          return send(res, 200, pendingProjection(updated));
+        }
+
+        // ── execute: ONLY when BOTH operators approved (isFullyApproved).
+        // Executes the skill in the RUNNER-tenant context through the same
+        // governed step loop, records the result hash, audits the run.
+        // Any premature attempt → 403 + skill_fed_real_denied and NOTHING
+        // executes.
+        if (action === 'execute') {
+          const row = ledger.getPending(runIdNum);
+          if (!row) return send(res, 404, { error: 'not_found' });
+          if (tenant.id !== row.runnerTenant) {
+            gw._audit({ type: 'skill_fed_real_denied', bot: bot.name, runId: row.id, skillId: row.skillId, reason: 'not_runner_tenant' });
+            return send(res, 403, { error: 'runner_tenant_required' });
+          }
+          if (row.executedAt !== null) {
+            gw._audit({ type: 'skill_fed_real_denied', bot: bot.name, runId: row.id, skillId: row.skillId, reason: 'already_executed' });
+            return send(res, 409, { error: 'already_executed' });
+          }
+          if (!ledger.isFullyApproved(row.id)) {
+            gw._audit({ type: 'skill_fed_real_denied', bot: bot.name, runId: row.id, skillId: row.skillId, reason: 'dual_approval_required' });
+            return send(res, 403, { error: 'dual_approval_required' });
+          }
+          const skill = store.get(row.skillId);
+          if (!skill || !isFederated(skill) || (skill.ownerTenant || 'main') !== row.ownerTenant) {
+            // The skill moved under us (unfederated / edited / deleted) —
+            // the approval no longer matches reality, fail closed.
+            gw._audit({ type: 'skill_fed_real_denied', bot: bot.name, runId: row.id, skillId: row.skillId, reason: 'skill_no_longer_federated' });
+            return send(res, 404, { error: 'not_found' });
+          }
+
+          let body;
+          try { body = JSON.parse((await readBody(req)) || '{}'); }
+          catch { return send(res, 400, { error: 'invalid_json' }); }
+          const args = (body && body.args) || {};
+
+          // Resolve every step's args up-front (same discipline as the
+          // normal run path — any failure aborts before ANY step runs).
+          const plan = [];
+          for (let i = 0; i < skill.steps.length; i++) {
+            const step = skill.steps[i];
+            let resolved;
+            try {
+              resolved = resolveTemplate(step.argsTemplate, args);
+            } catch (e) {
+              if (String(e && e.code) === 'bad_request') {
+                return send(res, 400, { error: 'bad_request', detail: e.message });
+              }
+              throw e;
+            }
+            plan.push({
+              seq: i + 1,
+              tool: step.tool,
+              args: resolved,
+              cls: classify(step.tool),
+              approvalHint: step.approvalHint || '',
+            });
+          }
+
+          const runSeq = `skrun_${gw.chain.head.seq + 1}`;
+          // Audited with BOTH tags: the runner tenant's scope tag AND
+          // federatedFrom on the same skill_run_started row.
+          gw._audit({
+            type: 'skill_run_started', skillId: skill.id, name: skill.name, bot: bot.name, steps: skill.steps.length, dry: false, runId: runSeq,
+            ...tenantAuditTag(tenant), federatedFrom: row.ownerTenant,
+          });
+
+          const results = [];
+          let status = 'completed';
+          let completed = 0;
+          for (const item of plan) {
+            const { seq, tool, args: stepArgs, cls } = item;
+            const verdict = decide({ tool, cls, bot });
+            gw._audit({
+              type: 'chat_action', kind: 'skill_step', skillId: skill.id, runId: runSeq,
+              seq, bot: bot.name, tool, class: cls,
+              decision: verdict.decision, reason: verdict.reason,
+              argsLength: JSON.stringify(stepArgs).length,
+            });
+            if (verdict.decision === 'allow' && gw.dispatch) {
+              try {
+                const result = await gw.dispatch(bot.name, tool, stepArgs);
+                gw._audit({ type: 'chat_action_executed', kind: 'skill_step', skillId: skill.id, seq, bot: bot.name, tool, ok: true });
+                results.push({ seq, tool, decision: 'allow', result });
+                completed = seq;
+              } catch (e) {
+                gw._audit({ type: 'chat_action_executed', kind: 'skill_step', skillId: skill.id, seq, bot: bot.name, tool, ok: false, error: String(e && e.message).slice(0, 200) });
+                results.push({ seq, tool, decision: 'allow', error: 'dispatch_failed' });
+                status = 'failed';
+                break;
+              }
+            } else if (verdict.decision === 'needs_approval') {
+              // A destructive step still parks — in the RUNNER tenant's
+              // scoped store, exactly as the normal cross-tenant path.
+              // The dual approval authorized the run, not every step.
+              const { approvalsStoreFor } = require('./09-approvals');
+              const runningApprovals = approvalsStoreFor(gw, tenant);
+              const approval = runningApprovals.request({ bot: { name: bot.name }, tool, args: stepArgs, reason: `skill ${skill.id} step ${seq}: ${verdict.reason}` });
+              gw._audit({ type: 'approval_requested', approvalId: approval.id, bot: bot.name, tool, class: cls, federatedFrom: row.ownerTenant });
+              results.push({ seq, tool, decision: 'needs_approval', approvalId: approval.id });
+              status = 'parked';
+              break;
+            } else {
+              results.push({ seq, tool, decision: verdict.decision, reason: verdict.reason });
+              status = 'denied';
+              break;
+            }
+          }
+
+          // Record the result hash — the run happened, whatever the status.
+          const rHash = resultHashOf(results);
+          ledger.markExecuted(row.id, rHash);
+          gw._audit({
+            type: 'skill_fed_real_executed', runId: row.id, skillId: skill.id,
+            ownerTenant: row.ownerTenant, runnerTenant: row.runnerTenant, bot: bot.name,
+            runChainSeq: runSeq, status, completed, resultHash: rHash,
+          });
+          return send(res, 200, { runId: row.id, skillId: skill.id, runChainSeq: runSeq, status, completed, steps: results, resultHash: rHash });
+        }
+
+        return send(res, 404, { error: 'not_found' });
       }
 
       // ── POST /v2/skills/:id/run — governed execution (or ?dry=1 plan) ──
