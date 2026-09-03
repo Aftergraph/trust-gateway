@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pricing — Trust Gateway</title>
+<meta name="description" content="Operator, Team, and Hosted tiers for Trust Gateway: a zero-dependency governed gateway, a jailed computer per bot, and a sealed hash-chained audit trail.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="site-header">
+  <span class="mark">▲ Trust Gateway</span>
+  <nav>
+    <a href="index.html">Home</a>
+    <a href="status.html">Status</a>
+    <a href="pricing.html">Pricing</a>
+    <a href="docs.html">Docs</a>
+  </nav>
+</header>
+
+<main>
+  <section class="hero">
+    <p class="kicker">Honest pricing</p>
+    <h1>Three ways to run a governed workforce.</h1>
+    <p class="sub">Every tier ships the same core: a <strong>zero-dependency
+    gateway</strong> (Node core only — no Docker, no Postgres, no Bun), a
+    <strong>jailed computer per bot</strong>, and a <strong>sealed,
+    hash-chained audit trail</strong>. What changes is who runs it and how
+    many bots you operate.</p>
+  </section>
+
+  <section id="tiers">
+    <div class="loop-grid">
+      <article class="loop-card">
+        <h3>Operator <span class="tier-sub">solo, self-hosted</span></h3>
+        <p class="price">Contact</p>
+        <p class="loop-note">You run the gateway yourself on your own machine.
+        One operator, your own worker bots.</p>
+        <ul>
+          <li>Zero-dependency gateway — Node core only, one process</li>
+          <li>Jail per bot: isolated dirs, its own tools, nothing shared</li>
+          <li>Sealed hash-chained audit log, tamper-evident</li>
+          <li>Fail-closed policy engine with human approvals</li>
+        </ul>
+      </article>
+
+      <article class="loop-card">
+        <h3>Team <span class="tier-sub">self-hosted, multi-operator</span></h3>
+        <p class="price">Contact</p>
+        <p class="loop-note">Same gateway, a real workforce: more bots, more
+        operators, bot-to-bot coordination.</p>
+        <ul>
+          <li>Everything in Operator</li>
+          <li>Bot-to-bot groups &amp; handoffs, routines / scheduling</li>
+          <li>Multi-model routing with provider fallback</li>
+          <li>Operator-role approvals over the full bot fleet</li>
+        </ul>
+      </article>
+
+      <article class="loop-card">
+        <h3>Hosted <span class="tier-sub">we run it</span></h3>
+        <p class="price">Contact</p>
+        <p class="loop-note">We operate the gateway; your bots work in
+        tenant-isolated jails and you keep the audit chain.</p>
+        <ul>
+          <li>Everything in Team</li>
+          <li>Tenant isolation — your data and chain stay yours</li>
+          <li>No ops burden: no Docker, no Postgres, no Bun — we run it</li>
+          <li>Status &amp; seal state visible to you at any time</li>
+        </ul>
+      </article>
+    </div>
+
+    <p class="foot">Prices are deliberately not published yet — every tier says
+    <strong>contact</strong> until the terms are final. We would rather show no
+    number than an invented one. The capability list above is the product as it
+    runs today; the <a href="index.html#loop">governed loop</a> and the
+    <a href="docs.html">public API</a> are real and testable now.</p>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <span>▲ Trust Gateway</span>
+  <span class="muted">Every action decided before it happens. Sealed after.</span>
+  <span class="muted" id="chain-stamp">chain: checking…</span>
+</footer>
+<script src="app.js"></script>
+</body>
+</html>
