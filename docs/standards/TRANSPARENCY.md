@@ -300,6 +300,24 @@ below is missing one.
   (passwordHash/salt visible — never a plaintext password); sessions file
   contains hashes only.
 
+### `harness2.js` + mount `106-harness2.js` — project build/run loop (FS-C2)
+- **Endpoints:** POST `/v2/harness2/projects` {name, files:{relPath:content}}
+  (256 KB total cap, traversal rejected, id = slug of name); GET
+  `/v2/harness2/projects` + `/:id`; POST `/:id/build` (files/ → jail/ copy);
+  POST `/:id/run` (node entry in jail). RBAC on create/build/run: operator
+  role, cap `harness.run`, or `*`.
+- **Approval gate:** manifest `requiresApproval=true` → run requests park in
+  the approvals store (202 `needs_approval`); execution happens only after
+  operator approval via the `harness2.run:<id>` executor.
+- **Honest limitation:** the jail is a same-user directory — process
+  discipline (no shell, env scrubbed to PATH/HOME/NODE_ENV, 10 s SIGKILL,
+  8 KB output tails), NOT an OS sandbox.
+- **Audit events:** `harness2_project_created` {id, fileCount};
+  `harness2_run` {id, ok, exitCode, durationMs}. Never file contents,
+  never stdout/stderr.
+- **Storage:** `data/harness2/<id>/{manifest.json, files/, jail/}`.
+- **Inspect:** `GET /v2/harness2/projects/:id`; jail contents on disk.
+
 ## Full audit-event table
 
 Event types emitted from `src/gateway/**`. Extraction rule: every string
@@ -389,7 +407,6 @@ plugins.js) across all files under `src/gateway/`.
 | 79 | `run_paused` | src/gateway/runs.js (wave F F1: cancellable-state transition — parked approval or operator/owner cancel; emitted by store.cancel() via POST /v2/runs/:id/cancel) |
 | 80 | `adapter_kind_register` | mounts/99-adapter-kinds.js (G9: {kind, fields count} — field names only, never values) |
 | 81 | `adapter_kind_rejected` | mounts/99-adapter-kinds.js (G9: {bot, kind?, errors[]} — validation failures) |
-<<<<<<< HEAD
 | 82 | `palette_open` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
 | 83 | `palette_command` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
 | 84 | `palette_search` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
@@ -412,6 +429,8 @@ plugins.js) across all files under `src/gateway/`.
 | 101 | `chat_user_ok` | mounts/103-chat-user.js (FS-A2: {userId, session} — namespaced session name only; never message text) |
 | 102 | `skill_created` | mounts/105-skills.js (FS-C1: {skillId, name, version, createdBy} — steps/tool detail not in the event) |
 | 103 | `skill_run_started` | mounts/105-skills.js (FS-C1: {skillId, name, bot, steps count, dry, runId} — per-step decisions ride the existing chat_action rows with kind 'skill_step') |
+| 104 | `harness2_project_created` | mounts/106-harness2.js (FS-C2: {id, fileCount} — file names/contents stay on disk, never in the chain) |
+| 105 | `harness2_run` | mounts/106-harness2.js (FS-C2: {id, ok, exitCode, durationMs} — never stdout/stderr) |
 
 ### `telemetry.js` + `mounts/100-telemetry.js` — post-launch telemetry (G12, §20.4)
 - **Endpoints:** `POST /v2/telemetry` {event, fields?} (bearer; server-side
