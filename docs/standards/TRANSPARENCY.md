@@ -266,7 +266,7 @@ below is missing one.
 
 ## Full audit-event table
 
-72 event types emitted from `src/gateway/**`. Extraction rule: every string
+76 event types emitted from `src/gateway/**`. Extraction rule: every string
 matched by `{type: '…'}` (including the `enabled ? 'a' : 'b'` ternary in
 plugins.js) across all files under `src/gateway/`.
 
@@ -343,7 +343,11 @@ plugins.js) across all files under `src/gateway/`.
 | 69 | `provider_live_probed` | mounts/92-providers-live.js (D5: operator successfully probed providers) |
 | 70 | `telegram_notify` | mounts/71-telegram.js (D2: chat_id + chars + outcome only — never text, never token) |
 | 71 | `telegram_notify_rejected` | mounts/71-telegram.js (D2: non-operator attempt; reason + bot name only) |
-| 72 | `observation_scanned` | src/gateway/llm-loop.js (D4: metadata ONLY — tool, hits, chars; scanned text is NEVER stored or logged) |
+| 72 | `observation_scanned` | llm-loop.js (E3: per loop turn, tool + hits + chars — never the text) |
+| 73 | `approval_impact_snapshot` | approvals.js (F2: at creation, {approvalId, risk, confidence} — no args) |
+| 74 | `memory_added` | memory.js (F3: per fact, {id, bot, source, pin} — text excluded by design — user-owned) |
+| 75 | `memory_edited` | memory.js (F3: {id, bot, fieldsChanged[]} — text included only on text change, scope stays inside bot) |
+| 76 | `memory_removed` | memory.js (F3: {id, bot, sourceChainSeq} — never the text) |
 ## Documented exceptions
 
 The test compares the table above against a programmatic extraction over

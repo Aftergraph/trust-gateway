@@ -10,6 +10,7 @@ const assert = require('node:assert');
 const http = require('node:http');
 const { Gateway } = require('../src/gateway/server');
 const { LlmBrain, setBrain, resolveConfig, extractAction, UNSET_REPLY } = require('../src/gateway/llm-brain');
+const { estimateChat, LOCAL_LIMIT } = require('../src/gateway/llm-cost');
 
 const KEY = 'sk-UNITTEST-KEY-9999'; // if this ever appears in output, we leaked
 

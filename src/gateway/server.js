@@ -8,7 +8,9 @@ const path = require('node:path');
 const { EventEmitter } = require('node:events');
 const { HashChain } = require('./hash-chain');
 const { classify, decide } = require('./policy');
+const { computeImpact } = require('./impact');
 const { ApprovalStore } = require('./approvals');
+const { MemoryStore, getMemoryStore } = require('./memory');
 const disk = require('./disk-audit');
 const { loadMounts, match } = require('./http-mounts');
 
@@ -68,7 +70,8 @@ class Gateway extends EventEmitter {
     } else {
       this.chain = chain ?? new HashChain();
     }
-    this.approvals = approvals ?? new ApprovalStore({ now, file: approvalsFile });
+    this.approvals = approvals ?? new ApprovalStore({ now, file: approvalsFile, gw: this });
+    this.memory = getMemoryStore(this);
     this.now = now;
     this.mounts = mountFiles ? loadMounts() : [];
     this.staticDir = staticDir ?? null;
@@ -327,6 +330,13 @@ class Gateway extends EventEmitter {
         reason: verdict.reason,
       });
       this._audit({ type: 'approval_requested', approvalId: approval.id, bot: bot.name, tool, class: cls });
+      // Audit the deterministic impact snapshot — never the raw args.
+      this._audit({
+        type: 'approval_impact_snapshot',
+        approvalId: approval.id,
+        risk: approval.impact ? approval.impact.risk : 'destructive',
+        confidence: approval.impact ? approval.impact.confidence : 'missing',
+      });
       return send(res, 202, { decision: 'needs_approval', approvalId: approval.id, reason: verdict.reason });
     }
 

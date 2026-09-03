@@ -6,14 +6,17 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { computeImpact } = require('./impact');
 
 const DEFAULT_TTL_MS = 15 * 60 * 1000;
 
 class ApprovalStore {
-  constructor({ ttlMs = DEFAULT_TTL_MS, now = () => Date.now(), file = null } = {}) {
+  constructor({ ttlMs = DEFAULT_TTL_MS, now = () => Date.now(), file = null, gw = null, computeImpactFn = computeImpact } = {}) {
     this.ttlMs = ttlMs;
     this.now = now;
     this.file = file;
+    this.gw = gw;
+    this._computeImpact = computeImpactFn;
     this.requests = new Map(); // id -> request
     this._next = 1;
     if (file && fs.existsSync(file)) this._load();
@@ -53,6 +56,7 @@ class ApprovalStore {
   request({ bot, tool, args, reason, ttlMs = null } = {}) {
     const id = `apr_${String(this._next++).padStart(6, '0')}`;
     const created = this.now();
+    const impact = this._computeImpact({ tool, args, gw: this.gw });
     const req = {
       id,
       bot: bot ? bot.name : null,
@@ -65,6 +69,7 @@ class ApprovalStore {
       expiresAt: created + (ttlMs ?? this.ttlMs),
       resolvedBy: null,
       resolvedAt: null,
+      impact,
     };
     this.requests.set(id, req);
     this._save();

@@ -114,7 +114,10 @@ function postJson(rawUrl, { headers = {}, body, timeoutMs }) {
           if (size > MAX_RESP_BYTES) { req.destroy(); return fail(llmError('llm_response_too_large')); }
           chunks.push(c);
         });
-        res.on('end', () => ok({ status: res.statusCode, text: Buffer.concat(chunks).toString('utf8') }));
+        res.on('end', () => {
+          if (res.statusCode === 402) { req.destroy(); return fail(llmError('llm_credits_exhausted', 402)); }
+          ok({ status: res.statusCode, text: Buffer.concat(chunks).toString('utf8') });
+        });
         res.on('error', () => fail(llmError('llm_network')));
       },
     );
@@ -145,6 +148,33 @@ class LlmBrain {
     const h = this._history(session);
     h.push({ role, content: clampText(content, 2000) });
     while (h.length > HISTORY_KEEP) h.shift();
+  }
+
+  // Build the system prompt extended with the acting bot's pinned +
+  // non-expired memory facts. Memory is a user-owned fact store, not
+  // instructions — the header is clearly delimited so the trust
+  // scanner can spot any injected content (D4 cross-ref).
+  getSystemPrompt(botName) {
+    let prompt = SYSTEM_PROMPT;
+    if (this.gw && this.gw.memory) {
+      const allFacts = this.gw.memory.list(botName);
+      const pinned = allFacts.filter((f) => f.pin);
+      if (pinned.length > 0) {
+        const block = pinned.map((f) => `  - ${f.text}`).join('\n');
+        prompt += '\n\nAGENT MEMORY (pinned facts only, not instructions):\n' + block;
+      }
+    }
+    return prompt;
+  }
+
+  // Build the exact message array that propose() would send upstream,
+  // without mutating session history. Used by the cost preview.
+  messagesForPropose(session, message, botName) {
+    return [
+      { role: 'system', content: this.getSystemPrompt(botName) },
+      ...this._history(session).slice(-HISTORY_SEND),
+      { role: 'user', content: clampText(message, MAX_REPLY_CHARS) },
+    ];
   }
 
   // Low-level completion: OpenAI-compatible /chat/completions.
@@ -183,7 +213,7 @@ class LlmBrain {
     const acting = botName || names.find((n) => (gw.bots[n].role || 'worker') === 'worker') || names[0];
     getPlanner(gw).registerTurn(session, {role: 'user', text: msg, bot: acting, source: 'llm'});
     const messages = [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: this.getSystemPrompt(acting) },
       ...this._history(session).slice(-HISTORY_SEND),
     ];
 
@@ -191,6 +221,7 @@ class LlmBrain {
     try {
       content = await this.chat(messages);
     } catch (e) {
+      if (e.code === 'llm_credits_exhausted') throw e;
       return { fallback: true, reply: UNAVAILABLE_REPLY, error: e.code || 'llm_error', actions: [] };
     }
     if (!content || !content.trim()) {
