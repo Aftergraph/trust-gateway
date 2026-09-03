@@ -537,7 +537,11 @@ plugins.js) across all files under `src/gateway/`.
 | 191 | `operator_notify_deleted` | mounts/143-operator-notify.js (FS-W3: {by, eventType, channel, removed} — operator removed a notification preference) |
 | 192 | `skill_deps_validated` | mounts/144-skill-deps.js (FS-W4: {by, skillId, requires[]} — operator validated a skill's dependency graph; skill id + slugs only, never step bodies; TG_SKILL_DEPS=1 only) |
 | 193 | `skill_deps_rejected` | mounts/144-skill-deps.js (FS-W4: {by, skillId, reason} — operator's skill was rejected: self_reference, invalid_dependency_slug, missing_dependency, or cycle_detected) |
+| 193 | `skill_deps_rejected` | mounts/144-skill-deps.js (FS-W4: {by, skillId, reason} — operator's skill was rejected: self_reference, invalid_dependency_slug, missing_dependency, or cycle_detected) |
 | 194 | `notify_delivery_test` | mounts/146-notify-delivery.js (FS-X1: {by, type, delivered} — operator manually triggered a notification delivery; type + count only; TG_NOTIFY_DELIVERY=1 only) |
+| 195 | `skill_sandbox_set` | mounts/147-skill-sandbox.js (FS-X2: {by, skillId, network, fsWrite} — operator set a per-skill sandbox profile; TG_SKILL_SANDBOX=1 only) |
+| 196 | `skill_sandbox_reset` | mounts/147-skill-sandbox.js (FS-X2: {by, skillId, removed} — operator removed a sandbox profile; id only) |
+| 197 | `skill_sandbox_listed` | mounts/147-skill-sandbox.js (FS-X2: {by, count} — operator listed sandbox profiles; count only) |
 
 ### `secrets-vault.js` + mounts `115-secrets.js` / `119-secrets-rotate.js` — tenant secrets vault + master-key rotation (FS-I5, FS-J2)
 - **Endpoints:** `PUT/GET/DELETE /v2/tenants/:id/secrets[/:key]` (operator;
