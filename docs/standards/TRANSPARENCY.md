@@ -511,6 +511,9 @@ plugins.js) across all files under `src/gateway/`.
 | 166 | `skill_rolled_back` | mounts/128-skill-versions.js (FS-M2: {by, skillId, version} — operator rolled a skill back to a prior version; the steps themselves are NEVER logged, audited, or returned in the audit row) |
 | 167 | `rate_bucket_read` | mounts/129-rate-ledger.js (FS-M3: {by, key, count} — operator queried a rate-limit bucket; count + key only, no caller identity) |
 | 168 | `rate_bucket_reset` | mounts/129-rate-ledger.js (FS-M3: {by, key, removed} — operator reset a rate-limit bucket; key + rows removed only) |
+| 169 | `tenant_flag_set` | mounts/130-tenant-flags.js (FS-N1: {by, tenant, name, enabled, value} — operator set a per-tenant feature flag override; flag name + enabled + value, no secret material; TG_TENANT_FLAGS=1 only) |
+| 170 | `tenant_flag_reset` | mounts/130-tenant-flags.js (FS-N1: {by, tenant, name} — operator reset a per-tenant feature flag to global default) |
+| 171 | `tenant_flag_listed` | mounts/130-tenant-flags.js (FS-N1: {by, tenant, count} — operator listed per-tenant feature flags; tenant id + count only) |
 
 ### `secrets-vault.js` + mounts `115-secrets.js` / `119-secrets-rotate.js` — tenant secrets vault + master-key rotation (FS-I5, FS-J2)
 - **Endpoints:** `PUT/GET/DELETE /v2/tenants/:id/secrets[/:key]` (operator;
