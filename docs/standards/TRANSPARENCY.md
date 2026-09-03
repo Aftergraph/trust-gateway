@@ -312,6 +312,7 @@ plugins.js) across all files under `src/gateway/`.
 | 64 | `adapter_secret_set` | mounts/70-adapters.js (payload: id+name+length only — value is NEVER stored or logged) |
 | 65 | `deploy_artifact` | mounts/75-deploy.js (wave C: rendered service/launcher downloads) |
 | 66 | `openai_request` | mounts/85-openai.js (counts only: model, bot, msgCount, charsIn/Out, streaming — no message content) |
+| 67 | `trust_scan` | mounts/91-trust.js (D4: metadata ONLY — chars, hits, rule names; scanned text is NEVER stored or logged) |
 ## Documented exceptions
 
 The test compares the table above against a programmatic extraction over
