@@ -21,6 +21,7 @@
 
 const path = require('node:path');
 const { makeHarness } = require('../harness');
+const { getRuns } = require('../runs');
 
 const harnesses = new WeakMap(); // gw -> harness (single instance per gateway)
 const harnessDirs = new WeakMap(); // gw -> botsDir bound at executor registration
@@ -60,7 +61,30 @@ function makeHarnessExecutor(botsDir, gw) {
     }
 
     // harness.run:<name>
+    // Wave F F1: the harness execution is a first-class Run (engine
+    // 'harness') — one 'action' Step carrying the exit-code digest, then
+    // run_completed with the child's exit code. Best-effort: a run-store
+    // failure never breaks the harness execution itself.
+    let runRec = null;
+    try { runRec = getRuns(gw).runStart('harness', { bot: botName, session: null }); } catch { runRec = null; }
     const run = await h.run(botName, name);
+    if (runRec) {
+      try {
+        const rs = getRuns(gw);
+        rs.runStep(runRec.id, {
+          kind: 'action',
+          tool,
+          args: { name },
+          decision: 'allow',
+          result: run.ok === false ? undefined : { exitCode: run.exitCode ?? null, timedOut: run.timedOut === true },
+          error: run.ok === false ? String(run.error || 'harness_failed') : null,
+        });
+        rs.runEnd(runRec.id, {
+          exitCode: run.ok === false ? 1 : (run.exitCode ?? null),
+          state: run.ok === false ? 'failed' : 'completed',
+        });
+      } catch { /* best effort */ }
+    }
     // ONE passthrough audit entry per run — exit code only, never stdout.
     gw._audit({
       type: 'harness_result',

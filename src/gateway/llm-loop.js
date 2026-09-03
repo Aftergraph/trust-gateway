@@ -44,6 +44,7 @@
 
 const { classify, decide, ROLE_CAPABILITIES } = require('./policy');
 const { quarantineWrap, scanForInjection, SOURCE_TIER, normSource } = require('./trust');
+const { getRuns } = require('./runs');
 
 const MAX_ITERATIONS = 3;
 const MAX_REPLY_CHARS = 4000;
@@ -284,6 +285,32 @@ async function deepTurn(gw, brain, { session, message, bot: botName, maxIteratio
 
   pushTurn(brain, session, 'user', message);
 
+  // ── Wave F F1: first-class Run + Step materialization ──────────
+  // The Run opens on the first successful brain response (NOT on function
+  // entry): documented invariant "fallback turn makes no stateful decisions"
+  // (tests/llm-loop.test.js (f)) means unconfigured/unavailable/no-bot turns
+  // must leave the chain untouched, and run_started is a chain entry. From
+  // the first real response on, every loop turn records one Step and the
+  // turn's exit records run_completed / run_paused. Best-effort throughout:
+  // a broken run store never fails the chat loop, and the returned shape
+  // {reply, actions, iterations, fallback?, pending_approval?} is unchanged.
+  let run = null;
+  const openRun = () => {
+    if (run) return run;
+    try { run = getRuns(gw).runStart('llm-loop', { session, bot: actingName }); } catch { run = null; }
+    return run;
+  };
+  const recordStep = (info) => {
+    if (!run) return;
+    try { getRuns(gw).runStep(run.id, info); } catch { /* best effort */ }
+  };
+  const endRun = (state, extra) => {
+    if (!run) return;
+    const r = run;
+    run = null;
+    try { getRuns(gw).runEnd(r.id, { state, ...extra }); } catch { /* best effort */ }
+  };
+
   const actions = [];
   let finalText = '';
   let pending = null;
@@ -296,16 +323,23 @@ async function deepTurn(gw, brain, { session, message, bot: botName, maxIteratio
     try {
       content = await askOnce(brain, buildMessages(brain, session, systemPrompt));
     } catch (e) {
+      recordStep({ kind: 'plan', error: (e && e.code) || 'llm_error' });
+      endRun('failed');
       return { fallback: true, reply: FALLBACK_UNCONFIGURED, actions, iterations: performed, error: e && e.code };
     }
+    openRun(); // first successful brain response → the Run materializes
     if (!content || !String(content).trim()) {
       finalText = finalText || '(empty response)';
+      recordStep({ kind: 'plan', result: finalText });
+      endRun('completed');
       break;
     }
     const parsed = parseAction(content);
     if (!parsed) {
       finalText = clampText(content, MAX_REPLY_CHARS);
       pushTurn(brain, session, 'assistant', finalText, 2000, actingName);
+      recordStep({ kind: 'plan', result: finalText });
+      endRun('completed');
       break;
     }
     // We have a tool call. Walk it through the SAME governed path the
@@ -338,6 +372,7 @@ async function deepTurn(gw, brain, { session, message, bot: botName, maxIteratio
       pushTurn(brain, session, 'assistant', parsed.text || '', 2000, actingName);
       pushTurn(brain, session, 'user', obs);
       finalText = clampText(`${parsed.text}\ndenied: ${verdict.reason}`, MAX_REPLY_CHARS);
+      recordStep({ kind: 'action', tool, args, decision: 'deny' });
       continue;
     }
 
@@ -368,6 +403,7 @@ async function deepTurn(gw, brain, { session, message, bot: botName, maxIteratio
       );
       pushTurn(brain, session, 'assistant', finalText, 2000, actingName);
       // Park and stop — humans must resolve. No further iterations.
+      recordStep({ kind: 'action', tool, args, decision: 'needs_approval', approvalId: approval.id });
       iter += 1;
       break;
     }
@@ -376,6 +412,8 @@ async function deepTurn(gw, brain, { session, message, bot: botName, maxIteratio
     if (!gw._run) {
       action.error = 'no_executor';
       finalText = clampText(`${parsed.text}\nno executor available`, MAX_REPLY_CHARS);
+      recordStep({ kind: 'action', tool, args, decision: 'allow', error: 'no_executor' });
+      endRun('failed');
       break;
     }
     let result;
@@ -402,6 +440,7 @@ async function deepTurn(gw, brain, { session, message, bot: botName, maxIteratio
       });
       action.error = 'dispatch_failed';
     }
+    recordStep({ kind: 'action', tool, args, decision: 'allow', result: action.error ? undefined : result, error: action.error });
     // Feed the result back as an observation so the model can react.
     // D4: external tool results are quarantined and scanned before
     // entering the brain; internal results pass through raw.
@@ -422,6 +461,10 @@ async function deepTurn(gw, brain, { session, message, bot: botName, maxIteratio
     pushTurn(brain, session, 'user', obsPayload, 4000);
     finalText = clampText(parsed.text || `done: ${tool}`, MAX_REPLY_CHARS);
   }
+
+  // Parked approvals leave the Run paused (run_paused); every other exit is
+  // a completed turn. Fallback exits inside the loop already ended the run.
+  endRun(pending ? 'paused' : 'completed');
 
   const out = {
     reply: finalText || '(no reply)',

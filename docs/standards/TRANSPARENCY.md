@@ -106,24 +106,16 @@ below is missing one.
   and secret never make it into the prompt). Reuses the same brain as
   `llm-brain.js` via `getBrain(gw)`. Degrades to `{fallback:true, reply:
   'llm not configured'}` when the brain is unset.
-|- **Audit events:** `chat_action`, `chat_action_executed`,
-<<<<<<< HEAD
-  `approval_requested`, `observation_scanned` — same types as
-  the single-turn brain, with `source: 'llm-live'` to distinguish
-  the loop-driven path. Parked approvals return
-  `{reply, pending_approval:{id,tool}, iterations}`. External tool
-  results (web.fetch, web.extract, harness.run, adapter probes) are
-  quarantined and scanned before reaching the brain;
-  `observation_scanned` records metadata only (tool, hits, chars).
-- **Tool execution:** routed through `gw._run(bot, tool, args)` — the
-=======
+||- **Audit events:** `chat_action`, `chat_action_executed`,
   `approval_requested`, `observation_scanned` — same types as the
   single-turn brain, with `source: 'llm-live'` to distinguish the
   loop-driven path. `observation_scanned` carries `{tool, hits, chars}`
   metadata only (scanned text is never stored). Parked approvals
-  return `{reply, pending_approval:{id,tool}, iterations}`.
-|- **Tool execution:** routed through `gw._run(bot, tool, args)` — the
->>>>>>> v2e/e3-trustloop
+  return `{reply, pending_approval:{id,tool}, iterations}`. External tool
+  results (web.fetch, web.extract, harness.run, adapter probes) are
+  quarantined and scanned before reaching the brain;
+  `observation_scanned` records metadata only (tool, hits, chars).
+- **Tool execution:** routed through `gw._run(bot, tool, args)` — the
   SAME path the deterministic ChatPlanner and the v1 `_postAction`
   handler use. No second dispatch route.
 |- **Inspect:** audit search `q=chat_action source:llm-live`.
@@ -133,6 +125,30 @@ below is missing one.
   the brain. A `[security: N hits]` integrity notice is prepended when
   injection patterns are detected. Internal tool results pass through
   raw. The response carries `observationsTrusted: true`.
+
+### `runs.js` + mount `96-runs.js` — first-class Run/Step objects (wave F)
+- **Endpoints:** `GET /v2/runs?bot=&state=&goalId=&limit=` (bearer; default
+  last 50, cap 200), `GET /v2/runs/:id` (bearer; run + full step list +
+  recent chain refs for provenance), `POST /v2/runs/:id/cancel`
+  (operator via `canApprove()`, or the bot that owns the run).
+- **Audit events:** `run_started`, `run_completed`, `run_paused` — the three
+  cancellable-state transitions only. Per-step events deliberately flow
+  through the existing `chat_action` / `chat_action_executed` /
+  `approval_requested` entries; no per-step audit types exist. A denied
+  non-operator cancel attempt reuses `approval_forbidden`.
+- **Storage:** `data/runs.json` — `{ <runId>: Run, …, "steps": { <stepId>:
+  Step } }` (atomic tmp+rename, 0600, fail-closed on corrupt load; run ids
+  `r_<8hex>` can never collide with the reserved `steps` key;
+  `TG_RUNS_FILE` env override) and `data/run-by-goal.json` —
+  `{ <goalId>: [runId, …] }` index for the future Graph view.
+- **Payload hygiene:** Steps carry `argsDigest`/`resultDigest` =
+  `sha256(plaintext)[:16]` — tool args and results are NEVER persisted;
+  digests let humans correlate against the audit chain. FIFO cap: 200 runs,
+  oldest evicted with its steps (and goal-index entries).
+- **Inspect:** `GET /v2/runs/:id` (steps + `{seq, ts, type, hash}` chain
+  refs); the file via jq; runs are written by `deepTurn` (engine
+  `llm-loop`), the single-turn brain `propose()` (engine `planner`), and
+  the `harness.run` executor (engine `harness`).
 
 ### `events.js` + mount `10-events.js` — SSE hub
 - **Endpoints:** `GET /v2/events?token=…` (auth: query — EventSource can't
@@ -266,7 +282,7 @@ below is missing one.
 
 ## Full audit-event table
 
-76 event types emitted from `src/gateway/**`. Extraction rule: every string
+79 event types emitted from `src/gateway/**`. Extraction rule: every string
 matched by `{type: '…'}` (including the `enabled ? 'a' : 'b'` ternary in
 plugins.js) across all files under `src/gateway/`.
 
@@ -348,6 +364,9 @@ plugins.js) across all files under `src/gateway/`.
 | 74 | `memory_added` | memory.js (F3: per fact, {id, bot, source, pin} — text excluded by design — user-owned) |
 | 75 | `memory_edited` | memory.js (F3: {id, bot, fieldsChanged[]} — text included only on text change, scope stays inside bot) |
 | 76 | `memory_removed` | memory.js (F3: {id, bot, sourceChainSeq} — never the text) |
+| 77 | `run_started` | src/gateway/runs.js (wave F F1: a governed Run opened — engine, bot, session, goalId; no args/results, ids only) |
+| 78 | `run_completed` | src/gateway/runs.js (wave F F1: run closed — state + exitCode; per-step detail stays in the existing chat_action/approval entries) |
+| 79 | `run_paused` | src/gateway/runs.js (wave F F1: cancellable-state transition — parked approval or operator/owner cancel; emitted by store.cancel() via POST /v2/runs/:id/cancel) |
 ## Documented exceptions
 
 The test compares the table above against a programmatic extraction over

@@ -22,6 +22,7 @@ const http = require('node:http');
 const https = require('node:https');
 const { classify, decide } = require('./policy');
 const { getPlanner } = require('./chat-singleton');
+const { getRuns } = require('./runs');
 
 const DEFAULT_BASE_URL = 'https://api.dialagram.ai/v1';
 const DEFAULT_TIMEOUT_MS = 20_000;
@@ -228,11 +229,32 @@ class LlmBrain {
       return { fallback: true, reply: EMPTY_REPLY, error: 'llm_empty_response', actions: [] };
     }
 
+    // ── Wave F F1: single-turn Run materialization ─────────────────
+    // Same contract as deepTurn: the Run opens on the first successful
+    // brain response (unconfigured/unavailable/empty turns make NO chain
+    // decisions — tests assert genesis-only fallbacks), one Step records
+    // the governed outcome, and run_completed/run_paused closes it.
+    // Best-effort; the {reply, actions} shape is unchanged.
+    let run = null;
+    try { run = getRuns(gw).runStart('planner', { session, bot: acting }); } catch { run = null; }
+    const recordStep = (info) => {
+      if (!run) return;
+      try { getRuns(gw).runStep(run.id, info); } catch { /* best effort */ }
+    };
+    const endRun = (state, extra) => {
+      if (!run) return;
+      const r = run;
+      run = null;
+      try { getRuns(gw).runEnd(r.id, { state, ...extra }); } catch { /* best effort */ }
+    };
+
     const tool = extractAction(content);
     const said = clampText(stripAction(content), MAX_REPLY_CHARS);
     if (!tool) {
       this._push(session, 'assistant', said);
       getPlanner(gw).registerTurn(session, {role: 'assistant', text: said, actions: [], bot: acting, source: 'llm'});
+      recordStep({ kind: 'plan', result: said });
+      endRun('completed');
       return { reply: said, actions: [] };
     }
 
@@ -241,6 +263,8 @@ class LlmBrain {
       const reply = `unknown bot "${acting}"`;
       this._push(session, 'assistant', reply);
       getPlanner(gw).registerTurn(session, {role: 'assistant', text: reply, actions: [], bot: acting, source: 'llm'});
+      recordStep({ kind: 'plan', error: 'unknown_bot' });
+      endRun('completed');
       return { reply, actions: [] };
     }
     const bot = { name: acting, ...gw.bots[acting] };
@@ -261,10 +285,14 @@ class LlmBrain {
         action.result = await gw.dispatch(acting, tool, null);
         gw._audit({ type: 'chat_action_executed', source: 'llm', bot: acting, tool, ok: true });
         decisionLine = `done: ${JSON.stringify(action.result)}`;
+        recordStep({ kind: 'action', tool, decision: 'allow', result: action.result });
+        endRun('completed');
       } catch (e) {
         action.error = 'dispatch_failed';
         gw._audit({ type: 'chat_action_executed', source: 'llm', bot: acting, tool, ok: false, error: clampText(e && e.message, 200) });
         decisionLine = 'failed: dispatch error (audited)';
+        recordStep({ kind: 'action', tool, decision: 'allow', error: 'dispatch_failed' });
+        endRun('completed');
       }
     } else if (verdict.decision === 'needs_approval') {
       const approval = gw.approvals.request({
@@ -273,8 +301,12 @@ class LlmBrain {
       gw._audit({ type: 'approval_requested', approvalId: approval.id, bot: acting, tool, class: cls });
       action.approvalId = approval.id;
       decisionLine = `proposed ${tool} — waiting for operator approval (${approval.id})`;
+      recordStep({ kind: 'action', tool, decision: 'needs_approval', approvalId: approval.id });
+      endRun('paused');
     } else {
       decisionLine = `denied: ${verdict.reason}`;
+      recordStep({ kind: 'action', tool, decision: 'deny' });
+      endRun('completed');
     }
 
     const reply = clampText(said ? `${said}\n${decisionLine}` : decisionLine, MAX_REPLY_CHARS);
