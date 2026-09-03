@@ -494,6 +494,9 @@ plugins.js) across all files under `src/gateway/`.
 | 151 | `quota_disk_warning` | quota-alerts.js (FS-K4: {tenant, usedMb, limitMb, pct} — disk usage exceeded TG_QUOTA_DISK_WARN_PCT (default 80); delivered via FS-G3 AlertSink with per-tenant per-hour dedup; inert when TG_ALERT_URLS unset) |
 | 152 | `quota_api_warning` | quota-alerts.js (FS-K4: {tenant, apiCount, limit, pct} — API count exceeded TG_QUOTA_API_WARN_PCT (default 80); delivered via FS-G3 AlertSink with per-tenant per-hour dedup; inert when TG_ALERT_URLS unset) |
 | 153 | `quota_alerts_read` | mounts/122-quota-alerts.js (FS-K4: {by, tenant, count} — operator queried /v2/tenants/:id/quota/alerts; tenant id + count only) |
+| 154 | `webhook_subs_created` | mounts/125-webhook-subs.js (FS-L2: {by, id, url} — operator registered a webhook subscription; url + id only, never the delivery payload; TG_WEBHOOK_SUBS=1 only) |
+| 155 | `webhook_subs_listed` | mounts/125-webhook-subs.js (FS-L2: {by, count} — operator listed webhook subscriptions; count only) |
+| 156 | `webhook_subs_deleted` | mounts/125-webhook-subs.js (FS-L2: {by, id} — operator removed a webhook subscription; id only) |
 
 ### `secrets-vault.js` + mounts `115-secrets.js` / `119-secrets-rotate.js` — tenant secrets vault + master-key rotation (FS-I5, FS-J2)
 - **Endpoints:** `PUT/GET/DELETE /v2/tenants/:id/secrets[/:key]` (operator;
