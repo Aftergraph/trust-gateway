@@ -19,6 +19,28 @@
 const HEARTBEAT_MS = 25_000;
 const HUB_WEAK_MAP = new WeakMap(); // gateway -> EventHub
 
+// FS-I4: fire-and-forget export tap. After a successful chain append,
+// server.js emits 'audit'; this hook streams the sealed entry to the
+// operator-configured export sinks (webhook / S3 stub) WITHOUT ever
+// blocking or breaking the audit path — the promise is intentionally not
+// awaited and every rejection is swallowed inside ExportSink.emit(). With
+// both TG_AUDIT_EXPORT_* env vars unset the sink is inert (zero calls,
+// byte-identical legacy behavior). Module-level WeakMap sink, same pattern
+// as getAlertSink / getHub.
+function wireExportSink(gateway) {
+  try {
+    if (!gateway || gateway._auditExportWired) return; // idempotent
+    const { getExportSink } = require('./audit-export');
+    const sink = getExportSink(gateway);
+    if (sink.inert) return; // env-off: nothing registered at all
+    gateway._auditExportWired = true;
+    gateway.on('audit', (entry) => {
+      // Fire-and-forget by design — audit append must never wait on sinks.
+      Promise.resolve(sink.emit(entry)).catch(() => { /* never crash */ });
+    });
+  } catch { /* export wiring must never break gateway construction */ }
+}
+
 class EventHub {
   constructor(gateway) {
     this.gateway = gateway;
@@ -41,6 +63,9 @@ class EventHub {
     // subscribe once for the lifetime of this hub
     this._onAudit = (entry) => this._broadcastAudit(entry);
     this.gateway.on('audit', this._onAudit);
+    // FS-I4: stream sealed entries to operator-configured export sinks
+    // (webhook / S3 stub) — inert when env unset, fire-and-forget always.
+    wireExportSink(this.gateway);
   }
 
   // Stop emitting and detach listeners. Mostly for tests / clean shutdown.
@@ -120,4 +145,4 @@ function getHub(gateway) {
   return hub;
 }
 
-module.exports = { EventHub, getHub, HEARTBEAT_MS };
+module.exports = { EventHub, getHub, HEARTBEAT_MS, wireExportSink };

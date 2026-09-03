@@ -453,6 +453,12 @@ plugins.js) across all files under `src/gateway/`.
 | 116 | `skill_unfederated` | mounts/105-skills.js (FS-G1: {id, by} — owning-tenant operator pulled a skill back to shared; never steps/args) |
 | 116 | `skill_federation_denied` | mounts/105-skills.js (FS-G1: {bot, skillId, action} — cross-tenant write attempt on a federated skill (run/patch/federate/unfederate) refused owner-tenant-only, answered 404 anti-enumeration; TG_SKILLS_FEDERATION=1 only; never args/steps) |
 | 117 | `skill_fed_limited` | mounts/105-skills.js (FS-H2: {runnerTenant, skillId, cap, window, limitKind} — a cross-tenant DRY run of a federated skill refused 429 fed_rate_limited because the runner tenant hit TG_FED_RUNS_PER_HOUR (default 20) or the skill hit TG_FED_RUNS_PER_SKILL_HOUR (default 50); enforced BEFORE the dry-run executes; TG_SKILLS_FEDERATION=1 only; never args/steps) |
+| 118 | `audit_export_webhook` | audit-export.js (FS-I4: {ok, error≤120 chars} — per failed webhook delivery attempt; ok:true attempts are silent, sink metadata only, never entry contents) |
+| 119 | `audit_export_backoff` | audit-export.js (FS-I4: {sink:'webhook', reason:'3_failures_in_60s', suppressUntil} — webhook suppressed 5 min after 3 failures in 60 s; storm = DoS vector on the receiver) |
+| 120 | `audit_export_s3_stub` | audit-export.js (FS-I4: one-time {bucket, region} — S3 STUB mode announced; no AWS SDK, local JSONL fallback under data/audit-export/<tenant>/<date>.jsonl) |
+| 121 | `s3_upload_pending` | audit-export.js (FS-I4: {bucket, key} — the would-be S3 object key `<tenant>/<date>.jsonl` per stub append; drain the fallback deliberately) |
+| 122 | `audit_export_test` | mounts/117-audit-export.js (FS-I4: {by, webhookOk, s3StubOk} — operator-triggered POST /v2/audit/export/test self-test; never token material) |
+| 123 | `audit_export_denied` | mounts/117-audit-export.js (FS-I4: {bot} — non-operator touched the export-test route; RBAC refusal audited) |
 
 ### `sandbox.js` — optional OS sandbox layer for the harness2 jail (FS-F3)
 - **What it is:** a spike, additive and default-OFF. The jail's real
@@ -521,6 +527,37 @@ plugins.js) across all files under `src/gateway/`.
 - **Inspect:** `GET /v2/observability` with an operator bearer; the
   console System panel renders the same scalars as a 'System health'
   row (hidden for non-operators).
+
+### `audit-export.js` + mount `117-audit-export.js` — audit-log export (FS-I4)
+- **Endpoints:** `POST /v2/audit/export/test` (bearer; operator-only —
+  workers get 403 + `audit_export_denied`). Sends a synthetic, clearly
+  labeled probe entry to each configured sink and returns
+  `{webhookOk, s3StubOk, lastError}`; the probe is NOT sealed into the chain.
+- **Sinks (both inert when their env is unset — env-off is byte-identical
+  legacy):** webhook `TG_AUDIT_EXPORT_WEBHOOK` (POST JSON, 3 s timeout,
+  10 sends/sec, 3 failures in 60 s → suppressed 5 min with
+  `audit_export_backoff`); S3 stub `TG_AUDIT_EXPORT_S3_BUCKET`
+  (+ `TG_AUDIT_EXPORT_S3_REGION`, default us-east-1) — NO AWS SDK (zero-dep
+  rule): entries append to `data/audit-export/<tenant>/<date>.jsonl`
+  (`TG_AUDIT_EXPORT_DIR` override) and each append seals
+  `s3_upload_pending {bucket, key}` so the fallback can be drained into the
+  real bucket deliberately.
+- **Wiring:** after every successful chain append, `events.js` taps the
+  gateway's 'audit' event and fires `sink.emit(entry)` WITHOUT awaiting —
+  a slow/hanging/failing sink never blocks or breaks the audit path. The
+  module's own `audit_export_*`/`s3_upload_pending` rows are never
+  re-exported (re-entrancy guard). Both sinks inert → no listener at all.
+- **Audit events:** `audit_export_webhook` (failed attempts),
+  `audit_export_backoff`, `audit_export_s3_stub` (one-time announcement),
+  `s3_upload_pending`, plus mount rows `audit_export_test`,
+  `audit_export_denied`.
+- **Honest limitation:** the S3 sink is a STUB — it writes a local JSONL
+  fallback and names the would-be object key; nothing leaves the host until
+  an operator (or a future uploader slice) drains it. The webhook sink
+  delivers real HTTP but is best-effort: after backoff, entries are NOT
+  queued — the chain remains the source of truth, the export is a mirror.
+- **Inspect:** `POST /v2/audit/export/test` (operator bearer); fallback
+  files under `data/audit-export/`; audit search `q=audit_export`.
 
 Note (FS-C1): per-step skill governance deliberately does NOT add a new
 event type — every step emits a standard `chat_action` row tagged
