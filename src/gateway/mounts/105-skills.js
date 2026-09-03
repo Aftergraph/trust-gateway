@@ -3,14 +3,36 @@
 // FS-F1 extension: skills self-service for non-operators.
 // FS-F4 extension: skills marketplace — publish/unpublish, a read-only
 // shared catalog, and cross-bot dry-runs of shared skills.
+// FS-G1 extension: cross-tenant skills FEDERATION — env-gated
+// (TG_SKILLS_FEDERATION=1), read-only cross-tenant, running-tenant
+// approvals. See the full federation model in ../skills.js (header).
 //
 // VISIBILITY (FS-F4): every skill has `visibility` — 'private' (default,
 // byte-identical to pre-FS-F4 behavior) or 'shared'. A shared skill is
 // visible to OTHER bots on the SAME gateway for GET and ?dry=1 run; it is
 // never PATCH/DELETE-able by a non-owner, and a real (non-dry) run stays
-// approval-gated exactly as before. SCOPE NOTE (honest): the skills store
-// is per-GATEWAY (global) in this slice — cross-TENANT sharing is out of
-// scope for FS-F4; a tenant boundary is a future slice's work (ROADMAP §R6).
+// approval-gated exactly as before.
+//
+// FEDERATION (FS-G1): visibility gains a third value 'federated', set ONLY
+// by the OWNING tenant's OPERATOR via the audited federate route. With the
+// env ON:
+//   • GET /v2/skills/federated — the federated catalog for the CALLING
+//     tenant: {id, name, version, ownerTenant, ownerBot, description} —
+//     NO steps, read-only discovery.
+//   • Bots of OTHER tenants can dry-run a federated skill; every such
+//     cross-tenant run is audited skill_run_started with BOTH tags:
+//     tenantAuditTag(running tenant) AND federatedFrom: <owner-tenant-id>.
+//   • REAL (non-dry) runs still flow the existing governed path; approval
+//     parks land in the RUNNING tenant's scoped approval store (its own
+//     operator approves) — never the owner's store.
+//   • Edits/delete/publish/unpublish stay OWNER-TENANT-only: a cross-
+//     tenant attempt is a uniform 404 (anti-enumeration) audited as
+//     skill_federation_denied.
+//   • The owner-tenant skill record is READ-ONLY for the running tenant.
+// With the env OFF (default) 'federated' behaves EXACTLY like 'shared':
+// same catalog dry-run semantics, no federation routes (404), no
+// ownerTenant stamping, untagged chain payloads — a byte-identical
+// off-switch for main single-tenant behavior.
 //
 // Routes (all bearer, RBAC — see skillsAccessLevel in ../skills):
 //   operator (role) or 'skill.author' cap → full FS-C1 behavior, unchanged.
@@ -28,6 +50,11 @@
 //                                     of every shared skill (no steps,
 //                                     no description, no owner bookkeeping
 //                                     beyond `owner`) — FS-F4
+//   GET    /v2/skills/federated      → FS-G1 federated catalog for the
+//                                     calling tenant: {id, name, version,
+//                                     ownerTenant, ownerBot, description}
+//                                     of every federated skill (no steps).
+//                                     TG_SKILLS_FEDERATION=1 only, else 404.
 //   GET    /v2/skills/:id            → get one skill
 //   POST   /v2/skills                → create {name, version, description, steps, createdBy}
 //   PATCH  /v2/skills/:id            → edit {name?, version?, description?, steps?}
@@ -36,6 +63,14 @@
 //                                     (audited skill_published {id, by})
 //   POST   /v2/skills/:id/unpublish  → operator-only: mark it 'private'
 //                                     again (audited skill_unpublished {id, by})
+//   POST   /v2/skills/:id/federate   → FS-G1, OWNING-tenant operator only:
+//                                     mark a skill 'federated' (audited
+//                                     skill_federated {id, by, ownerTenant}).
+//                                     TG_SKILLS_FEDERATION=1 only, else 404.
+//   POST   /v2/skills/:id/unfederate → FS-G1, owning-tenant operator only:
+//                                     back to 'private' — 404 anti-enum
+//                                     restored cross-tenant (audited
+//                                     skill_unfederated {id, by}).
 //   POST   /v2/skills/:id/run {args} → run steps through the EXISTING
 //                                     governed path (gw.dispatch + policy
 //                                     classify/decide + approvals). A
@@ -46,14 +81,22 @@
 // Audit: skill_created + skill_run_started (own TRANSPARENCY rows) +
 // skill_denied (FS-F1: RBAC / dry-only refusals, {bot, skillId?, action}) +
 // FS-F4: skill_published / skill_unpublished (operator publish toggles,
-// {id, by}) + skill_denied on non-operator publish/unpublish attempts.
+// {id, by}) + skill_denied on non-operator publish/unpublish attempts +
+// FS-G1: skill_federated {id, by, ownerTenant} / skill_unfederated {id, by}
+// (owning-tenant operator federation toggles), skill_federation_denied
+// {bot, skillId, action} (cross-tenant write attempts — owner-tenant-only
+// enforcement, anti-enum 404 to the caller), and skill_run_started rows
+// tagged with tenantAuditTag(running tenant) + federatedFrom on every
+// cross-tenant dry run of a federated skill.
 // Per-step governance rides the EXISTING chat_action rows:
 //   {type:'chat_action', kind:'skill_step', skillId, seq, tool, decision}
 // — no raw args ever enter the chain (argsLength only).
 
 const { send, readBody } = require('../server');
-const { getSkillStore, resolveTemplate, skillsAccessLevel, isOwnSkill, isShared, canViewSkill } = require('../skills');
+const { getSkillStore, resolveTemplate, skillsAccessLevel, isOwnSkill, isShared, isFederated, isSharedLike, federationEnabled, canViewSkill } = require('../skills');
 const { classify, decide } = require('../policy');
+const { resolveTenant } = require('../tenant-resolve');
+const { tenantAuditTag } = require('../tenant-scope');
 
 // FS-F1: access tier — 'operator' | 'author' | 'self' | null (see skills.js).
 function skillAuthorAllowed(bot) {
@@ -100,6 +143,14 @@ module.exports = {
     // take the unchanged FS-C1 paths below.
     const selfService = access === 'self';
 
+    // FS-G1: resolve the calling tenant (token prefix claim / operator
+    // X-Tenant header — bearer auth itself stays where it is). req.bot is
+    // exposed for the resolver's operator check (same pattern as
+    // 93-memory). Unknown/disabled tenant → 404, never 403 (anti-enum).
+    req.bot = bot;
+    const { tenant } = resolveTenant(req, gw);
+    if (!tenant) return send(res, 404, { error: 'not_found' });
+
     try {
       // ── GET /v2/skills — list (governed skills + module-provided skills) ──
       if (req.method === 'GET' && !id) {
@@ -135,6 +186,28 @@ module.exports = {
         return send(res, 200, { skills: shared });
       }
 
+      // ── GET /v2/skills/federated — FS-G1 federated catalog ──────────
+      // The calling tenant's view of the federation: every 'federated'
+      // skill, projected to {id, name, version, ownerTenant, ownerBot,
+      // description} — NO steps, read-only discovery. Env OFF → uniform
+      // 404 (the route simply does not exist; 'federated' behaves as
+      // 'shared' everywhere else). Every tier that can touch the skills
+      // surface at all may read the catalog — same gate as /shared.
+      if (req.method === 'GET' && id === 'federated') {
+        if (!federationEnabled()) return send(res, 404, { error: 'not_found' });
+        const federated = store.list()
+          .filter((s) => isFederated(s))
+          .map((s) => ({
+            id: s.id,
+            name: s.name,
+            version: s.version,
+            ownerTenant: s.ownerTenant || tenant.id,
+            ownerBot: s.createdBy,
+            description: s.description || '',
+          }));
+        return send(res, 200, { skills: federated });
+      }
+
       // ── GET /v2/skills/:id ──
       if (req.method === 'GET' && id && !isRun) {
         const skill = store.get(id);
@@ -165,6 +238,14 @@ module.exports = {
         const current = store.get(id);
         // Self-service: 404 (anti-enum) on someone else's or missing skill.
         if (!current || (selfService && !isOwnSkill(current, bot))) return send(res, 404, { error: 'not_found' });
+        // FS-G1 owner-tenant read-only: edits stay OWNER-TENANT-only. A
+        // cross-tenant edit of a federated skill is a uniform 404
+        // (anti-enumeration) audited as skill_federation_denied — the
+        // running tenant never mutates the owner's record.
+        if (federationEnabled() && isFederated(current) && tenant.id !== (current.ownerTenant || 'main')) {
+          gw._audit({ type: 'skill_federation_denied', bot: bot.name, skillId: current.id, action: 'patch' });
+          return send(res, 404, { error: 'not_found' });
+        }
         let body;
         try { body = JSON.parse((await readBody(req)) || '{}'); }
         catch { return send(res, 400, { error: 'invalid_json' }); }
@@ -177,6 +258,13 @@ module.exports = {
         const current = store.get(id);
         // Self-service: ownership enforced — cannot delete someone else's.
         if (!current || (selfService && !isOwnSkill(current, bot))) return send(res, 404, { error: 'not_found' });
+        // FS-G1 owner-tenant read-only: deletes stay OWNER-TENANT-only. A
+        // cross-tenant delete of a federated skill is a uniform 404
+        // (anti-enumeration) audited as skill_federation_denied.
+        if (federationEnabled() && isFederated(current) && tenant.id !== (current.ownerTenant || 'main')) {
+          gw._audit({ type: 'skill_federation_denied', bot: bot.name, skillId: current.id, action: 'delete' });
+          return send(res, 404, { error: 'not_found' });
+        }
         const removed = store.remove(id);
         return send(res, 200, { id: removed.id, name: removed.name });
       }
@@ -186,6 +274,15 @@ module.exports = {
         if (!isSkillOperator(bot)) {
           gw._audit({ type: 'skill_denied', bot: bot.name, skillId: id, action: segs[3] });
           return send(res, 403, { error: 'operator_required' });
+        }
+        // FS-G1 owner-tenant read-only: the marketplace toggles stay
+        // OWNER-TENANT-only for FEDERATED skills — a cross-tenant operator
+        // could otherwise unpublish someone else's federation. Uniform 404
+        // + skill_federation_denied (anti-enumeration).
+        const fedCurrent = store.get(id);
+        if (fedCurrent && isFederated(fedCurrent) && tenant.id !== (fedCurrent.ownerTenant || 'main')) {
+          gw._audit({ type: 'skill_federation_denied', bot: bot.name, skillId: id, action: segs[3] });
+          return send(res, 404, { error: 'not_found' });
         }
         const visibility = segs[3] === 'publish' ? 'shared' : 'private';
         const updated = store.setVisibility(id, visibility);
@@ -197,19 +294,59 @@ module.exports = {
         return send(res, 200, { id: updated.id, name: updated.name, visibility: updated.visibility });
       }
 
+      // ── POST /v2/skills/:id/federate | /unfederate — FS-G1, operator-only ──
+      // Federation toggles are OWNING-TENANT-only: the skill's ownerTenant
+      // (stamped at federate time) must match the CALLING tenant, else
+      // uniform 404 + skill_federation_denied (anti-enumeration — a cross-
+      // tenant operator learns nothing about the id). Env OFF → the routes
+      // do not exist (404), byte-identical off-switch.
+      if (req.method === 'POST' && id && (segs[3] === 'federate' || segs[3] === 'unfederate')) {
+        if (!federationEnabled()) return send(res, 404, { error: 'not_found' });
+        if (!isSkillOperator(bot)) {
+          gw._audit({ type: 'skill_denied', bot: bot.name, skillId: id, action: segs[3] });
+          return send(res, 403, { error: 'operator_required' });
+        }
+        const current = store.get(id);
+        const ownerTenant = (current && current.ownerTenant) || tenant.id;
+        if (ownerTenant !== tenant.id) {
+          // cross-tenant federation write — owner-tenant-only, 404 anti-enum
+          gw._audit({ type: 'skill_federation_denied', bot: bot.name, skillId: id, action: segs[3] });
+          return send(res, 404, { error: 'not_found' });
+        }
+        const updated = segs[3] === 'federate'
+          ? store.federate(id, tenant.id)
+          : store.unfederate(id);
+        if (segs[3] === 'federate') {
+          gw._audit({ type: 'skill_federated', id: updated.id, by: bot.name, ownerTenant: updated.ownerTenant || tenant.id });
+        } else {
+          gw._audit({ type: 'skill_unfederated', id: updated.id, by: bot.name });
+        }
+        return send(res, 200, { id: updated.id, name: updated.name, visibility: updated.visibility });
+      }
+
       // ── POST /v2/skills/:id/run — governed execution (or ?dry=1 plan) ──
       if (req.method === 'POST' && isRun) {
         const skill = store.get(id);
         // FS-F4 visibility-aware lookup: a non-owner can find a SHARED skill
         // here (dry-run path below); a PRIVATE skill owned by someone else
-        // stays 404 (anti-enum, byte-identical FS-F1 behavior).
+        // stays 404 (anti-enum, byte-identical FS-F1 behavior). FS-G1: a
+        // 'federated' skill is shared-like everywhere — and federation
+        // adds CROSS-TENANT runs (below).
         if (!skill || !canViewSkill(skill, bot, access)) return send(res, 404, { error: 'not_found' });
 
         const dry = url.searchParams.get('dry') === '1';
+        // FS-G1 bookkeeping: is this a CROSS-TENANT use of a federated
+        // skill? Only when the env is ON, the skill is 'federated', and
+        // the RUNNING tenant differs from the skill's ownerTenant.
+        const crossTenantFederated = federationEnabled()
+          && isFederated(skill)
+          && tenant.id !== (skill.ownerTenant || 'main');
+
         // FS-F1 + FS-F4: self-service runs are dry-only — a non-owner may
         // dry-run its own or a SHARED skill, but the approval-gated live
         // run stays operator/author-only (FS-C1) regardless of visibility.
-        // Refusal is audited.
+        // Refusal is audited. (Same-tenant federated skills follow the
+        // exact FS-F4 rule.)
         if (selfService && !dry) {
           gw._audit({ type: 'skill_denied', bot: bot.name, skillId: skill.id, action: 'run' });
           return send(res, 403, { error: 'dry_run_only' });
@@ -244,7 +381,15 @@ module.exports = {
         }
 
         const runSeq = `skrun_${gw.chain.head.seq + 1}`;
-        gw._audit({ type: 'skill_run_started', skillId: skill.id, name: skill.name, bot: bot.name, steps: skill.steps.length, dry, runId: runSeq });
+        // FS-G1: every cross-tenant run of a federated skill is audited
+        // with BOTH tags on the SAME skill_run_started row:
+        //   tenantAuditTag(running tenant)  AND  federatedFrom: <owner>.
+        // Non-federated / same-tenant runs keep the untouched FS-C1 payload
+        // (byte-identical; main stays untagged).
+        gw._audit({
+          type: 'skill_run_started', skillId: skill.id, name: skill.name, bot: bot.name, steps: skill.steps.length, dry, runId: runSeq,
+          ...(crossTenantFederated ? { ...tenantAuditTag(tenant), federatedFrom: skill.ownerTenant || 'main' } : {}),
+        });
 
         if (dry) {
           return send(res, 200, { skillId: skill.id, runId: runSeq, dry: true, status: 'planned', plan });
@@ -277,8 +422,17 @@ module.exports = {
               break;
             }
           } else if (verdict.decision === 'needs_approval') {
-            const approval = gw.approvals.request({ bot: { name: bot.name }, tool, args, reason: `skill ${skill.id} step ${seq}: ${verdict.reason}` });
-            gw._audit({ type: 'approval_requested', approvalId: approval.id, bot: bot.name, tool, class: cls });
+            // FS-G1: approval rides the RUNNING tenant's store. The mount
+            // matches /v2/skills only, so the running tenant's scoped store
+            // is resolved here via the SAME WeakMap-cached factory the
+            // FS-E1d approvals mount uses — tenant 'main' keeps the
+            // singleton gw.approvals byte-identically.
+            const { approvalsStoreFor } = require('./09-approvals');
+            const runningApprovals = approvalsStoreFor(gw, tenant);
+            const approval = runningApprovals.request({ bot: { name: bot.name }, tool, args, reason: `skill ${skill.id} step ${seq}: ${verdict.reason}` });
+            const auditPayload = { type: 'approval_requested', approvalId: approval.id, bot: bot.name, tool, class: cls };
+            if (crossTenantFederated) auditPayload.federatedFrom = skill.ownerTenant || 'main';
+            gw._audit(auditPayload);
             results.push({ seq, tool, decision: 'needs_approval', approvalId: approval.id });
             status = 'parked'; // later steps wait for this approval
             break;

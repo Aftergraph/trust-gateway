@@ -84,10 +84,50 @@ function isOwnSkill(skill, bot) {
 // A skill's visibility is 'private' (default — every skill created before
 // FS-F4, and every skill created now, behaves exactly as before) or
 // 'shared' (visible to other bots on the SAME gateway for reading and
-// DRY-run; never editable or deletable by non-owners). Cross-TENANT
-// sharing is out of scope for this slice — the store stays per-gateway.
+// DRY-run; never editable or deletable by non-owners).
+//
+// ── FS-G1: cross-tenant skills federation (design-locked, additive) ──
+// Federation model:
+//   • A skill can be PUBLISHED FEDERATED by its OWNING tenant's OPERATOR —
+//     visibility gains a third value 'federated' (set ONLY via the audited
+//     federate route, never through create/update/publish).
+//   • A federated skill is READABLE (name/version/owner-tenant/description
+//     projection — never steps) and DRY-RUNNABLE by bots of OTHER tenants.
+//   • REAL (non-dry) runs of a federated skill still flow the EXISTING
+//     governed path; approval parks ride the RUNNING tenant's approval
+//     store (the running tenant's operator approves — never the owner's).
+//   • Edits/delete remain OWNER-TENANT-only (a cross-tenant operator is
+//     answered 404 anti-enum + audited skill_federation_denied).
+//   • Federation is OFF by default: TG_SKILLS_FEDERATION=1 is required for
+//     every federation ROUTE and semantic; with the env unset a 'federated'
+//     skill behaves EXACTLY like 'shared' (byte-identical off-switch — the
+//     env is read dynamically at request time, never cached).
+//   • The store stays per-gateway; the owner tenant is recorded ON the
+//     skill record as `ownerTenant` (set at create when the env is on,
+//     else at federate time). Cross-tenant dry runs are audited
+//     skill_run_started with BOTH tags: tenantAuditTag(running tenant) AND
+//     federatedFrom: <owner-tenant-id>.
 function isShared(skill) {
   return !!skill && skill.visibility === 'shared';
+}
+
+// FS-G1: 'federated' visibility — always viewable/dry-runnable like
+// 'shared' (env off degrades it TO shared semantics; env on adds the
+// cross-tenant projection, tags and running-tenant approval routing).
+function isFederated(skill) {
+  return !!skill && skill.visibility === 'federated';
+}
+
+// FS-G1: shared-like = visible cross-bot. Env-independent by design (see
+// isFederated above) — the env gates ROUTES and bookkeeping, not viewability.
+function isSharedLike(skill) {
+  return isShared(skill) || isFederated(skill);
+}
+
+// FS-G1: the federation switch. Read dynamically (never cached) so tests
+// and operators can flip it without a restart; unset/'0' = OFF.
+function federationEnabled() {
+  return process.env.TG_SKILLS_FEDERATION === '1';
 }
 
 // Visibility-aware view check, used where FS-F1 used bare ownership:
@@ -102,7 +142,7 @@ function canViewSkill(skill, bot, access) {
   if (!skill) return false;
   if (isOwnSkill(skill, bot)) return true;
   if (access === 'operator' || access === 'author') return true;
-  if (access === 'self' && isShared(skill)) return true;
+  if (access === 'self' && isSharedLike(skill)) return true; // FS-G1: federated counts as shared-like
   return false;
 }
 
@@ -313,6 +353,37 @@ class SkillStore {
     return { ...this.skills[idx] };
   }
 
+  // FS-G1: publish a skill FEDERATED — operator-only via the audited
+  // federate route. 'federated' is deliberately unreachable through
+  // setVisibility/create/update (the same anti-smuggle rule as FS-F4).
+  // The owner tenant is stamped here if absent (created before the env was
+  // on); an already-stamped owner tenant is NEVER overwritten.
+  federate(id, ownerTenant = 'main') {
+    if (!this.skills.some((s) => s.id === id)) throw err('not_found', 'skill not found');
+    const idx = this.skills.findIndex((s) => s.id === id);
+    const current = this.skills[idx];
+    this.skills[idx] = {
+      ...current,
+      visibility: 'federated',
+      ownerTenant: current.ownerTenant || ownerTenant,
+    };
+    this._save();
+    return { ...this.skills[idx] };
+  }
+
+  // FS-G1: pull a skill back from federation → 'private'. The federation
+  // contract is "unfederate → 404 anti-enum restored" for OTHER tenants:
+  // only 'private' re-hides the skill everywhere. An operator who wants a
+  // shared-but-not-federated skill uses unpublish instead.
+  unfederate(id) {
+    if (!this.skills.some((s) => s.id === id)) throw err('not_found', 'skill not found');
+    const idx = this.skills.findIndex((s) => s.id === id);
+    const current = this.skills[idx];
+    this.skills[idx] = { ...current, visibility: 'private' };
+    this._save();
+    return { ...this.skills[idx] };
+  }
+
   remove(id) {
     const idx = this.skills.findIndex((s) => s.id === id);
     if (idx === -1) throw err('not_found', 'skill not found');
@@ -343,6 +414,9 @@ module.exports = {
   skillsAccessLevel,
   isOwnSkill,
   isShared,
+  isFederated,
+  isSharedLike,
+  federationEnabled,
   canViewSkill,
   validateTemplate,
   resolveTemplate,
