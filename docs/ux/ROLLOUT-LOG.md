@@ -45,11 +45,43 @@ full suite is green on the phase's head commit. Entries are append-only.
 
 ---
 
+## 2026-09-03 — Phase 1 (queue-first NOW + palette): **COMPLETE**
+
+- **Head**: `746b146` (main, pushed)
+- **Entry gate**: Phase 0 complete ✓
+- **Work**:
+  - Tab order: History pinned directly after Console (NOW priority).
+    Kill-switch `?tabs=legacy` restores the Phase-0 order verbatim;
+    tab ids unchanged → redirect guarantee holds.
+  - NOW queue strip in the header: pending-approval count + open-queue
+    jump visible from **every** tab (same store as the Console pane —
+    single decision surface, §20 Phase 1 exit criterion met).
+  - Palette (⌘K / Ctrl+K): one input, context set = tab jumps +
+    `GET /v2/search` audit hits as the primary channel (§18.1/§18.2);
+    Enter on a hit → `TG_HISTORY.jumpToSeq(seq)` → History mounts,
+    loads window `seq±(40/20)`, highlights + opens the row (§18.3).
+  - Long-standing bugs fixed on the way (pre-phase-1, wave-B vintage):
+    `switchTab('console')` rendered a "panel not loaded" placeholder and
+    hid the 3-pane grid (no console panel exists); `.view-show` was
+    toggled by the router but no CSS rule keyed on it, so every mounted
+    panel and the history modal were permanently visible.
+- **Exit gate**:
+  - Full suite: **695/695 pass** (7 new phase-1 regression tests:
+    palette wiring, queue strip, jumpToSeq contract, XSS policy,
+    CSS visibility contracts, /v2/search numeric-seq hit shape)
+  - Conformance tier-A: **9/9 ALL PASS**
+- **Kill-switch**: `git revert 746b146` (UI-only), or runtime
+  `?tabs=legacy` for the tab-order half. No state touched.
+- **Gates G1–G4**: G2/G4 pass (commands map to real mounts; needs_approval
+  still parks, no auto-execute — tier-A CONTROL covers it). G1's palette→
+  history jump is client-side and shipped; G3 (fuzzy token/seq resolution)
+  remains open — token-prefix lookup is a listed BACKEND GAP.
+
+---
+
 ## Next gate targets (open)
 
-- **Phase 1 (NOW-first tabs)**: entry = Phase 0 complete ✓. Requires tab
-  reorder + approval-queue surfacing in the Console panel + palette search
-  promotion. Gate: tier-A 9/9 + G1–G4 (see 05-SYSTEM.md §20 gates).
+- **Phase 2** (deep-link URIs `/d/<domain>/o/<type>/<id>`): candidate next.
 - BACKEND GAPs still open after wave F: TG.api operator tokens, TG.session,
   manifest validation harness, /model mount, /interrupt endpoint, FTS5 live,
   token prefix lookup, telemetry infra (cost-preview and runs/conformance
