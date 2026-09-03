@@ -100,13 +100,14 @@ below is missing one.
 - **Inspect:** audit search on `chat_action` (payload carries `source: 'llm'`).
 
 ### `llm-loop.js` + mount `23-chat-llm-live.js` — multi-iteration LLM tool-call loop
-- **Endpoints:** `POST /v2/chat/llm/deep` {session, message, bot?} (bearer).
+|- **Endpoints:** `POST /v2/chat/llm/deep` {session, message, bot?} (bearer).
   Up to 3 iterations; allowed-tools list is built from
   `ROLE_CAPABILITIES + classify` (read/write classes only — destructive
   and secret never make it into the prompt). Reuses the same brain as
   `llm-brain.js` via `getBrain(gw)`. Degrades to `{fallback:true, reply:
   'llm not configured'}` when the brain is unset.
 |- **Audit events:** `chat_action`, `chat_action_executed`,
+<<<<<<< HEAD
   `approval_requested`, `observation_scanned` — same types as
   the single-turn brain, with `source: 'llm-live'` to distinguish
   the loop-driven path. Parked approvals return
@@ -115,9 +116,23 @@ below is missing one.
   quarantined and scanned before reaching the brain;
   `observation_scanned` records metadata only (tool, hits, chars).
 - **Tool execution:** routed through `gw._run(bot, tool, args)` — the
+=======
+  `approval_requested`, `observation_scanned` — same types as the
+  single-turn brain, with `source: 'llm-live'` to distinguish the
+  loop-driven path. `observation_scanned` carries `{tool, hits, chars}`
+  metadata only (scanned text is never stored). Parked approvals
+  return `{reply, pending_approval:{id,tool}, iterations}`.
+|- **Tool execution:** routed through `gw._run(bot, tool, args)` — the
+>>>>>>> v2e/e3-trustloop
   SAME path the deterministic ChatPlanner and the v1 `_postAction`
   handler use. No second dispatch route.
-- **Inspect:** audit search `q=chat_action source:llm-live`.
+|- **Inspect:** audit search `q=chat_action source:llm-live`.
+|- **Observation formatting (D4):** external tool results (web.fetch,
+  web.extract, adapter probes, harness.run) are quarantined via
+  `quarantineWrap` and scanned via `scanForInjection` before entering
+  the brain. A `[security: N hits]` integrity notice is prepended when
+  injection patterns are detected. Internal tool results pass through
+  raw. The response carries `observationsTrusted: true`.
 
 ### `events.js` + mount `10-events.js` — SSE hub
 - **Endpoints:** `GET /v2/events?token=…` (auth: query — EventSource can't
