@@ -453,6 +453,10 @@ plugins.js) across all files under `src/gateway/`.
 | 116 | `skill_unfederated` | mounts/105-skills.js (FS-G1: {id, by} — owning-tenant operator pulled a skill back to shared; never steps/args) |
 | 116 | `skill_federation_denied` | mounts/105-skills.js (FS-G1: {bot, skillId, action} — cross-tenant write attempt on a federated skill (run/patch/federate/unfederate) refused owner-tenant-only, answered 404 anti-enumeration; TG_SKILLS_FEDERATION=1 only; never args/steps) |
 | 117 | `skill_fed_limited` | mounts/105-skills.js (FS-H2: {runnerTenant, skillId, cap, window, limitKind} — a cross-tenant DRY run of a federated skill refused 429 fed_rate_limited because the runner tenant hit TG_FED_RUNS_PER_HOUR (default 20) or the skill hit TG_FED_RUNS_PER_SKILL_HOUR (default 50); enforced BEFORE the dry-run executes; TG_SKILLS_FEDERATION=1 only; never args/steps) |
+| 118 | `secret_set` | mounts/115-secrets.js (FS-I5: {tenant, key} — secret key NAME and tenant only; the value itself is encrypted at rest (AES-256-GCM, per-tenant key from TG_SECRETS_MASTER_KEY via scrypt) and NEVER logged, audited, or API-readable; TG_SECRETS_VAULT=1 only) |
+| 118 | `secret_deleted` | mounts/115-secrets.js (FS-I5: {tenant, key} — key name and tenant only; delete of a missing key is a uniform 404; TG_SECRETS_VAULT=1 only) |
+| 118 | `secret_listed` | mounts/115-secrets.js (FS-I5: {tenant} — the listing route returns KEY NAMES only, never values; there is no API route that reads a secret value back, values are consumed by internal code paths only; TG_SECRETS_VAULT=1 only) |
+| 118 | `secret_denied` | mounts/115-secrets.js (FS-I5: {bot} — non-operator touched a secrets route; RBAC refusal audited, key names and values never in the payload) |
 
 ### `sandbox.js` — optional OS sandbox layer for the harness2 jail (FS-F3)
 - **What it is:** a spike, additive and default-OFF. The jail's real
