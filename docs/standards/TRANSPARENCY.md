@@ -280,9 +280,28 @@ below is missing one.
 - **Storage:** operates only inside `data/bots/<name>/` jails (per-bot).
 - **Inspect:** audit entries for every dispatch; jail contents per bot dir.
 
+### `harness2.js` + mount `106-harness2.js` — project build/run loop (FS-C2)
+- **Endpoints:** POST `/v2/harness2/projects` {name, files:{relPath:content}}
+  (256 KB total cap, traversal rejected, id = slug of name); GET
+  `/v2/harness2/projects` + `/:id`; POST `/:id/build` (files/ → jail/ copy);
+  POST `/:id/run` (node entry in jail). RBAC on create/build/run: operator
+  role, cap `harness.run`, or `*`.
+- **Approval gate:** manifest `requiresApproval=true` → run requests park in
+  the approvals store (202 `needs_approval`); execution happens only after
+  operator approval via the `harness2.run:<id>` executor.
+- **Honest limitation:** the jail is a same-user directory — process
+  discipline (no shell, env scrubbed to PATH/HOME/NODE_ENV, 10 s SIGKILL,
+  8 KB output tails), NOT an OS sandbox.
+- **Audit events:** `harness2_project_created` {id, fileCount};
+  `harness2_run` {id, ok, exitCode, durationMs}. Never file contents,
+  never stdout/stderr.
+- **Storage:** `data/harness2/<id>/{manifest.json, files/, jail/}`.
+- **Inspect:** `GET /v2/harness2/projects/:id`; jail contents on disk.
+
 ## Full audit-event table
 
-81 event types emitted from `src/gateway/**`. Extraction rule: every string
+83 event types emitted from `src/gateway/**` at this branch (fleet target:
+107 once the remaining FS slices' rows merge). Extraction rule: every string
 matched by `{type: '…'}` (including the `enabled ? 'a' : 'b'` ternary in
 plugins.js) across all files under `src/gateway/`.
 
@@ -369,6 +388,8 @@ plugins.js) across all files under `src/gateway/`.
 | 79 | `run_paused` | src/gateway/runs.js (wave F F1: cancellable-state transition — parked approval or operator/owner cancel; emitted by store.cancel() via POST /v2/runs/:id/cancel) |
 | 80 | `adapter_kind_register` | mounts/99-adapter-kinds.js (G9: {kind, fields count} — field names only, never values) |
 | 81 | `adapter_kind_rejected` | mounts/99-adapter-kinds.js (G9: {bot, kind?, errors[]} — validation failures) |
+| 106 | `harness2_project_created` | mounts/106-harness2.js (FS-C2: {id, fileCount} — file names/contents stay on disk, never in the chain) |
+| 107 | `harness2_run` | mounts/106-harness2.js (FS-C2: {id, ok, exitCode, durationMs} — never stdout/stderr) |
 ## Documented exceptions
 
 The test compares the table above against a programmatic extraction over
