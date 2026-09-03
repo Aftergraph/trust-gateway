@@ -142,7 +142,7 @@ class Gateway extends EventEmitter {
         return this._serveStatic(res, 'index.html');
       }
       const rel = pathname === '/' ? 'index.html'
-        : /^\/(app\.js|compose\.js|style\.css|index\.html|sw\.js|offline\.html|pwa-head\.html|manifest\.webmanifest|responsive\.css|desktop\.css|favicon\.svg)$/.test(pathname) ? pathname.slice(1)
+        : /^(\/(app\.js|keys\.js|compose\.js|style\.css|index\.html|sw\.js|offline\.html|pwa-head\.html|manifest\.webmanifest|responsive\.css|desktop\.css|favicon\.svg))$/.test(pathname) ? pathname.slice(1)
         : /^\/icons\/[\w.-]+\.svg$/.test(pathname) ? pathname.slice(1)
         : /^\/panels\/[\w.-]+\.js$/.test(pathname) ? pathname.slice(1)
         : null;

@@ -232,6 +232,16 @@ header {
   display: none; align-items: center; justify-content: center;
 }
 .modal.view-show { display: flex; }
+
+/* G5 (§18.7): keyboard registry — approval-card focus ring + help overlay */
+.card.kbd-focus { outline: 2px solid var(--tg-accent, #58a6ff); outline-offset: 1px; }
+.help-box { background: var(--tg-bg-surface, #161b22); border: 1px solid var(--tg-border-strong, #30363d); border-radius: var(--tg-radius-md, 8px); padding: 16px 20px; max-height: 80vh; overflow: auto; min-width: 320px; }
+.help-box h3 { margin: 0 0 8px; font-size: 14px; color: var(--tg-text-bright, #e6edf3); }
+.help-box h4 { margin: 10px 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--tg-text-muted, #8b949e); }
+.help-box table { border-collapse: collapse; width: 100%; }
+.help-box td { padding: 3px 10px 3px 0; font-size: 12px; vertical-align: top; }
+.help-box td:first-child { color: var(--tg-text-bright, #e6edf3); white-space: nowrap; font-family: var(--tg-mono, monospace); }
+.help-box p { margin: 10px 0 0; font-size: 11px; }
 .modal pre {
   background: var(--tg-bg-surface); border: 1px solid var(--tg-border-accent); border-radius: var(--tg-radius-lg);
   padding: var(--tg-space-5); max-width: 80vw; max-height: 80vh; overflow: auto;

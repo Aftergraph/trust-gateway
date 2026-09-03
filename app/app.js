@@ -435,6 +435,10 @@
   // shared surface for /panels/*.js (wave B UI modules)
   window.TG = {
     api, el,
+    // G5 (§18.7): keys.js (loaded before app.js) owns the global ⌘K binding
+    // and dispatches it here — the palette keeps its own Esc/Enter/↑↓ input
+    // handler, documented as native palette bindings in the TG_KEYS registry.
+    openPalette,
     token: () => token,
     authed,
     // phase 3 composition inputs (§5.1): the engine reads permissions from
