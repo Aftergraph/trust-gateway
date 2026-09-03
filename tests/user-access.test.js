@@ -219,7 +219,10 @@ test('/v2/me: bearer fallback projects the bot identity like /v2/whoami (regress
   try {
     const me = await (await get(srv.base, '/v2/me', 'tok-forge')).json();
     const who = await (await get(srv.base, '/v2/whoami', 'tok-forge')).json();
-    assert.deepEqual(me, who);
+    // FS-E1 slice 3: /v2/me gains ONE added field (tenant) — parity with
+    // /v2/whoami modulo that field, byte-identical for the default tenant.
+    assert.deepEqual(me, Object.assign({}, who, { tenant: 'main' }));
+    assert.equal(me.tenant, 'main');
     assert.equal(me.name, 'forge');
     assert.deepEqual(me.capabilities, ['fs.read', 'fs.write:*']);
     assert.equal(me.botGrants, undefined, 'bearer path exposes no user concept');

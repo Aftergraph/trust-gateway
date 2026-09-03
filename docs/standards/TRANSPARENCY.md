@@ -438,6 +438,10 @@ plugins.js) across all files under `src/gateway/`.
 | 110 | `apikey_created` | mounts/112-apikeys.js (FS-E3: {id, name, scopes} — NEVER the plaintext, never the hash) |
 | 110 | `apikey_revoked` | mounts/112-apikeys.js (FS-E3: {id, by} — key id and operator name only) |
 | 110 | `apikey_denied` | mounts/112-apikeys.js (FS-E3: {bot} — non-operator touched a key route; RBAC refusal audited) |
+| 111 | `tenant_created` | mounts/113-tenants.js (FS-E1: {id, name} — slug id + display name only) |
+| 111 | `tenant_disabled` | mounts/113-tenants.js (FS-E1: {id} — tenant id only) |
+| 111 | `tenant_enabled` | mounts/113-tenants.js (FS-E1: {id} — tenant id only) |
+| 111 | `tenant_denied` | mounts/113-tenants.js (FS-E1: {bot} — non-operator touched a tenant route; RBAC refusal audited) |
 
 ### `backup.js` + mount `110-backup.js` — verified backup/restore (FS-B1)
 - **Endpoints:** `GET /v2/backup` (list, operator), `POST /v2/backup`
