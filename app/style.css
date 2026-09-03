@@ -142,10 +142,15 @@ header {
 .pane { background: var(--tg-bg-elevated); border: 1px solid var(--tg-border); border-radius: var(--tg-radius-lg); display: flex; flex-direction: column; min-height: 0; }
 .pane h2 { margin: 0; padding: 10px var(--tg-space-4); font-size: var(--tg-text-sm); text-transform: uppercase; letter-spacing: .09em; color: var(--tg-text-muted); border-bottom: 1px solid var(--tg-border); }
 .pane-body { overflow-y: auto; padding: var(--tg-space-2) 10px; flex: 1; }
-.empty { color: var(--tg-text-muted); padding: var(--tg-space-4); text-align: center; font-style: italic; }
+.empty {
+  color: var(--tg-text-muted); padding: var(--tg-space-4); text-align: center; font-style: italic;
+  border: 1px dashed var(--tg-border); border-radius: var(--tg-radius-md); /* FE2: quiet empty state block */
+  margin: var(--tg-space-2) auto; max-width: 48ch;
+}
 
 /* stream */
-.row { display: flex; gap: var(--tg-space-2); align-items: baseline; padding: 3px var(--tg-space-1); border-bottom: 1px solid var(--tg-row-line); animation: flash 1.2s ease-out; }
+/* FE2 (craft): uniform 4/8px row rhythm (spaces 1/2) + hover lift. */
+.row { display: flex; gap: var(--tg-space-2); align-items: baseline; padding: var(--tg-space-1) var(--tg-space-2); border-bottom: 1px solid var(--tg-row-line); animation: flash 1.2s ease-out; }
 @keyframes flash { from { background: var(--tg-risk-read-bg); } to { background: transparent; } }
 .age { color: var(--tg-text-muted); font-size: var(--tg-text-xs); min-width: 64px; }
 .tool { color: var(--tg-text-bright); font-size: var(--tg-text-sm); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -169,7 +174,7 @@ header {
 .btnrow { display: flex; gap: var(--tg-space-2); font-size: var(--tg-text-sm); color: var(--tg-text-muted); }
 
 /* workforce */
-.botrow { display: flex; gap: var(--tg-space-2); align-items: baseline; padding: 6px var(--tg-space-1); border-bottom: 1px solid var(--tg-row-line); }
+.botrow { display: flex; gap: var(--tg-space-2); align-items: baseline; padding: var(--tg-space-1) var(--tg-space-2); border-bottom: 1px solid var(--tg-row-line); }
 .role { padding: 1px 7px; border-radius: 9px; font-size: var(--tg-text-xs); background: var(--tg-risk-write-bg); color: var(--tg-risk-write); }
 .role.operator { background: var(--tg-state-ok-bg); color: var(--tg-state-ok); }
 .role.worker { background: var(--tg-risk-read-bg); color: var(--tg-risk-read); }
@@ -200,7 +205,7 @@ header {
  * by it — mounted panels and modals were permanently visible. Show only the
  * active panel-view; modals hidden until view-show (history detail, palette). */
 .panel-view { background: var(--tg-bg-elevated); border: 1px solid var(--tg-border); border-radius: var(--tg-radius-lg); flex: 1; overflow-y: auto; padding: var(--tg-space-4); display: none; }
-.panel-view.view-show { display: block; }
+.panel-view.view-show { display: block; border-top: 1px solid var(--tg-border-accent); } /* FE2: active view hairline */
 .panel-view h3 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--tg-text-muted); }
 .panel-placeholder { color: var(--tg-text-muted); font-style: italic; padding: var(--tg-space-5); }
 .modal {
@@ -252,14 +257,29 @@ header {
 
 /* Phase 2 (§20.3): domain rail + per-domain subnav */
 .tab.domain { text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
+/* FE2 (craft): active rail button = background lift + left accent (inset
+ * box-shadow keeps layout identical to the inactive state). */
+.tab.domain.active {
+  background: var(--tg-bg-hover);
+  box-shadow: inset 3px 0 0 var(--tg-risk-read);
+}
 .subtabs { display: flex; gap: var(--tg-space-1); flex-wrap: wrap; padding: 0 var(--tg-space-4); }
 .subtab {
-  background: transparent; border: 0; border-bottom: 2px solid transparent;
+  position: relative; background: transparent; border: 0; border-bottom: 2px solid transparent;
   color: var(--tg-text-muted); padding: var(--tg-space-1) var(--tg-space-2);
   cursor: pointer; font-family: inherit; font-size: var(--tg-text-sm);
 }
+/* FE2 (craft): underline animates via transform (no width/border layout
+ * thrash) — scaleX 0→1 on a hairline pseudo-element. */
+.subtab::after {
+  content: ''; position: absolute; left: var(--tg-space-2); right: var(--tg-space-2); bottom: 0;
+  height: 2px; background: var(--tg-risk-read);
+  transform: scaleX(0); transform-origin: left center;
+  transition: transform 120ms ease;
+}
 .subtab:hover { color: var(--tg-text); }
-.subtab.active { color: var(--tg-risk-read); border-bottom-color: var(--tg-risk-read); }
+.subtab.active { color: var(--tg-risk-read); }
+.subtab.active::after { transform: scaleX(1); }
 
 /* Phase 3 (§5): compose-mode capability-filter note */
 .compose-cap-note {
@@ -267,6 +287,41 @@ header {
   background: var(--tg-risk-write-bg); border: 1px solid var(--tg-border-write-accent);
   border-radius: var(--tg-radius-sm); padding: var(--tg-space-1) var(--tg-space-2); margin-bottom: var(--tg-space-2);
 }
+
+/* ── FE2 (craft): surface polish within the token system ─────────────── */
+
+/* Row hover lift (stream, workforce, hub adapter rows). */
+.hub-row { display: flex; gap: var(--tg-space-2); align-items: baseline; padding: var(--tg-space-1) var(--tg-space-2); border-bottom: 1px solid var(--tg-row-line); }
+.row:hover, .botrow:hover, .hub-row:hover { background: var(--tg-bg-hover); }
+.clickable { cursor: pointer; }
+
+/* Interactive controls: quick 120ms ease on state changes; keyboard focus
+ * gets a visible 2px ring in the read-risk hue. */
+.btn, .tab, .subtab {
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+.btn:focus-visible, .tab:focus-visible, .subtab:focus-visible {
+  outline: 2px solid var(--tg-risk-read); outline-offset: 1px;
+}
+
+/* Thin scrollbars on the scrollable surfaces (Firefox + WebKit). */
+.panel-view, .pane-body, .chatlog {
+  scrollbar-width: thin;
+  scrollbar-color: var(--tg-border-strong) transparent;
+}
+.panel-view::-webkit-scrollbar, .pane-body::-webkit-scrollbar, .chatlog::-webkit-scrollbar { width: 6px; height: 6px; }
+.panel-view::-webkit-scrollbar-track, .pane-body::-webkit-scrollbar-track, .chatlog::-webkit-scrollbar-track { background: transparent; }
+.panel-view::-webkit-scrollbar-thumb, .pane-body::-webkit-scrollbar-thumb, .chatlog::-webkit-scrollbar-thumb { background: var(--tg-border-strong); border-radius: 3px; }
+.panel-view::-webkit-scrollbar-thumb:hover, .pane-body::-webkit-scrollbar-thumb:hover, .chatlog::-webkit-scrollbar-thumb:hover { background: var(--tg-border-accent); }
+
+/* NOW strip pulses exactly once when the pending count changes
+ * (.just-changed is added by app.js refreshStrip and removed on
+ * animationend, so it re-arms for the next change). */
+@keyframes now-pulse {
+  0% { box-shadow: 0 0 0 0 var(--tg-risk-write); }
+  100% { box-shadow: 0 0 0 6px transparent; }
+}
+.now-queue.just-changed { animation: now-pulse 360ms ease-out 1; }
 
 @media (max-width: 800px) {
   .panes { grid-template-columns: 1fr; overflow-y: auto; }
