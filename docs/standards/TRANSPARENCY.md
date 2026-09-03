@@ -402,6 +402,13 @@ plugins.js) across all files under `src/gateway/`.
 | 92 | `tg_api_raw_fetch_blocked` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
 | 93 | `tg_session_unavailable` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
 | 94 | `search_backend_fts5_swap` | telemetry.js (G12 §20.4 — telemetry ring buffer, not audit chain) |
+| 95 | `user_registered` | mounts/101-auth.js (FS-A1: {userId, role} — never the password, never the hash) |
+| 96 | `user_login_ok` | mounts/101-auth.js (FS-A1: {userId} — humans only; bots stay bearer tokens) |
+| 97 | `user_login_failed` | mounts/101-auth.js (FS-A1: {reason} — 'invalid_credentials' or 'account_disabled'; response is always the same generic error, no enumeration) |
+| 98 | `user_logout` | mounts/101-auth.js (FS-A1: {userId}) |
+| 99 | `identity_me` | mounts/102-identity.js (FS-A2: {userId} only — never email, name or token material) |
+| 100 | `chat_user_denied` | mounts/103-chat-user.js (FS-A2: {userId, bot} — grant enforcement; never message text) |
+| 101 | `chat_user_ok` | mounts/103-chat-user.js (FS-A2: {userId, session} — namespaced session name only; never message text) |
 
 ### `telemetry.js` + `mounts/100-telemetry.js` — post-launch telemetry (G12, §20.4)
 - **Endpoints:** `POST /v2/telemetry` {event, fields?} (bearer; server-side
@@ -416,8 +423,6 @@ plugins.js) across all files under `src/gateway/`.
   (silent drop); fields projected to scalars only.
 - **Inspect:** `GET /v2/telemetry` (operator bearer) or read
   `data/telemetry.json` directly (one JSON object with an `events` array).
-v2h/fs-a1
-
 ## Documented exceptions
 
 The test compares the table above against a programmatic extraction over
