@@ -183,5 +183,39 @@ Vurderet mod: kommerciel værdi × teknisk risiko × slice-størrelse.
 - (d) Self-host dokumentation til eksterne kunder (install.sh + RUNBOOK
   som kundevendt docs)
 
+## 9. Wave v2p leveret
+
+Batch konvergeret på `main @ b72562f` — 1137/1137 tests grønne.
+TRANSPARENCY rækker 118–139 tilføjet. Syv slices landet:
+
+- **FS-I1** (79adeff): cross-tenant REAL runs med dual-approval —
+  begge tenanter skal godkende, chain-stemplet begge steder.
+- **FS-I2** (d52403f): observability koblet på AlertSink —
+  telemetry-events udløser operator-alarmer.
+- **FS-I3** (3b1d6ad): tenant-quota enforcement på disk + API —
+  fail-closed ved overskridelse.
+- **FS-I4** (885271c): audit-log export via webhook + S3-stub.
+- **FS-I5** (5d2c81b): secrets vault med AES-256-GCM
+  per-tenant kryptering.
+- **FS-I6** (6942575): hot-reload via SIGHUP — env + quotas genlæses
+  uden genstart.
+- **FS-I7** (49a778a): chain archival med age-baseret compaction.
+
+## 10. Næste kandidater (v2q)
+
+- (a) Federation real-run audit-dashboard — operator-visning af
+  cross-tenant executions (bygger på FS-I1's chain-stemplede runs)
+- (b) Secrets rotation operator-endpoint — rotér
+  TG_SECRETS_MASTER_KEY og re-encrypt alle vault-entries (bygger på
+  FS-I5)
+- (c) Archive restore-drill — gendan arkiverede chain-entries til live
+  DB (modstykke til FS-I7 + FS-E2's restore-drill)
+- (d) Tenant-scoped telemetry isolation — per-tenant event-streams
+  (bygger på FS-I2)
+- (e) Observability historiske snapshots — persistér snapshots hver
+  time, queryable (udvider FS-I2's coupling)
+- (f) Quota usage alerts — auto-alarm når en tenant rammer 80% af
+  disk/API-cappen (bygger på FS-I3)
+
 *Owner: Jonas · Genereret af convergence-agent efter wave v2h + PM-audit;
-opdateret efter v2l.*
+opdateret efter v2l; opdateret efter v2p.*
