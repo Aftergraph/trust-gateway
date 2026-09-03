@@ -527,6 +527,8 @@ plugins.js) across all files under `src/gateway/`.
 | 182 | `impersonation_listed` | mounts/134-tenant-impersonation.js (FS-O2: {by, count} — operator listed active impersonation tokens) |
 | 183 | `operator_dashboard_read` | mounts/135-operator-dashboard.js (FS-O3: {by, sections[]} — operator read the aggregated dashboard; section names only, no row data) |
 | 184 | `operator_dashboard_denied` | mounts/135-operator-dashboard.js (FS-O3: {bot} — non-operator touched /v2/dashboard; RBAC refusal audited) |
+| 185 | `chain_pruned` | mounts/142-chain-prune.js (FS-W2: {by, removed, beforeTs, manifestPath} — operator executed a real chain prune; counts + manifest path only; TG_CHAIN_PRUNE=1 only) |
+| 186 | `chain_prune_refused` | mounts/142-chain-prune.js (FS-W2: {by, reason, current?} — prune refused (below_safety_threshold without force, invalid_before, no_audit_chain); nothing deleted on refusal) |
 
 ### `secrets-vault.js` + mounts `115-secrets.js` / `119-secrets-rotate.js` — tenant secrets vault + master-key rotation (FS-I5, FS-J2)
 - **Endpoints:** `PUT/GET/DELETE /v2/tenants/:id/secrets[/:key]` (operator;
