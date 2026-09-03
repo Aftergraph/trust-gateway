@@ -48,6 +48,18 @@ function open(file = resolveDbFile()) {
       updated_at       INTEGER NOT NULL
     );
   `);
+  // FS-I5 — tenant-scoped secrets vault (encrypted values, see
+  // secrets-vault.js). Table exists unconditionally so the schema is stable
+  // whether or not TG_SECRETS_VAULT is enabled.
+  d.exec(`
+    CREATE TABLE IF NOT EXISTS tenant_secrets (
+      tenant     TEXT NOT NULL,
+      key        TEXT NOT NULL,
+      value_enc  TEXT NOT NULL,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (tenant, key)
+    );
+  `);
   return d;
 }
 

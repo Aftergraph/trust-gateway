@@ -470,6 +470,10 @@ plugins.js) across all files under `src/gateway/`.
 | 128 | `s3_upload_pending` | audit-export.js (FS-I4: {bucket, key} — the would-be S3 object key `<tenant>/<date>.jsonl` per stub append; drain the fallback deliberately) |
 | 129 | `audit_export_test` | mounts/117-audit-export.js (FS-I4: {by, webhookOk, s3StubOk} — operator-triggered POST /v2/audit/export/test self-test; never token material) |
 | 130 | `audit_export_denied` | mounts/117-audit-export.js (FS-I4: {bot} — non-operator touched the export-test route; RBAC refusal audited) |
+| 131 | `secret_set` | mounts/115-secrets.js (FS-I5: {tenant, key} — secret key NAME and tenant only; the value itself is encrypted at rest (AES-256-GCM, per-tenant key from TG_SECRETS_MASTER_KEY via scrypt) and NEVER logged, audited, or API-readable; TG_SECRETS_VAULT=1 only) |
+| 132 | `secret_deleted` | mounts/115-secrets.js (FS-I5: {tenant, key} — key name and tenant only; delete of a missing key is a uniform 404; TG_SECRETS_VAULT=1 only) |
+| 133 | `secret_listed` | mounts/115-secrets.js (FS-I5: {tenant} — the listing route returns KEY NAMES only, never values; there is no API route that reads a secret value back, values are consumed by internal code paths only; TG_SECRETS_VAULT=1 only) |
+| 134 | `secret_denied` | mounts/115-secrets.js (FS-I5: {bot} — non-operator touched a secrets route; RBAC refusal audited, key names and values never in the payload) |
 
 ### `sandbox.js` — optional OS sandbox layer for the harness2 jail (FS-F3)
 - **What it is:** a spike, additive and default-OFF. The jail's real
