@@ -137,3 +137,45 @@ Every restore outcome is audited with counts and hashes only:
 - ENOSPC: process exits 1 — fail closed. Tier-C scenario (c) ✓
 - Restart storm ×5: healthz recovers every time, chain monotonic. Tier-C
   scenario (d) ✓
+
+## Multi-tenant operations (FS-A1, 2026-09-04)
+
+Tenant tokens: `tnt_<tenantId>_<rosterToken>`. The tenant claim is
+validated fail-closed at auth (unknown or disabled tenant → 401, both on
+v1 via `09-approvals` and on v2 via `server._auth`). The roster part
+must match an existing bot token exactly.
+
+```bash
+# List tenants the operator can address
+curl -s localhost:8800/v2/tenants/accessible -H "authorization: Bearer $ATLAS" | jq
+
+# Create / disable / enable a tenant (operator)
+curl -s -X POST localhost:8800/v2/tenants -H "authorization: Bearer $ATLAS" \
+  -d '{"name":"acme"}' | jq
+curl -s -X POST localhost:8800/v2/tenants/acme/disable -H "authorization: Bearer $ATLAS" | jq
+curl -s -X POST localhost:8800/v2/tenants/acme/enable  -H "authorization: Bearer $ATLAS" | jq
+```
+
+Tenant-scoped surfaces (all fail-closed on unknown/disabled tenant):
+- `/v2/metrics/tenant/:id` — 404 on unknown/disabled (anti-enumeration)
+- `/v2/events?token=tnt_<id>_<tok>` — SSE stream filtered to `payload.tenant === id`;
+  never receives other tenants' entries or untagged main broadcasts
+- `/v2/tenants/:id/webhooks` — per-tenant subscriptions (`*` = wildcard)
+- `/v2/tenants/:id/quota` — FS-I3 disk/API caps, FS-Z6 resource quotas
+
+Console: operator tenant picker (FS-A1 slice 3) sets `X-Tenant` on all
+operator calls; selection persists in localStorage (`tg_tenant`).
+
+Feature flags (systemd env, all verified live 2026-09-04):
+`TG_TENANT_METRICS`, `TG_FED_AUDIT_DASH`, `TG_SKILL_MARKET_SEARCH`,
+`TG_CHAIN_INTEGRITY`, `TG_AUDIT_EXPORT`, `TG_OPERATOR_SESSION_AUDIT`,
+`TG_ROUTE_LIMITS`, `TG_WEBHOOK_SUBS_TENANT`, `TG_SKILL_SANDBOX`,
+`TG_OPERATOR_DASHBOARD`, `TG_OPERATOR_NOTIFY`, `TG_TENANT_ACTIVITY`.
+
+## Chain growth note (2026-09-04)
+
+`mounts_function_style_skipped` is emitted ONLY when the skip-set
+changes (content-hashed dedup in `http-mounts.js`) — stable boots add
+zero rows. If chain growth resumes at >1/min with no traffic, check for
+a boot loop (`systemctl status tg-gateway` restart counter) before
+suspecting event spam.
