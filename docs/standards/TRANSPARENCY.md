@@ -782,3 +782,7 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 221 | `audit_export_denied` | mounts/156-audit-export.js (FS-Z5: {bot, reason} — non-operator attempted audit export) |
 | 222 | `audit_retention_applied` | mounts/156-audit-export.js (FS-Z5: {by, pruned} — operator applied audit retention policy; pruned count only) |
 | 223 | `audit_retention_denied` | mounts/156-audit-export.js (FS-Z5: {bot, reason} — non-operator attempted audit retention) |
+| 224 | `tenant_quota_read` | mounts/157-tenant-quotas.js (FS-Z6: {by, tenant, resource} — operator read tenant quota/usage) |
+| 225 | `tenant_quota_set` | mounts/157-tenant-quotas.js (FS-Z6: {by, tenant, resource, maxValue} — operator set tenant quota) |
+| 226 | `tenant_quota_denied` | mounts/157-tenant-quotas.js (FS-Z6: {bot, reason} — non-operator attempted quota access) |
+| 227 | `tenant_quota_set_denied` | mounts/157-tenant-quotas.js (FS-Z6: {bot, reason} — non-operator attempted quota set) |
