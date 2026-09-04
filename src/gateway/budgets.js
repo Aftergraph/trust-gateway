@@ -1,6 +1,119 @@
 'use strict';
 const fs = require('node:fs');
 
+class BudgetLedger {
+  /**
+   * Frozen-semantic budget ledger with reservation semantics.
+   * Tracks budgetUsd, spentUsd, reservedUsd with reserve()/settle()/commit()/refund().
+   * Monotonic spending; replay-safe via actionId idempotency.
+   */
+  constructor({ budgetUsd, file, now }) {
+    this.budgetUsd = budgetUsd || 0;
+    this.spentUsd = 0;
+    this.reservedUsd = 0;
+    this.committed = new Map(); // actionId -> cost
+    this.actionHistory = []; // replay-safe audit trail
+    this.file = file;
+    this.now = now || (() => Date.now());
+    this._load();
+  }
+
+  _load() {
+    if (!this.file || !fs.existsSync(this.file)) return;
+    let data;
+    try {
+      data = JSON.parse(fs.readFileSync(this.file, 'utf8'));
+    } catch (err) {
+      throw new Error('budgetLedger: refusing to load corrupt file (fail closed)');
+    }
+    this.budgetUsd = data.budgetUsd || 0;
+    this.spentUsd = data.spentUsd || 0;
+    this.reservedUsd = data.reservedUsd || 0;
+    this.committed = new Map(Object.entries(data.committed || {}));
+    this.actionHistory = data.actionHistory || [];
+  }
+
+  _save() {
+    if (!this.file) return;
+    const tmpFile = this.file + '.tmp';
+    fs.writeFileSync(tmpFile, JSON.stringify({
+      budgetUsd: this.budgetUsd,
+      spentUsd: this.spentUsd,
+      reservedUsd: this.reservedUsd,
+      committed: Object.fromEntries(this.committed),
+      actionHistory: this.actionHistory,
+    }), { mode: 0o600 });
+    if (process.platform !== 'win32') fs.chmodSync(tmpFile, 0o600);
+    fs.renameSync(tmpFile, this.file);
+  }
+
+  /** Reserve budget for action; returns true if successful. */
+  reserve(actionId, cost) {
+    if (this.committed.has(actionId)) {
+      return false; // idempotent: already committed
+    }
+    if (this.spentUsd + this.reservedUsd + cost > this.budgetUsd) {
+      return false; // budget exceeded
+    }
+    this.reservedUsd += cost;
+    this.actionHistory.push({ actionId, cost, type: 'reserve', ts: new Date(this.now()).toISOString() });
+    this._save();
+    return true;
+  }
+
+  /** Commit reserved budget to spent; returns true if successful. */
+  commit(actionId) {
+    if (!this.committed.has(actionId)) {
+      return false; // idempotent: never reserved
+    }
+    const cost = this.committed.get(actionId);
+    this.committed.delete(actionId);
+    this.reservedUsd -= cost;
+    this.spentUsd += cost;
+    this.actionHistory.push({ actionId, cost, type: 'commit', ts: new Date(this.now()).toISOString() });
+    this._save();
+    return true;
+  }
+
+  /** Settle final cost after execution; returns true if successful. */
+  settle(actionId, cost) {
+    if (this.committed.has(actionId)) {
+      return false; // idempotent: already settled
+    }
+    this.committed.set(actionId, cost);
+    this.reservedUsd += cost;
+    this.actionHistory.push({ actionId, cost, type: 'settle', ts: new Date(this.now()).toISOString() });
+    this._save();
+    return true;
+  }
+
+  /** Refund budget if action failed; returns true if successful. */
+  refund(actionId) {
+    if (!this.committed.has(actionId)) {
+      return false; // idempotent: never reserved
+    }
+    const cost = this.committed.get(actionId);
+    this.committed.delete(actionId);
+    this.reservedUsd -= cost;
+    this.actionHistory.push({ actionId, cost, type: 'refund', ts: new Date(this.now()).toISOString() });
+    this._save();
+    return true;
+  }
+
+  get available() {
+    return Math.max(0, this.budgetUsd - this.spentUsd - this.reservedUsd);
+  }
+
+  get summary() {
+    return {
+      budgetUsd: this.budgetUsd,
+      spentUsd: this.spentUsd,
+      reservedUsd: this.reservedUsd,
+      available: this.available,
+    };
+  }
+}
+
 class BudgetStore {
   constructor({ now, file } = {}) {
     this.now = now || (() => Date.now());
@@ -24,8 +137,6 @@ class BudgetStore {
   
   _save() {
     if (!this.file) return;
-    // Write atomically to temp file, then rename. Mode 0600 (A-008): the file
-    // holds per-bot spend data — same secrecy bar as the token stores.
     const tmpFile = this.file + '.tmp';
     fs.writeFileSync(tmpFile, JSON.stringify({
       limits: Object.fromEntries(this.limits),
@@ -51,7 +162,6 @@ class BudgetStore {
   consume(bot) {
     const limit = this.limits.get(bot);
     if (!limit) {
-      // No budget limit for this bot - unlimited
       return { ok: true, unlimited: true };
     }
     
@@ -80,4 +190,4 @@ class BudgetStore {
   }
 }
 
-module.exports = { BudgetStore };
+module.exports = { BudgetLedger, BudgetStore };
