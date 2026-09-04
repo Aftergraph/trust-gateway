@@ -18,9 +18,10 @@
   function saveToken() { localStorage.setItem('tg_token', token); }
 
   async function api(path, opts) {
+    const tenantHdr = (window.TGTenant && typeof window.TGTenant.header === 'function') ? window.TGTenant.header() : {};
     const res = await fetch(path, Object.assign({
-      headers: Object.assign({ 'content-type': 'application/json' }, (opts && opts.headers) || {}),
-    }, opts || {}, { headers: Object.assign({}, (opts && opts.headers) || {}, authed() ? { authorization: 'Bearer ' + token } : {}) }));
+      headers: Object.assign({ 'content-type': 'application/json' }, tenantHdr, (opts && opts.headers) || {}),
+    }, opts || {}, { headers: Object.assign({}, (opts && opts.headers) || {}, authed() ? Object.assign({ authorization: 'Bearer ' + token }, tenantHdr) : {}) }));
     if (res.status === 401) throw Object.assign(new Error('unauthorized'), { status: 401 });
     if (res.status === 403) throw Object.assign(new Error('operator_required'), { status: 403 });
     return res.json();
