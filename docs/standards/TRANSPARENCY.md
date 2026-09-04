@@ -756,8 +756,11 @@ The test compares the table above against a programmatic extraction over
 
 No other exceptions exist. If the extraction finds a `{type: '…'}` string
 that is not in the table (or the table lists something the code no longer
-emits), `tests/standards.test.js` fails — update both in the same commit.| 201 | `graceful_shutdown_initiated` | mounts/149-shutdown.js (FS-Y3: {by} — operator initiated graceful shutdown; TG_SHUTDOWN_ENDPOINT=1 only) |
+emits), `tests/standards.test.js` fails — update both in the same commit.
+| 201 | `graceful_shutdown_initiated` | mounts/149-shutdown.js (FS-Y3: {by} — operator initiated graceful shutdown; TG_SHUTDOWN_ENDPOINT=1 only) |
 | 202 | `graceful_shutdown_denied` | mounts/149-shutdown.js (FS-Y3: {bot, reason} — non-operator, missing_confirm, or already_draining) |
 | 203 | `tenant_webhook_created` | mounts/150-webhook-subs-tenant.js (FS-Y1: {by, tenant, id, url} — operator created a per-tenant webhook subscription; TG_WEBHOOK_SUBS_TENANT=1 only) |
 | 204 | `tenant_webhook_listed` | mounts/150-webhook-subs-tenant.js (FS-Y1: {by, tenant, count} — operator listed per-tenant webhook subscriptions; tenant id + count only) |
 | 205 | `tenant_webhook_deleted` | mounts/150-webhook-subs-tenant.js (FS-Y1: {by, tenant, id} — operator removed a per-tenant webhook subscription; id only) |
+| 206 | `chain_verified` | mounts/151-chain-integrity.js (FS-Y2: {by, checked, ok, mismatches} — operator verified audit chain integrity; counts only) |
+| 207 | `chain_verify_denied` | mounts/151-chain-integrity.js (FS-Y2: {bot, reason} — non-operator attempted chain verification) |
