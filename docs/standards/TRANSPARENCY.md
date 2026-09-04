@@ -851,6 +851,8 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 288 | `workflow_webhook_run` | mounts/26-workflows.js (P2: {workflow_id, work_id} — webhook-triggered WORKS run) |
 | 289 | `workflow_schedule_run` | mounts/26-workflows.js (P2: {workflow_id, works_ok} — schedule-sweep run submission) |
 | 290 | `workflow_sweep_forbidden` | mounts/26-workflows.js (P2: {bot} — non-operator attempted schedule sweep) |
+| 291 | `evals_forbidden` | mounts/06-evals.js (P2: {bot} — non-operator attempted eval run) |
+| 292 | `evals_run` | mounts/06-evals.js (P2: {gate, total, failed, snapshot_hash} — golden-set eval executed) |
 | 260 | `plugin_forbidden` | mounts/35-plugins.js (W4: {bot, method, path} — non-operator plugin write) |
 | 261 | `plugin_permission_rejected` | mounts/35-plugins.js (W4: declared permission rejected at runtime) |
 | 262 | `plugin_delete_forbidden` | mounts/35-plugins.js (W4: uninstall denied by policy) |
