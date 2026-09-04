@@ -14,17 +14,31 @@ const MOUNTS_DIR = path.join(__dirname, 'mounts');
 
 function loadMounts() {
   if (!fs.existsSync(MOUNTS_DIR)) return [];
-  return fs
+  const skipped = [];
+  const mounts = fs
     .readdirSync(MOUNTS_DIR)
     .filter((f) => f.endsWith('.js'))
     .sort()
-    .map((f) => {
+    .flatMap((f) => {
       const m = require(path.join(MOUNTS_DIR, f));
+      // Function-style mounts (module.exports = function mount(gw)) register
+      // themselves via gw.router on a live gateway — they cannot be loaded
+      // statically. Skip them here instead of throwing: a single bad mount
+      // must not take down every gateway-spawning test and the production
+      // boot path (the 252-failure regression since v2r).
+      if (typeof m === 'function') {
+        skipped.push(f);
+        return [];
+      }
       if (!m || !m.name || !m.method || !m.path || typeof m.handle !== 'function') {
         throw new Error(`mounts/${f}: must export {name, method, path, handle}`);
       }
-      return { auth: 'bearer', ...m, file: f };
+      return [{ auth: 'bearer', ...m, file: f }];
     });
+  if (skipped.length > 0) {
+    try { require('./events').audit('mounts_function_style_skipped', { files: skipped }); } catch {}
+  }
+  return mounts;
 }
 
 function match(mount, method, pathname) {

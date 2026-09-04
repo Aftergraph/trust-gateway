@@ -790,3 +790,4 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 229 | `op_session_audit_denied` | mounts/158-operator-session-audit.js (FS-Z7: {bot, reason} — non-operator attempted session audit access) |
 | 230 | `op_active_sessions_read` | mounts/158-operator-session-audit.js (FS-Z7: {by, count} — operator listed active sessions) |
 | 231 | `op_active_sessions_denied` | mounts/158-operator-session-audit.js (FS-Z7: {bot, reason} — non-operator attempted active sessions access) |
+| 232 | `mounts_function_style_skipped` | http-mounts.js (P0 loader fix: {files} — function-style mount files skipped at static load; they register via gw.router on a live gateway. Boot no longer throws on v2r+ mounts) |
