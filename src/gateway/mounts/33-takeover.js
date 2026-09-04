@@ -29,7 +29,7 @@ const { send, readBody } = require('../server');
 const { canApprove } = require('../rbac');
 const crypto = require('node:crypto');
 
-const TAKEOVER_RE = /^\/v2\/takeover(?:\/([^/]+))?\/?$/;
+const TAKEOVER_RE = /^\/v2\/takeover(?:\/([^/]+)?(?:\/hand-back)?)?\/?$/;
 
 async function readJson(req) {
   try {
@@ -57,6 +57,30 @@ module.exports = {
       const rec = store.get(m[1]);
       if (!rec) return send(res, 404, { error: 'not_found' });
       return send(res, 200, rec);
+    }
+
+    // ── POST /v2/takeover/:id/hand-back — human hands control back to the agent.
+    if (req.method === 'POST' && m[1] && ctx.url.pathname.endsWith('/hand-back')) {
+      if (!canApprove(ctx.bot)) {
+        gw._audit({ type: 'takeover_handback_forbidden', bot: ctx.bot.name });
+        return send(res, 403, { error: 'operator_required' });
+      }
+      const rec = store.get(m[1]);
+      if (!rec) return send(res, 404, { error: 'not_found' });
+      if (rec.handed_back_at) return send(res, 409, { error: 'already_handed_back' });
+      // Ownership returns to the agent principal: capabilities restored to the
+      // PRE-takeover set (never wider — same no-escalation law as issuance).
+      rec.handed_back_at = store.now();
+      rec.handed_back_by = ctx.bot.name;
+      // restored = the full pre-takeover authority envelope (the agent's own original caps)
+      rec.restored_capabilities = rec.previous_capabilities;
+      gw._audit({
+        type: 'takeover_handed_back',
+        takeover_id: rec.id,
+        principal_id: rec.principal_id,
+        restored_capabilities: rec.restored_capabilities,
+      });
+      return send(res, 200, { ok: true, takeover: rec });
     }
 
     // ── POST /v2/takeover ──
@@ -127,6 +151,7 @@ function getTakeoverStore(gw) {
     const pending = new Map(); // principal_id -> [approval rows]
     const issued = new Map();
     const caps = new Map(); // principal_id -> [capabilities]
+    const now = () => new Date().toISOString();
     gw._takeoverStore = {
       revokePendingForPrincipal(gw2, principalId, reason) {
         const out = [];
@@ -161,6 +186,7 @@ function getTakeoverStore(gw) {
       },
       put(rec) { issued.set(rec.id, rec); if (!caps.has(rec.principal_id)) caps.set(rec.principal_id, rec.granted_capabilities); },
       get(id) { return issued.get(id) || null; },
+      now: () => new Date().toISOString(),
     };
   }
   return gw._takeoverStore;

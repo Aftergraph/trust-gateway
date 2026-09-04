@@ -836,6 +836,8 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 273 | `approvals_batch_resolved` | mounts/07-approvals-v2.js (P1: {approver, ops, approved} — batch resolution summary) |
 | 274 | `approvals_batch_forbidden` | mounts/07-approvals-v2.js (P1: {bot} — non-operator attempted batch) |
 | 275 | `approvals_metrics_forbidden` | mounts/07-approvals-v2.js (P1: {bot} — non-operator attempted metrics read) |
+| 276 | `takeover_handback_forbidden` | mounts/33-takeover.js (HC8: {bot} — non-operator attempted hand-back) |
+| 277 | `takeover_handed_back` | mounts/33-takeover.js (HC8: {takeover_id, principal_id, restored_capabilities} — ownership returned to agent, pre-takeover envelope restored) |
 | 260 | `plugin_forbidden` | mounts/35-plugins.js (W4: {bot, method, path} — non-operator plugin write) |
 | 261 | `plugin_permission_rejected` | mounts/35-plugins.js (W4: declared permission rejected at runtime) |
 | 262 | `plugin_delete_forbidden` | mounts/35-plugins.js (W4: uninstall denied by policy) |
