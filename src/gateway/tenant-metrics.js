@@ -16,6 +16,13 @@ function _parsePayload(payload) {
 
 function getMetrics(tenant, windowMs) {
   if (!enabled() || !tenant) return null;
+  // Anti-enumeration: unknown or disabled tenant → null (mount serves 404).
+  // Read the store via db directly — getTenantStore() requires a gw instance
+  // which module-level helpers don't have.
+  try {
+    const row = db.prepare('SELECT disabled FROM tenants WHERE id = ?').get(tenant);
+    if (!row || row.disabled) return null;
+  } catch { /* tenant table missing — proceed with metrics-only view */ }
   const now = Date.now();
   const since = now - (windowMs || 3600000); // default 1h
   const rows = db.prepare(

@@ -47,4 +47,19 @@ describe('fn-route dispatch contract', () => {
     const anonReq = {};
     assert.equal(isOperator(anonReq), null, 'anon must be refused');
   });
+
+  it('tenant metrics: unknown/disabled tenant → null (anti-enumeration 404)', async () => {
+    const tm = require('../src/gateway/tenant-metrics');
+    // Enabled fixture tenant from tenants-mount tests may exist; ghost never does
+    process.env.TG_TENANT_METRICS = '1';
+    delete require.cache[require.resolve('../src/gateway/tenant-metrics')];
+    const tm2 = require('../src/gateway/tenant-metrics');
+    // ghost-tenant is not in the tenants table → null (mount maps to 404)
+    assert.equal(tm2.getMetrics('ghost-no-such-tenant'), null);
+    // 'main' exists (ensureMain) → non-null structure
+    const r = tm2.getMetrics('main');
+    assert.ok(r, 'main tenant must resolve');
+    assert.equal(r.tenant, 'main');
+    delete process.env.TG_TENANT_METRICS;
+  });
 });

@@ -22,6 +22,11 @@ module.exports = function mountTenantMetrics(gw) {
     const url = new URL(req.url, 'http://localhost');
     const windowMs = Number(url.searchParams.get('window')) || undefined;
     const result = tm.getMetrics(tenant, windowMs);
+    // Anti-enumeration: unknown/disabled tenant → 404, never 403 or empty 200
+    if (!result) {
+      res.statusCode = 404;
+      return res.end(JSON.stringify({ error: 'not_found' }));
+    }
     audit('tenant_metrics_read', { by: op.name, tenant, totalEvents: result.totalEvents });
     res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify(result));

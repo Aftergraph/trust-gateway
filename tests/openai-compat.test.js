@@ -17,6 +17,11 @@ const {
 const SCHEME = 'Bear' + 'er '; // built at runtime (redactor hygiene)
 
 function makeGw() {
+  // Offline determinism: tests must never inherit a live TG_LLM_* config
+  // (the brain would answer instead of the offline planner).
+  delete process.env.TG_LLM_BASE_URL;
+  delete process.env.TG_LLM_KEY;
+  delete process.env.TG_LLM_MODEL;
   return new Gateway({
     bots: {
       forge: { token: 'tok-forge', role: 'worker', capabilities: ['fs.read', 'fs.write:*'] },
