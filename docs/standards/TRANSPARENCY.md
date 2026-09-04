@@ -811,3 +811,5 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 250 | `tenant_webhook_denied` | mounts/150-webhook-subs-tenant.js (FS-Y1: {bot} — non-operator touched tenant webhook route) |
 | 251 | `restricted` | telemetry-tenant.js (FS-K2: tenant-scoped telemetry projection for unknown types — the scalar projection itself, never entry contents) |
 | 252 | `tenant_quota_read` | mounts/157-tenant-quotas.js (FS-Z6: {by, tenant, resource} — operator read tenant quota/usage) |
+| 253 | `tenant_access_listed` | mounts/159-tenant-access.js (FS-A1-S3: {by, count} — operator listed accessible tenants; ids + names only, no secrets) |
+| 254 | `tenant_access_denied` | mounts/159-tenant-access.js (FS-A1-S3: {bot, reason} — non-operator attempted tenant listing) |
