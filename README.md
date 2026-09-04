@@ -18,7 +18,7 @@ Design: `docs/TRUST-GATEWAY-V1.md`. Roadmap: `docs/ROADMAP.md` (v3).
 
 The gateway is a zero-dependency Node.js runtime (SQLite persistence via
 SqlChain, mounts-only HTTP surface). Verified surfaces — each backed by
-dedicated modules and tests (145 test files):
+dedicated modules and tests (175 test files):
 
 | Surface | Modules |
 |---|---|
