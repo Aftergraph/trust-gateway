@@ -1,111 +1,99 @@
-# Agent Workforce — Trust Gateway v1
+# Trust Gateway
 
-En styret AI-workforce: specialist-bots (persona + persistent memory), hver med
-isolerede værktøjer og model-routing — samlet bag én **Trust Gateway** der
-beslutter hver handling **før** den sker (fail-closed) og forsegler den i en
-tamper-evident audit chain.
+Runtime control and enforcement plane for governed autonomous agent work —
+specialist bots (persona + persistent memory) with isolated tools, each action
+decided **before** it happens (fail-closed) and sealed into a tamper-evident
+audit chain.
 
-Positionering: se `docs/COMPARISON-2026-09-02.md` (Grok Bot × OpenBot × Hermes).
-Design: `docs/TRUST-GATEWAY-V1.md`.
+> Trust Gateway is the runtime control and enforcement plane of the working
+> ABDE Platform architecture. Its runtime evidence does not automatically
+> establish AIE conformance or scientific claims.
 
-## Komponenter
+**Brand note (provisional, once):** ABDE Intelligence is the current provisional brand candidate — not trademark cleared; `@Aftergraph` is a temporary namespace.
 
-| Modul | Formål |
+Positioning: `docs/COMPARISON-2026-09-02.md` (Grok Bot × OpenBot × Hermes).
+Design: `docs/TRUST-GATEWAY-V1.md`. Roadmap: `docs/ROADMAP.md` (v3).
+
+## Verified current state
+
+The gateway is a zero-dependency Node.js runtime (SQLite persistence via
+SqlChain, mounts-only HTTP surface). Verified surfaces — each backed by
+dedicated modules and tests (145 test files):
+
+| Surface | Modules |
 |---|---|
-| `src/gateway/hash-chain.js` | Append-only audit chain (sha256-kædet, replay-beskyttet genesis) |
-| `src/gateway/policy.js` | Fail-closed classification + decision (read/write/destructive/secret) |
-| `src/gateway/approvals.js` | Menneske-approvals med TTL, fail-closed på expiry |
-| `src/gateway/server.js` | HTTP API med write-ahead audit (decision logges FØR dispatch) |
-| `src/gateway/client.js` | Zero-dependency Node client SDK (GatewayClient) |
+| Tenant / auth / RBAC | `113-tenants.js`, `101-auth.js`, `102-identity.js`, `159-tenant-access.js`, scrypt user accounts + sessions (FS-A1) |
+| Policy + approvals | `src/gateway/policy.js` (fail-closed classification: read/write/destructive/secret), durable approvals with TTL (`09-approvals.js`, `approvals-db.js`) |
+| Budgets | `52-budgets.js` |
+| Rate limiting | `53-rate-limit.js`, persistent rate ledger (`129-rate-ledger.js`, FS-M3) |
+| Token / secrets security | `54-tokens.js`, external API keys (`112-apikeys.js`, `tgk_` sha256-stored), secrets vault + rotation (`115-secrets.js`, `119-`, `124-`) |
+| Telegram bridge | `71-telegram.js`, `src/bridge/telegram.js` |
+| Audit chain | write-ahead hash-chain audit, integrity check, prune + archive (`151-chain-integrity.js`, `142-`, `111-`) |
+| Audit export + search | JSONL export (`117-`/`156-audit-export.js`), full-text audit search (`10-`/`131-audit-search.js`) |
+| Plugin runtime | mounts system — every endpoint is a file in `src/gateway/mounts/` (`35-plugins.js`) |
+| ComputerSession | jailed per-bot computers (`42-computer.js`, `src/gateway/computer.js`) |
+| Artifacts | `40-artifacts.js`, `src/gateway/artifacts.js` |
+| Adaptive Cards / Adaptive Workspace | `57-cards.js`, console app `app/` (cards.js, compose.js, workspace primitives) |
+| Provider/model routing | `45-providers.js`, `85-`/`92-providers*` (OpenAI-compatible mount, live probing) |
+| Ops | backup/restore with sha256 manifest + chain-head binding (`110-`, `155-`), feature flags (`126-`/`130-`), tenant quotas, operator dashboard (`135-`), healthz deep (`145-`), webhooks (`125-`/`150-`) |
+| Skills / harness2 | skills as governed objects with approval-gated run (`105-skills.js`, `147-skill-sandbox.js`), jailed build/run project model (`55-harness.js`, `106-harness2.js`) |
 
-## Garantier i v1
+Wave-B (integrated in HEAD): Wave-B surfaces + Adaptive Cards slice composed
+onto the FS architecture. Conformance: tier-A 9/9 domains, tier-B and tier-C
+batteries with evidence in `docs/ROADMAP.md`.
 
-1. **Ukendt tool = destruktiv** (fail closed) → kræver menneske-godkendelse
-2. **Destructive aldrig auto-eksekveret** — heller ikke med capability
-3. **Secret-værdier nå aldrig audit** — kun længde logges
-4. **Write-ahead audit** — også refusals og crashes er på rekord
-5. **Tamper-evident** — én ændret byte i historikken bryder alle efterfølgende hashes
-6. **Approvals expire fail-closed** (15 min TTL)
+## Core guarantees (unchanged since v1)
 
-## Kør
+1. **Unknown tool = destructive** (fail closed) → requires human approval
+2. **Destructive is never auto-executed** — not even with capability
+3. **Secret values never reach the audit** — only length is logged
+4. **Write-ahead audit** — refusals and crashes are on record too
+5. **Tamper-evident** — one changed byte breaks all subsequent hashes
+6. **Approvals expire fail-closed** (TTL)
+
+## Run
 
 ```bash
 npm test          # unit + integration tests (node:test, 0 dependencies)
-npm run demo      # live HTTP-demo: fuldt bot-workflow inkl. tamper-detektion
-```
-
-Demo-output (verificeret 2026-09-04):
-
-```
-✔ unauthenticated → 401
-✔ read allowed
-✔ write (capability) executed
-✔ destructive → 202 needs_approval
-✔ destructive NOT executed
-✔ deny blocks execution
-✔ approve → executed
-✔ secret value NOT in audit
-✔ audit chain verifies  → length=15
-✔ tampering detected  → at seq 2 (hash_mismatch)
-✔ healthz (no auth)
-★ DEMO PASSED — all checks green
+npm run demo      # live HTTP demo: full bot workflow incl. tamper detection
 ```
 
 ### Bot SDK
 
-En zero-dependency Node-client (`src/gateway/client.js`) pakker den dokumenterede
-HTTP API op i en `GatewayClient`-klasse. Netværks- og parse-fejl kaster;
-HTTP-fejl (401/403/202/502) returneres som et resolved objekt med `error` eller
-`decision`, så klientkoden kan grense uden try/catch omkring hver call.
+Zero-dependency Node client (`src/gateway/client.js`):
 
 ```js
 const { GatewayClient } = require('./src/gateway/client');
-const gw = new GatewayClient({ baseUrl: 'http://100.71.253.52:8800', token: process.env.TG_TOKEN });
+const gw = new GatewayClient({ baseUrl: 'http://127.0.0.1:8800', token: process.env.TG_TOKEN });
 const r = await gw.action('fs.read:notes/x.md');
 ```
 
-Metoder: `action(tool, args?)`, `pending()`, `approve(id)`, `deny(id)`, `verify()`,
-`audit(since=0)`. Se `example/bot.js` for en komplet read → write → needs_approval →
-human-in-the-loop workflow.
+Methods: `action(tool, args?)`, `pending()`, `approve(id)`, `deny(id)`,
+`verify()`, `audit(since=0)`. See `example/bot.js` for a complete
+read → write → needs_approval → human-in-the-loop workflow.
 
-## v2 — Search, Operator Console, Plugin Mounts
+### Operator console
 
-v2 tilføjer et plugin-mount system (`src/gateway/mounts/*.js`) og en audit-søgeendpoint,
-uden at ændre `server.js`. Hver mount-fil erklærer sin egen auth-mode og route.
+`example/console.js` shows the governed loop: propose → approve → seal.
+A full web console lives in `app/` (login, tenant picker, chat, cards,
+compose, icons, offline page).
 
-### Audit Search (`GET /v2/search`)
+### Plugin mounts
 
-Fuldtekst-søgning over audit-loggen. Returnerer matches newest-first.
+New endpoints are files in `src/gateway/mounts/` — never touch `server.js`.
+Each file exports `{ name, method, path, auth, handle }`; auth modes:
+`bearer`, `query` (?token=), `none`. Function-style mounts are wired through
+the router facade with `:param` matching and RBAC.
 
-```
-GET /v2/search?q=shell&token=<operator-token>
-→ { hits: [{ seq, ts, hash, payload }, ...], query, total }
-```
+## Honest limits (documented, not hidden)
 
-Auth: query-param `?token=` (browser EventSource kan ikke sætte headers).
-Implementering: `src/gateway/search.js` (in-memory substring; FTS5 når SqlChain lander).
-Mount: `src/gateway/mounts/10-search.js`.
+- Jail is process discipline, not an OS sandbox (OS-sandbox hardening on roadmap).
+- Docs/site commercial claims carry nuance per the transparency wave (FS-E4);
+  see `docs/ROADMAP.md` gap analysis.
 
-### Operator Console Demo
+## License
 
-`example/console.js` viser den styrede løkke: propose → approve → seal.
-Bruger GatewayClient SDK + raw fetch for `/v2/search`.
-
-```bash
-GATEWAY_URL=http://127.0.0.1:8800 GATEWAY_TOKEN=tok-atlas node example/console.js
-```
-
-### Plugin Mount System
-
-Nye endpoints tilføjes som filer i `src/gateway/mounts/` — server.js rører du ikke.
-Hver fil eksporterer `{ name, method, path, auth, handle }`. Auth-modes:
-`bearer` (Authorization header), `query` (?token=), `none`.
-
-## Vejen videre (ikke committed, kun vision)
-
-- v2: container-isolation pr. bot (gVisor), persistence af approvals, TLS
-- ADR: AG-UI vs. OpenAI-compat som agent-protokol
-- Hosted multi-tenant edition (SMB-pakken)
+Apache-2.0.
 
 ---
 
