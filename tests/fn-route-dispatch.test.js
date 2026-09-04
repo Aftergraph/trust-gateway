@@ -49,10 +49,28 @@ describe('fn-route dispatch contract', () => {
   });
 
   it('tenant metrics: unknown/disabled tenant → null (anti-enumeration 404)', async () => {
+    // Hermetic DB: this test must not depend on the developer checkout's
+    // live data/gateway.db (cwd-relative resolution made it pass only where
+    // a 'main' tenant already existed — e.g. the VDS repo dir — but fail in
+    // the works CI checkout under /tmp, where the DB starts empty).
+    // Point TG_DB_FILE at a temp file and create 'main' explicitly.
+    const os = require('node:os');
+    const path = require('node:path');
+    const fs = require('node:fs');
+    const tmpDb = path.join(os.tmpdir(), `fnroute-${process.pid}-${Date.now()}.db`);
+    process.env.TG_DB_FILE = tmpDb;
+    delete require.cache[require.resolve('../src/gateway/db')];
+    delete require.cache[require.resolve('../src/gateway/tenants')];
+    delete require.cache[require.resolve('../src/gateway/tenant-metrics')];
+    const { TenantStore } = require('../src/gateway/tenants');
+    new TenantStore().ensureMain();
+    // chain_entries schema (tenant-metrics reads the audit chain) is created
+    // by the Gateway boot normally; in this hermetic DB we must create it.
+    const { SqlChain } = require('../src/gateway/sql-chain');
+    new SqlChain({ file: tmpDb });
     const tm = require('../src/gateway/tenant-metrics');
     // Enabled fixture tenant from tenants-mount tests may exist; ghost never does
     process.env.TG_TENANT_METRICS = '1';
-    delete require.cache[require.resolve('../src/gateway/tenant-metrics')];
     const tm2 = require('../src/gateway/tenant-metrics');
     // ghost-tenant is not in the tenants table → null (mount maps to 404)
     assert.equal(tm2.getMetrics('ghost-no-such-tenant'), null);
@@ -61,5 +79,8 @@ describe('fn-route dispatch contract', () => {
     assert.ok(r, 'main tenant must resolve');
     assert.equal(r.tenant, 'main');
     delete process.env.TG_TENANT_METRICS;
+    delete require.cache[require.resolve('../src/gateway/db')];
+    delete require.cache[require.resolve('../src/gateway/tenant-metrics')];
+    fs.rmSync(tmpDb, { force: true });
   });
 });
