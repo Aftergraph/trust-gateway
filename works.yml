@@ -1,0 +1,28 @@
+# works.yml — Trust Gateway CI via the works control plane.
+#
+# Zero GitHub Actions in this repo by convention; the local wave
+# scripts (wave-*/conformance-tier-*) remain the dev-loop tools.
+# This pipeline is the per-push verification gate published as the
+# `works-execution` commit status.
+version: 1
+
+work:
+  verify:
+    triggers:
+      - push
+      - pull_request
+
+    requirements:
+      confidence: development
+      os: linux
+      arch: amd64
+      pool: avc-core
+
+    nodes:
+      test:
+        run: |
+          export PATH=/opt/works/node-current/bin:$PATH
+          npm test
+        cache: true
+        cache_key_inputs: [run, repository]
+        timeout_s: 900
