@@ -53,10 +53,14 @@ module.exports = {
       await new Promise(r => req.on('end', r));
       let body;
       try { body = JSON.parse(raw || '{}'); } catch { return send(res, 400, { error: 'invalid_json' }); }
-      const { role, content } = body || {};
+      const { role, content, meta } = body || {};
       if (typeof role !== 'string' || !['user', 'assistant'].includes(role)) return send(res, 400, { error: 'role_required' });
       if (typeof content !== 'string' || content.length < 1) return send(res, 400, { error: 'content_required' });
-      const msg = store.appendMessage(id, role, content);
+      // Composer v1: validate meta shape if present (attachments + mentions only)
+      if (meta && typeof meta !== 'object') return send(res, 400, { error: 'invalid_meta' });
+      if (meta && meta.attachments && !Array.isArray(meta.attachments)) return send(res, 400, { error: 'attachments_array_required' });
+      if (meta && meta.mentions && !Array.isArray(meta.mentions)) return send(res, 400, { error: 'mentions_array_required' });
+      const msg = store.appendMessage(id, role, content, meta);
       return send(res, 201, msg);
     }
 

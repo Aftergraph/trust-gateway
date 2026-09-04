@@ -44,10 +44,16 @@ class ConversationStore {
   }
 
   /** Append a message to a conversation. Returns { id, conversation_id, role, content, ts, payload_hash }. */
-  appendMessage(conversationId, role, content) {
+  /**
+   * Append a message. Composer v1 (P1): `meta` optionally carries attachments
+   * [{name, mime, size, sha256}] and mentions [agent_id] — both are part of the
+   * hashed payload (tamper-evident like the rest of the message).
+   */
+  appendMessage(conversationId, role, content, meta = {}) {
     const msgId = crypto.randomUUID();
     const ts = Date.now();
-    const payload = JSON.stringify({ conversation_id: conversationId, role, content, ts });
+    const cleanMeta = meta && (meta.attachments || meta.mentions) ? meta : null;
+    const payload = JSON.stringify({ conversation_id: conversationId, role, content, ts, meta: cleanMeta });
     const payloadHash = sha256(payload);
 
     db.prepare(
@@ -59,7 +65,23 @@ class ConversationStore {
       `UPDATE conversations SET updated_at = ? WHERE id = ? AND tenant = ?`
     ).run(ts, conversationId, this.tenant);
 
-    return { id: msgId, conversation_id: conversationId, role, content, ts, payload_hash: payloadHash };
+    const out = { id: msgId, conversation_id: conversationId, role, content, ts, payload_hash: payloadHash };
+    if (cleanMeta) out.meta = cleanMeta;
+    return out;
+  }
+
+  /**
+   * Composer context-preview (P1): what the model will see next turn —
+   * message tail + any pending NeedsYou + active proposals for this tenant.
+   * Read-only; no side effects.
+   */
+  preview(conversationId, { tail = 10 } = {}) {
+    const messages = this.getMessages(conversationId, 0).slice(-tail);
+    return {
+      conversation_id: conversationId,
+      message_tail: messages,
+      tail_count: messages.length,
+    };
   }
 
   /** Get messages for a conversation, optionally since a timestamp.
