@@ -847,6 +847,10 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 284 | `workflow_archived` | mounts/26-workflows.js (P2: {workflow_id}) |
 | 285 | `workflow_run_forbidden` | mounts/26-workflows.js (P2: {workflow_id, bot} — non-operator attempted run) |
 | 286 | `workflow_run_submitted` | mounts/26-workflows.js (P2: {workflow_id, version, works_ok, work_id} — submitted to WORKS) |
+| 287 | `workflow_webhook_rejected` | mounts/26-workflows.js (P2: {workflow_id} — webhook HMAC signature invalid) |
+| 288 | `workflow_webhook_run` | mounts/26-workflows.js (P2: {workflow_id, work_id} — webhook-triggered WORKS run) |
+| 289 | `workflow_schedule_run` | mounts/26-workflows.js (P2: {workflow_id, works_ok} — schedule-sweep run submission) |
+| 290 | `workflow_sweep_forbidden` | mounts/26-workflows.js (P2: {bot} — non-operator attempted schedule sweep) |
 | 260 | `plugin_forbidden` | mounts/35-plugins.js (W4: {bot, method, path} — non-operator plugin write) |
 | 261 | `plugin_permission_rejected` | mounts/35-plugins.js (W4: declared permission rejected at runtime) |
 | 262 | `plugin_delete_forbidden` | mounts/35-plugins.js (W4: uninstall denied by policy) |

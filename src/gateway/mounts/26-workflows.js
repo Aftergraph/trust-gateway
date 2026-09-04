@@ -19,7 +19,7 @@ const { canApprove } = require('../rbac');
 const { WorkflowStore } = require('../workflows.js');
 const worksClient = require('../works-client.js');
 
-const RE = /^\/v2\/workflows(?:\/([^/]+)(?:\/([^/]+))?)?\/?$/;
+const RE = /^\/v2\/workflows(?:\/([^/]+)?(?:\/([^/]+))?)?\/?$/;
 
 async function readJson(req) {
   try {
@@ -70,6 +70,24 @@ module.exports = {
         return send(res, 400, { error: e.message });
       }
     }
+    if (req.method === 'POST' && id === 'trigger-sweep') {
+      if (!canApprove(ctx.bot)) {
+        gw._audit({ type: 'workflow_sweep_forbidden', bot: ctx.bot.name });
+        return send(res, 403, { error: 'operator_required' });
+      }
+      const swept = [];
+      for (const wfId of store.dueSchedules()) {
+        const w = store._must(wfId);
+        const workBody = store.toWorksWork(w);
+        const out = await worksClient.createWork({
+          objective: workBody.objective, mission_id: `workflow_${wfId}`, queue: true,
+        });
+        if (out.ok) store.markRun(wfId, out.work_id);
+        swept.push({ workflow_id: wfId, works_ok: out.ok, work_id: out.work_id || null });
+        gw._audit({ type: 'workflow_schedule_run', workflow_id: wfId, works_ok: out.ok });
+      }
+      return send(res, 200, { ok: true, swept });
+    }
     if (req.method === 'POST' && id) {
       const { body, error } = await readJson(req);
       if (error) return send(res, 400, { error });
@@ -83,6 +101,50 @@ module.exports = {
           const w = store.archive(id);
           gw._audit({ type: 'workflow_archived', workflow_id: id });
           return send(res, 200, { ok: true, workflow: w });
+        }
+        // ── POST /v2/workflows/:id/webhook — HMAC-verified trigger (P2) ──
+        if (action === 'webhook') {
+          const w = store._must(id);
+          const trigger = (w.triggers || []).find((t) => t.type === 'webhook');
+          if (!trigger) return send(res, 409, { error: 'webhook_not_configured' });
+          const sig = (req.headers['x-works-signature'] || '');
+          const expected = 'sha256=' + require('node:crypto')
+            .createHmac('sha256', trigger.secret || '')
+            .update(JSON.stringify(body))
+            .digest('hex');
+          if (!sig || sig.length !== expected.length ||
+              !require('node:crypto').timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
+            console.error('SIG-DEBUG: sig=', sig.slice(0,20), 'expected=', expected.slice(0,20), 'body=', JSON.stringify(body).slice(0,60));
+            gw._audit({ type: 'workflow_webhook_rejected', workflow_id: id });
+            return send(res, 401, { error: 'invalid_signature' });
+          }
+          if (w.status !== 'active') return send(res, 409, { error: 'not_active', status: w.status });
+          const workBody = store.toWorksWork(w);
+          const out = await worksClient.createWork({
+            objective: workBody.objective, mission_id: `workflow_${id}`, queue: true,
+          });
+          if (!out.ok) return send(res, 502, { error: 'works_submission_failed', detail: out.reason });
+          store.markRun(id, out.work_id);
+          gw._audit({ type: 'workflow_webhook_run', workflow_id: id, work_id: out.work_id });
+          return send(res, 200, { ok: true, work_id: out.work_id });
+        }
+        if (action === 'trigger-sweep') {
+          if (!canApprove(ctx.bot)) {
+            gw._audit({ type: 'workflow_sweep_forbidden', bot: ctx.bot.name });
+            return send(res, 403, { error: 'operator_required' });
+          }
+          const swept = [];
+          for (const wfId of store.dueSchedules()) {
+            const w = store._must(wfId);
+            const workBody = store.toWorksWork(w);
+            const out = await worksClient.createWork({
+              objective: workBody.objective, mission_id: `workflow_${wfId}`, queue: true,
+            });
+            if (out.ok) store.markRun(wfId, out.work_id);
+            swept.push({ workflow_id: wfId, works_ok: out.ok, work_id: out.work_id || null });
+            gw._audit({ type: 'workflow_schedule_run', workflow_id: wfId, works_ok: out.ok });
+          }
+          return send(res, 200, { ok: true, swept });
         }
         if (action === 'run') {
           if (!canApprove(ctx.bot)) {

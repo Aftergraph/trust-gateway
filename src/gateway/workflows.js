@@ -182,6 +182,37 @@ class WorkflowStore {
       correlation_id: `workflow_${w.id}_v${w.version}`,
     };
   }
+  // ── P2: trigger execution (schedule) ─────────────────────────────────────
+
+  /** Schedule triggers due for a run: active workflows whose interval elapsed. */
+  dueSchedules() {
+    const nowMs = Date.parse(this.now());
+    const due = [];
+    for (const w of this.workflows.values()) {
+      if (w.status !== 'active') continue;
+      for (const t of w.triggers || []) {
+        if (t.type !== 'schedule') continue;
+        const everyMs = (Number(t.every_minutes) || 0) * 60000;
+        if (everyMs <= 0) continue;
+        const last = w.last_run_at ? Date.parse(w.last_run_at) : 0;
+        if (nowMs - last >= everyMs) due.push(w.id);
+      }
+    }
+    return due;
+  }
+
+  /** Stamp the last run (called by the mount after a successful submission). */
+  markRun(id, workId) {
+    const w = this._must(id);
+    w.last_run_at = this.now();
+    w.last_work_id = w.last_work_id || [];
+    w.last_work_id.push(workId);
+    if (w.last_work_id.length > 20) w.last_work_id.shift(); // bounded tail
+    w.updated_at = this.now();
+    this._save();
+    return w;
+  }
+
 }
 
 module.exports = { WorkflowStore };
