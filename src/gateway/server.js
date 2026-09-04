@@ -192,6 +192,13 @@ class Gateway extends EventEmitter {
     for (const r of this._fnRoutes) {
       if (r.method !== '*' && r.method !== method) continue;
       if (typeof r.path === 'string') {
+        // ':param' segments match any non-slash segment
+        if (r.path.includes(':')) {
+          const pat = new RegExp('^' + r.path.split('/').map(s => s.startsWith(':') ? '([^/]+)' : s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('/') + '$');
+          const m = pathname.match(pat);
+          if (m) return { handler: r.handler, params: m };
+          continue;
+        }
         if (r.path !== pathname) continue;
         return { handler: r.handler, params: null };
       }
@@ -232,6 +239,7 @@ class Gateway extends EventEmitter {
     if (fnMatch) {
       const bot = this._auth(req);
       if (!bot) { this._audit({ type: 'auth_rejected', path: pathname }); return send(res, 401, { error: 'unauthorized' }); }
+      req.bot = bot; // fn-mount handlers call isOperator(req) on the raw req
       return fnMatch.handler(req, res, { url, params: fnMatch.params, bot });
     }
 

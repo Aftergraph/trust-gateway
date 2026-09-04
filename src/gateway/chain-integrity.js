@@ -1,25 +1,19 @@
 'use strict';
 // FS-Y2 — chain integrity check endpoint.
 // Exposes verifyRange(from, to) and verifyFull() that recompute hashes
-// and compare against stored values. Returns {ok, checked, mismatches[]}.
+// using the canonical hash-chain entryHash formula.
+// Returns {ok, checked, mismatches[]}.
 // Inert when TG_CHAIN_INTEGRITY unset.
 
 const { db } = require('./db');
-const crypto = require('node:crypto');
+const { entryHash } = require('./hash-chain');
 
 function enabled() {
   return process.env.TG_CHAIN_INTEGRITY === '1';
 }
 
 function _hash(row) {
-  // Recompute hash from the stored payload + metadata fields
-  const payload = JSON.stringify({
-    seq: row.seq,
-    payload: row.payload,
-    prev_hash: row.prev_hash,
-    ts: row.ts,
-  });
-  return crypto.createHash('sha256').update(payload).digest('hex');
+  return entryHash(row.seq, row.prev_hash, row.ts, JSON.parse(row.payload));
 }
 
 function verifyRange(fromId, toId) {
