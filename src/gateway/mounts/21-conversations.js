@@ -1,4 +1,4 @@
-use strict';
+'use strict';
 
 const { ConversationStore } = require('../conversations');
 const { send } = require('../server');

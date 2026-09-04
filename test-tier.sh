@@ -44,12 +44,15 @@ for domain in A B C D E F G H I; do
   source "$SHARD_MAP"; eval "files=\$SHARD_${domain}"
   [ -z "$files" ] && continue
   (
+    SHARD_DB=$(mktemp -d)/gateway-$domain.db   # per-shard db: no cross-shard SQLITE lock contention
+    export TG_DB_FILE="$SHARD_DB"
     $WIN_NODE --test --test-concurrency=1 $files > ".avc/state/tg-shard-$domain.log" 2>&1
     rc=$?
     if [ $rc -ne 0 ]; then
       # single retry: flakes here are DrvFs write-visibility artifacts (WSL /mnt/c),
       # not logic regressions — retry once, keep both logs.
       sleep 1
+      SHARD_DB2=$(mktemp -d)/gateway-$domain.db; export TG_DB_FILE="$SHARD_DB2"
       $WIN_NODE --test --test-concurrency=1 $files > ".avc/state/tg-shard-$domain.log" 2>&1
       rc=$?
     fi
