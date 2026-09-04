@@ -9,7 +9,11 @@ module.exports = {
   path: /^\/v2\/conversations(?:\/.*)?$/,
   auth: 'bearer',
   handle: async (gw, req, res, ctx) => {
-    const store = new ConversationStore(req.bot.tenant);
+    // Tenant scoping (FS-E1d pattern): tnt_<id>_ prefix claim on the bearer token,
+    // else the main tenant. ctx.bot is the authenticated roster entry.
+    const tm = /^tnt_([a-z0-9-]{3,24})_/.exec((req.headers['authorization'] || '').replace(/^Bearer\s+/i, ''));
+    const tenant = tm ? tm[1] : 'main';
+    const store = new ConversationStore(tenant);
     const pathname = ctx.url.pathname;
     const seg = pathname.split('/');
     

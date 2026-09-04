@@ -27,16 +27,16 @@ module.exports = {
 
       // GET /v2/need-you — list items for current tenant
       if (seg.length === 2 && method === 'GET') {
-        if (!ctx.tenant || !ctx.tenant.id) {
+        if (!ctx.tenant || !tenant) {
           return send(res, 400, { error: 'tenant_required' });
         }
-        const items = store.listByTenant(ctx.tenant.id);
+        const items = store.listByTenant(tenant);
         return send(res, 200, { items });
       }
 
       // POST /v2/need-you — create a new item
       if (seg.length === 2 && method === 'POST') {
-        if (!ctx.tenant || !ctx.tenant.id) {
+        if (!ctx.tenant || !tenant) {
           return send(res, 400, { error: 'tenant_required' });
         }
         let raw = '';
@@ -62,7 +62,7 @@ module.exports = {
         }
 
         const item = store.create({
-          tenantId: ctx.tenant.id,
+          tenantId: tenant,
           type: doc.type,
           subject: doc.subject,
           details: doc.details || null,
