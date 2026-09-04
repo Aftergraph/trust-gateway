@@ -283,3 +283,9 @@ TG_FED_AUDIT_DASH, TG_SKILL_MARKET_SEARCH, TG_CHAIN_INTEGRITY,
 TG_AUDIT_EXPORT, TG_OPERATOR_SESSION_AUDIT, TG_ROUTE_LIMITS,
 TG_WEBHOOK_SUBS_TENANT, TG_SKILL_SANDBOX, TG_OPERATOR_DASHBOARD,
 TG_OPERATOR_NOTIFY). TRANSPARENCY: 252 rækker.
+
+### Backup/restore drill (2026-09-04, live ops-verification)
+- Latest automated backup (04:00, tg-backup.timer): **13/13 sha256 verified**
+- Tampered backup → restore REFUSED fail-closed ("sha256 mismatch — refusing")
+- Clean restore into throwaway dir → 13/13 files restored
+- Live gateway unaffected (healthz ok:true throughout)
