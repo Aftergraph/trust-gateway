@@ -766,3 +766,7 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 205 | `tenant_webhook_deleted` | mounts/150-webhook-subs-tenant.js (FS-Y1: {by, tenant, id} — operator removed a per-tenant webhook subscription; id only) |
 | 206 | `chain_verified` | mounts/151-chain-integrity.js (FS-Y2: {by, checked, ok, mismatches} — operator verified audit chain integrity; counts only) |
 | 207 | `chain_verify_denied` | mounts/151-chain-integrity.js (FS-Y2: {bot, reason} — non-operator attempted chain verification) |
+| 208 | `tenant_metrics_read` | mounts/152-tenant-metrics.js (FS-Z1: {by, tenant, totalEvents} — operator read per-tenant metrics; counts only) |
+| 209 | `tenant_metrics_denied` | mounts/152-tenant-metrics.js (FS-Z1: {bot, reason} — non-operator attempted tenant metrics access) |
+| 210 | `metrics_summary_read` | mounts/152-tenant-metrics.js (FS-Z1: {by, tenantCount} — operator read all-tenant summary; count only) |
+| 211 | `metrics_summary_denied` | mounts/152-tenant-metrics.js (FS-Z1: {bot, reason} — non-operator attempted metrics summary access) |
