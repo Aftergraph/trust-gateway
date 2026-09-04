@@ -830,3 +830,5 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 261 | `plugin_permission_rejected` | mounts/35-plugins.js (W4: declared permission rejected at runtime) |
 | 262 | `plugin_delete_forbidden` | mounts/35-plugins.js (W4: uninstall denied by policy) |
 | 263 | `model_route` | mounts/59-router.js (HC4/router: {capability, model, provider} — routing decision) |
+| 264 | `needyou_created` | mounts/08-need-you.js (W0.5: {id, tenantId, type, subject} — new NeedsYouItem created) |
+| 265 | `needyou_resolved` | mounts/08-need-you.js (W0.5: {id, resolvedBy} — NeedsYouItem resolved) |
