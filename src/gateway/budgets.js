@@ -24,12 +24,14 @@ class BudgetStore {
   
   _save() {
     if (!this.file) return;
-    // Write atomically to temp file, then rename
+    // Write atomically to temp file, then rename. Mode 0600 (A-008): the file
+    // holds per-bot spend data — same secrecy bar as the token stores.
     const tmpFile = this.file + '.tmp';
     fs.writeFileSync(tmpFile, JSON.stringify({
       limits: Object.fromEntries(this.limits),
       usage: Object.fromEntries(this.usage),
-    }));
+    }), { mode: 0o600 });
+    if (process.platform !== 'win32') fs.chmodSync(tmpFile, 0o600);
     fs.renameSync(tmpFile, this.file);
   }
   
