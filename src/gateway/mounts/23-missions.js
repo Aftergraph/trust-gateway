@@ -14,6 +14,7 @@
 const { send, readBody } = require('../server');
 const { canApprove } = require('../rbac');
 const { MissionProposalStore } = require('../missions');
+const { createWork: worksCreateWork } = require('../works-client');
 const crypto = require('node:crypto');
 
 const RE = /^\/v2\/proposals(?:\/([^/]+)(?:\/([^/]+))?)?\/?$/;
@@ -85,14 +86,30 @@ module.exports = {
             gw._audit({ type: 'proposal_approve_forbidden', proposal_id: id, bot: ctx.bot.name });
             return send(res, 403, { error: 'operator_required' });
           }
-          const p = store.approve(id, ctx.bot.name, body.mission_id);
+          // W0.3: prefer a real WORKS Work over a synthetic mission id. If the
+          // control plane is configured (WORKS_API_URL) and reachable, the Work ID
+          // becomes the durable correlation; otherwise missions.js synthetic id
+          // keeps the chain coherent (fail-open on correlation, fail-closed on auth).
+          let missionId = body.mission_id;
+          let works = null;
+          if (!missionId && store.proposals.get(id) && store.proposals.get(id).proposed_mission) {
+            const spec = store.proposals.get(id).proposed_mission;
+            works = await worksCreateWork({
+              objective: spec.objective || store.proposals.get(id).objective,
+              success_criteria: spec.success_criteria,
+              mission_id: id,
+            });
+            if (works.ok) missionId = works.work_id;
+          }
+          const p = store.approve(id, ctx.bot.name, missionId);
           gw._audit({
             type: 'proposal_approved',
             proposal_id: id,
             approver: ctx.bot.name,
             mission_id: p.converted_to_mission_id,
+            works_ok: works ? works.ok : null,
           });
-          return send(res, 200, { ok: true, proposal: p });
+          return send(res, 200, { ok: true, proposal: p, works });
         }
         if (verb === 'reject') {
           if (!canApprove(ctx.bot)) {
