@@ -545,6 +545,8 @@ plugins.js) across all files under `src/gateway/`.
 | 198 | `route_limit_set` | mounts/148-route-limits.js (FS-X3: {by, pattern, maxHits, windowMs} — operator set a per-route rate limit; TG_ROUTE_LIMITS=1 only) |
 | 199 | `route_limit_listed` | mounts/148-route-limits.js (FS-X3: {by, count} — operator listed per-route rate limits; count only) |
 | 200 | `route_limit_removed` | mounts/148-route-limits.js (FS-X3: {by, pattern, removed} — operator removed a per-route rate limit; pattern only) |
+| 201 | `graceful_shutdown_initiated` | mounts/149-shutdown.js (FS-Y3: {by, graceMs} — operator initiated a graceful shutdown; grace period in ms; TG_GRACEFUL_SHUTDOWN=1 only) |
+| 202 | `graceful_shutdown_denied` | mounts/149-shutdown.js (FS-Y3: {bot, reason} — non-operator, missing_confirm, or already_draining) |
 
 ### `secrets-vault.js` + mounts `115-secrets.js` / `119-secrets-rotate.js` — tenant secrets vault + master-key rotation (FS-I5, FS-J2)
 - **Endpoints:** `PUT/GET/DELETE /v2/tenants/:id/secrets[/:key]` (operator;
