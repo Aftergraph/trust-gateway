@@ -832,6 +832,10 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 269 | `proposal_rejected` | mounts/23-missions.js (W0.2: {proposal_id, reason}) |
 | 270 | `proposal_approve_forbidden` | mounts/23-missions.js (W0.2: {proposal_id, bot} — non-operator attempted approval) |
 | 271 | `proposal_reject_forbidden` | mounts/23-missions.js (W0.2: {proposal_id, bot} — non-operator attempted rejection) |
+| 272 | `project_created` | mounts/24-projects.js (P1: {project_id, title} — Project primitive created) |
+| 273 | `approvals_batch_resolved` | mounts/07-approvals-v2.js (P1: {approver, ops, approved} — batch resolution summary) |
+| 274 | `approvals_batch_forbidden` | mounts/07-approvals-v2.js (P1: {bot} — non-operator attempted batch) |
+| 275 | `approvals_metrics_forbidden` | mounts/07-approvals-v2.js (P1: {bot} — non-operator attempted metrics read) |
 | 260 | `plugin_forbidden` | mounts/35-plugins.js (W4: {bot, method, path} — non-operator plugin write) |
 | 261 | `plugin_permission_rejected` | mounts/35-plugins.js (W4: declared permission rejected at runtime) |
 | 262 | `plugin_delete_forbidden` | mounts/35-plugins.js (W4: uninstall denied by policy) |

@@ -31,9 +31,13 @@ Missing coverage due to gaps:
 - ❌ Full conversation creation and message append
 - ❌ Full NeedsYou item create, view, resolve (tenant-dependent)
 
-## Recommendations
+## Resolution (2026-09-04, commit 2cd28c7)
 
-1. Add tenant-aware test helpers to .src/gateway/test-helpers.js
-2. Create acceptance criteria files before next E2E run
-3. Consider mocking tenant context for unit tests
-4. Integrate with existing tier-c tests for full coverage
+1. **Gap 1 CLOSED** — tenant scoping implemented via the FS-E1d pattern (tnt_<id>_ prefix
+   claim on bearer token, else main tenant) in 21-conversations.js and 08-need-you.js.
+   The E2E suite now covers conversation + NeedsYou flows: 8/8.
+2. Acceptance criteria docs: superseded by the E2E suite itself (tests are the executable
+   contract); 25/27 synthesis docs remain in .avc/state/product-synthesis-v2/.
+3. W0.3 WORKS-side landed separately (works-client.js, commit 8200cd0): proposal approval
+   now prefers a real WORKS Work ID as the durable mission correlation, fail-closed when
+   the control plane is unconfigured/unreachable.
