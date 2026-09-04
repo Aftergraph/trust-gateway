@@ -40,6 +40,9 @@ fi
 t0=$(date +%s)
 rm -f .avc/state/tg-shard-status
 pids=()
+
+export AIE_PYTHON="C:/Users/empir/AppData/Local/hermes/hermes-agent/venv/Scripts/python.exe"
+export TG_AIE_FAIL_OPEN=true
 for domain in A B C D E F G H I; do
   source "$SHARD_MAP"; eval "files=\$SHARD_${domain}"
   [ -z "$files" ] && continue

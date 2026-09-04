@@ -53,12 +53,16 @@ class ApprovalStore {
     try { fs.chmodSync(this.file, 0o600); } catch { /* best effort */ }
   }
 
-  request({ bot, tool, args, reason, ttlMs = null } = {}) {
+  request({ bot, tool, args, reason, ttlMs = null, action_id = null } = {}) {
     const id = `apr_${String(this._next++).padStart(6, '0')}`;
     const created = this.now();
     const impact = this._computeImpact({ tool, args, gw: this.gw });
     const req = {
       id,
+      // Preserve the AIE admission identity across an approval pause. The
+      // execution-time revalidation must use the same action ID that was
+      // admitted before the request was parked.
+      action_id: action_id || null,
       bot: bot ? bot.name : null,
       tool,
       args,

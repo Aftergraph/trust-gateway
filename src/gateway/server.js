@@ -520,11 +520,13 @@ class Gateway extends EventEmitter {
       return send(res, 403, { ...verdict, audited: true });
     }
     if (verdict.decision === 'needs_approval') {
+      const action_id = body.action_id || null;
       const approval = this.approvals.request({
         bot,
         tool,
         args,
         reason: verdict.reason,
+        action_id,
       });
       this._audit({ type: 'approval_requested', approvalId: approval.id, bot: bot.name, tool, class: cls });
       // Audit the deterministic impact snapshot — never the raw args.
@@ -539,17 +541,10 @@ class Gateway extends EventEmitter {
 
     // allow → execute (executor wins for synthetic tools, else jailed dispatch)
     if (!this.dispatch && !this._findExecutor(tool)) return send(res, 500, { error: 'no_dispatcher' });
-    // orchestrator-owned guard (documented exception to ABI mount-only rule):
-    // the dispatch + budget check together form one decision; splitting them
-    // would let the audit chain record 'allow' for an action we then refuse.
-    if (this.budgets && !this.budgets.consume(bot.name).ok) {
-      this._audit({ type: 'budget_denied', bot: bot.name, tool });
-      return send(res, 402, { decision: 'deny', error: 'budget_exhausted' });
-    }
     // TG → AIE execution-time revalidation (TH-12): fail-closed by default
     const failOpen = process.env.TG_AIE_FAIL_OPEN === 'true';
     try {
-      const rv = aie_revalidate(body.action_id || 'tg-' + Date.now());
+      const rv = aie_revalidate(body.action_id || 'tg-' + Date.now(), { bot: bot.name, tool, args });
       if (!rv.ok) {
         this._audit({ type: 'action.revalidation_failed', bot: bot.name, tool, error: rv.code });
         if (!failOpen) {
@@ -558,13 +553,17 @@ class Gateway extends EventEmitter {
           if (rv.code === 'AIE-AUTH-002') { status = 410; err = 'lease_expired'; }
           else if (rv.code === 'AIE-AUTH-003') { err = 'authority_revoked'; }
           else if (rv.code === 'AIE-AUTH-004') { err = 'action_not_admitted'; }
-          else if (rv.code === 'AIE_UNREACHABLE') { err = 'aie_unreachable'; }
+          else if (rv.code === 'AIE_UNREACHABLE') { status = 502; err = 'aie_unreachable'; }
           return send(res, status, { decision: 'deny', error: err, error_code: rv.code });
         }
       }
     } catch (e) {
       this._audit({ type: 'action.revalidation_failed', bot: bot.name, tool, error: String(e) });
       if (!failOpen) return send(res, 502, { decision: 'deny', error: 'aie_unreachable' });
+    }
+    if (this.budgets && !this.budgets.consume(bot.name).ok) {
+      this._audit({ type: 'budget_denied', bot: bot.name, tool });
+      return send(res, 402, { decision: 'deny', error: 'budget_exhausted' });
     }
     try {
       const result = await this._run(bot.name, tool, args);
@@ -596,7 +595,9 @@ class Gateway extends EventEmitter {
     }
 
     const approver = bot.name;
-    const parkedAction = parked && parked.status === 'pending' ? { tool: parked.tool, args: parked.args, bot: parked.bot } : null;
+    const parkedAction = parked && parked.status === 'pending'
+      ? { tool: parked.tool, args: parked.args, bot: parked.bot, action_id: parked.action_id }
+      : null;
     const result = this.approvals.resolve(id, verb, approver);
     this._audit({
       type: 'approval_resolved',
@@ -615,15 +616,13 @@ class Gateway extends EventEmitter {
     // Approved → execute the parked decision (survives restart via durable store).
     if (!parkedAction) return send(res, 500, { error: 'parked_action_missing' });
     if (!this.dispatch && !this._findExecutor(parkedAction.tool)) return send(res, 500, { error: 'no_dispatcher' });
-    // Budget check after approval — mirrors _postAction guard.
-    if (this.budgets && !this.budgets.consume(parkedAction.bot).ok) {
-      this._audit({ type: 'budget_denied', bot: parkedAction.bot, tool: parkedAction.tool });
-      return send(res, 402, { id, status: 'approved', decision: 'deny', error: 'budget_exhausted' });
-    }
+    // Generate fallback action_id when AIE is not in use (most tests). The
+    // aie_revalidate call below handles missing AIE via TG_AIE_FAIL_OPEN.
+    const actionId = parkedAction.action_id || 'tg-apr-' + id;
     // TG → AIE execution-time revalidation (TH-12): fail-closed by default
     const failOpen = process.env.TG_AIE_FAIL_OPEN === 'true';
     try {
-      const rv = aie_revalidate(parkedAction.action_id || 'tg-' + Date.now());
+      const rv = aie_revalidate(actionId, { bot: parkedAction.bot, tool: parkedAction.tool, args: parkedAction.args });
       if (!rv.ok) {
         this._audit({ type: 'action.revalidation_failed', bot: parkedAction.bot, tool: parkedAction.tool, error: rv.code });
         if (!failOpen) {
@@ -631,7 +630,7 @@ class Gateway extends EventEmitter {
           if (rv.code === 'AIE-AUTH-002') { status = 410; err = 'lease_expired'; }
           else if (rv.code === 'AIE-AUTH-003') { err = 'authority_revoked'; }
           else if (rv.code === 'AIE-AUTH-004') { err = 'action_not_admitted'; }
-          else if (rv.code === 'AIE_UNREACHABLE') { err = 'aie_unreachable'; }
+          else if (rv.code === 'AIE_UNREACHABLE') { status = 502; err = 'aie_unreachable'; }
           return send(res, status, { id, status: 'approved', decision: 'deny', error: err, error_code: rv.code });
         }
       }
@@ -639,8 +638,12 @@ class Gateway extends EventEmitter {
       this._audit({ type: 'action.revalidation_failed', bot: parkedAction.bot, tool: parkedAction.tool, error: String(e) });
       if (!failOpen) return send(res, 502, { id, status: 'approved', decision: 'deny', error: 'aie_unreachable' });
     }
+    if (this.budgets && !this.budgets.consume(parkedAction.bot).ok) {
+      this._audit({ type: 'budget_denied', bot: parkedAction.bot, tool: parkedAction.tool });
+      return send(res, 402, { id, status: 'approved', decision: 'deny', error: 'budget_exhausted' });
+    }
     try {
-      const out2 = await this._run(bot.name, parkedAction.tool, parkedAction.args);
+      const out2 = await this._run(parkedAction.bot, parkedAction.tool, parkedAction.args);
       this._audit({ type: 'action_executed_after_approval', approvalId: id, tool: parkedAction.tool, ok: true });
       return send(res, 200, { id, status: 'approved', result: out2 });
     } catch (e) {
