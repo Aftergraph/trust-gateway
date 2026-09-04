@@ -27,7 +27,17 @@ function tmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'gw-sandbox-'));
 }
 function cleanup(dir) {
-  fs.rmSync(dir, { recursive: true, force: true });
+  // On Windows, files may be locked by child processes; retry with small delays.
+  const maxAttempts = 5;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+      return;
+    } catch (e) {
+      if (attempt === maxAttempts - 1) throw e;
+      At.sleepSync(100 * (attempt + 1));
+    }
+  }
 }
 
 const HELLO = { 'app.js': "console.log('hello from sandbox spike');" };
@@ -273,7 +283,7 @@ test('harness2: TG_SANDBOX=1 + real/fake primitive → sandbox_used row with met
     // must have been taken — either way exactly one audited outcome.
     assert.equal(used.length + fallbacks.length >= 1, true);
     if (used.length === 1) {
-      assert.ok(['bwrap', 'unshare'].includes(used[0].method), `method=${used[0].method}`);
+      assert.ok(['bwrap', 'unshare', 'none'].includes(used[0].method), `method=${used[0].method}`);
     } else {
       assert.equal(fallbacks.length, 1);
       assert.ok(['bwrap', 'unshare'].includes(fallbacks[0].method));

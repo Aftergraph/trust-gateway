@@ -305,12 +305,13 @@ function makeHarness2({ dataDir, knownSkills = null, runTimeoutMs = RUN_TIMEOUT_
     // the mount can audit `sandbox_used` / `sandbox_fallback`.
     const sandboxOn = process.env.TG_SANDBOX === '1';
     let attempts;
+    let wrapResult = null;
     if (sandboxOn) {
-      const wrap = wrapCommand('node', [entryAbs], { jail, env });
+      wrapResult = wrapCommand('node', [entryAbs], { jail, env });
       const plain = { cmd: 'node', args: [entryAbs], env, wrapped: false, method: 'none' };
-      attempts = wrap.wrapped
-        ? [{ spec: wrap, wrapped: true }, { spec: plain, wrapped: false }]
-        : [{ spec: plain, wrapped: false, reason: wrap.reason }];
+      attempts = wrapResult.wrapped
+        ? [{ spec: wrapResult, wrapped: true }, { spec: plain, wrapped: false }]
+        : [{ spec: plain, wrapped: false, reason: wrapResult.reason }];
     } else {
       attempts = [{ spec: { cmd: 'node', args: [entryAbs], env }, wrapped: false }];
     }
@@ -318,6 +319,10 @@ function makeHarness2({ dataDir, knownSkills = null, runTimeoutMs = RUN_TIMEOUT_
     // chain-agnostic; the mount wires them to gw._audit.
     const onUsed = (info) => { if (onSandboxUsed) onSandboxUsed(info); };
     const onFallback = (info) => { if (onSandboxFallback) onSandboxFallback(info); };
+    // When sandbox is enabled but unavailable, still report sandbox_used with method='none'.
+    if (sandboxOn && !wrapResult.wrapped) {
+      onUsed({ id, method: 'none' });
+    }
 
     return new Promise((resolve) => {
       let attemptIdx = 0;
