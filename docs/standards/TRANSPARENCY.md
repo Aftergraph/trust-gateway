@@ -774,3 +774,5 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 213 | `fed_audit_denied` | mounts/153-fed-audit-dash.js (FS-Z2: {bot, reason} — non-operator attempted federation audit access) |
 | 214 | `fed_audit_summary_read` | mounts/153-fed-audit-dash.js (FS-Z2: {by, totalEvents} — operator read federation audit summary; count only) |
 | 215 | `fed_audit_summary_denied` | mounts/153-fed-audit-dash.js (FS-Z2: {bot, reason} — non-operator attempted federation audit summary access) |
+| 216 | `skill_searched` | mounts/154-skill-market-search.js (FS-Z3: {by, total, returned} — operator searched skill marketplace; counts only) |
+| 217 | `skill_search_denied` | mounts/154-skill-market-search.js (FS-Z3: {bot, reason} — non-operator attempted skill search) |
