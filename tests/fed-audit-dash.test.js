@@ -7,6 +7,7 @@ const os = require('node:os');
 describe('FS-Z2 federation audit dashboard', () => {
   let tmpDir;
   let origEnv;
+  let db;
 
   before(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fs-z2-'));
@@ -15,6 +16,16 @@ describe('FS-Z2 federation audit dashboard', () => {
     process.env.TG_FED_AUDIT_DASH = '1';
     delete require.cache[require.resolve('../src/gateway/db')];
     delete require.cache[require.resolve('../src/gateway/fed-audit-dash')];
+    db = require('../src/gateway/db').db;
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS chain_entries (
+        seq INTEGER PRIMARY KEY,
+        ts INTEGER NOT NULL,
+        prev_hash TEXT NOT NULL,
+        hash TEXT NOT NULL UNIQUE,
+        payload TEXT NOT NULL
+      )
+    `);
   });
 
   after(() => {

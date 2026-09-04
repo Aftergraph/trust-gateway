@@ -7,6 +7,7 @@ const os = require('node:os');
 describe('FS-Y2 chain integrity', () => {
   let tmpDir;
   let origEnv;
+  let db;
 
   before(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fs-y2-'));
@@ -15,6 +16,16 @@ describe('FS-Y2 chain integrity', () => {
     process.env.TG_CHAIN_INTEGRITY = '1';
     delete require.cache[require.resolve('../src/gateway/db')];
     delete require.cache[require.resolve('../src/gateway/chain-integrity')];
+    db = require('../src/gateway/db').db;
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS chain_entries (
+        seq INTEGER PRIMARY KEY,
+        ts INTEGER NOT NULL,
+        prev_hash TEXT NOT NULL,
+        hash TEXT NOT NULL UNIQUE,
+        payload TEXT NOT NULL
+      )
+    `);
   });
 
   after(() => {

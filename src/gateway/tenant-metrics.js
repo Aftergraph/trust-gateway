@@ -10,59 +10,60 @@ function enabled() {
   return process.env.TG_TENANT_METRICS === '1';
 }
 
-function _ensureTable() {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS audit_chain (
-      id        INTEGER PRIMARY KEY AUTOINCREMENT,
-      tenant    TEXT,
-      type      TEXT NOT NULL,
-      data      TEXT,
-      prev_hash TEXT,
-      ts        INTEGER NOT NULL,
-      hash      TEXT NOT NULL
-    )
-  `);
+function _parsePayload(payload) {
+  try { return JSON.parse(payload); } catch { return {}; }
 }
 
 function getMetrics(tenant, windowMs) {
   if (!enabled() || !tenant) return null;
-  _ensureTable();
   const now = Date.now();
   const since = now - (windowMs || 3600000); // default 1h
   const rows = db.prepare(
-    `SELECT type, COUNT(*) as cnt FROM audit_chain
-     WHERE tenant = ? AND ts >= ? GROUP BY type ORDER BY cnt DESC`
-  ).all(tenant, since);
-  const total = rows.reduce((s, r) => s + Number(r.cnt), 0);
-  const lastRow = db.prepare(
-    'SELECT ts FROM audit_chain WHERE tenant = ? ORDER BY ts DESC LIMIT 1'
-  ).get(tenant);
+    'SELECT payload, ts FROM chain_entries WHERE ts >= ? ORDER BY seq'
+  ).all(since);
+  const filtered = rows.filter(r => {
+    const p = _parsePayload(r.payload);
+    return p.tenant === tenant;
+  });
+  const byTypeMap = {};
+  for (const r of filtered) {
+    const p = _parsePayload(r.payload);
+    const t = p.type || 'unknown';
+    byTypeMap[t] = (byTypeMap[t] || 0) + 1;
+  }
+  const total = filtered.length;
+  const lastTs = filtered.length > 0 ? filtered[filtered.length - 1].ts : null;
   return {
     tenant,
     windowMs: windowMs || 3600000,
     since,
     now,
     totalEvents: total,
-    byType: rows.map(r => ({ type: r.type, count: Number(r.cnt) })),
-    lastActivityAt: lastRow ? lastRow.ts : null,
+    byType: Object.entries(byTypeMap).map(([type, count]) => ({ type, count })),
+    lastActivityAt: lastTs,
   };
 }
 
 function getAllTenantsSummary(windowMs) {
   if (!enabled()) return null;
-  _ensureTable();
   const now = Date.now();
   const since = now - (windowMs || 3600000);
   const rows = db.prepare(
-    `SELECT tenant, COUNT(*) as cnt FROM audit_chain
-     WHERE ts >= ? AND tenant IS NOT NULL GROUP BY tenant ORDER BY cnt DESC`
+    'SELECT payload FROM chain_entries WHERE ts >= ? ORDER BY seq'
   ).all(since);
+  const tenantMap = {};
+  for (const r of rows) {
+    const p = _parsePayload(r.payload);
+    if (p.tenant) {
+      tenantMap[p.tenant] = (tenantMap[p.tenant] || 0) + 1;
+    }
+  }
   return {
     windowMs: windowMs || 3600000,
     since,
     now,
-    tenantCount: rows.length,
-    tenants: rows.map(r => ({ tenant: r.tenant, events: Number(r.cnt) })),
+    tenantCount: Object.keys(tenantMap).length,
+    tenants: Object.entries(tenantMap).map(([tenant, events]) => ({ tenant, events })),
   };
 }
 
