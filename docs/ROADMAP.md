@@ -289,3 +289,11 @@ TG_OPERATOR_NOTIFY). TRANSPARENCY: 252 rækker.
 - Tampered backup → restore REFUSED fail-closed ("sha256 mismatch — refusing")
 - Clean restore into throwaway dir → 13/13 files restored
 - Live gateway unaffected (healthz ok:true throughout)
+
+### Conformance tiers B+C + SQLite integrity (2026-09-04)
+- **Tier-A: 9/9 domæner PASS** (live gateway :8800)
+- **Tier-B: 3/3 PASS** (policy, secrets, ratelimits deep battery)
+- **Tier-C: 4/4 PASS** (WAL concurrent writers, ENOSPC fail-closed,
+  restart-storm 5×, disk-full runbook)
+- SQLite integrity_check: ok — 2212 chain entries, 2.5MB
+- Suite: **1362/1362 grønne** (inkl. nye fn-route dispatch contract tests)
