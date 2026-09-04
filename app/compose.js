@@ -300,9 +300,14 @@
 
   // ── browser flag + globals ─────────────────────────────────────────────
   function composeEnabled() {
+    // P1 adaptive surfaces: default ON. Opt-out via ?compose=false or
+    // localStorage 'tg-compose' === 'false'; explicit ?compose=true still wins.
     try {
+      if (/[?&]compose=false\b/.test(location.search)) return false;
       if (/[?&]compose=true\b/.test(location.search)) return true;
-      return localStorage.getItem('tg-compose') === 'true';
+      const pref = localStorage.getItem('tg-compose');
+      if (pref === 'false') return false;
+      return true;
     } catch { return false; }
   }
 
