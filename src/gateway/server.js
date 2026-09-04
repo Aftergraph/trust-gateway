@@ -13,6 +13,7 @@ const { ApprovalStore } = require('./approvals');
 const { getApprovals } = require('./approvals-db'); // FS-A5: env-gated DB variant
 const { MemoryStore, getMemoryStore } = require('./memory');
 const { BudgetStore } = require('./budgets');
+const { revalidate: aie_revalidate } = require('./aie-client'); // TG → AIE execution-time revalidation
 const disk = require('./disk-audit');
 const { TelemetryRing, DEFAULT_FILE: DEFAULT_TELEMETRY_FILE } = require('./telemetry');
 const { loadMounts, match } = require('./http-mounts');
@@ -545,6 +546,26 @@ class Gateway extends EventEmitter {
       this._audit({ type: 'budget_denied', bot: bot.name, tool });
       return send(res, 402, { decision: 'deny', error: 'budget_exhausted' });
     }
+    // TG → AIE execution-time revalidation (TH-12): fail-closed by default
+    const failOpen = process.env.TG_AIE_FAIL_OPEN === 'true';
+    try {
+      const rv = aie_revalidate(body.action_id || 'tg-' + Date.now());
+      if (!rv.ok) {
+        this._audit({ type: 'action.revalidation_failed', bot: bot.name, tool, error: rv.code });
+        if (!failOpen) {
+          // Map AIE codes → TG HTTP
+          let status = 403, err = 'revalidation_failed';
+          if (rv.code === 'AIE-AUTH-002') { status = 410; err = 'lease_expired'; }
+          else if (rv.code === 'AIE-AUTH-003') { err = 'authority_revoked'; }
+          else if (rv.code === 'AIE-AUTH-004') { err = 'action_not_admitted'; }
+          else if (rv.code === 'AIE_UNREACHABLE') { err = 'aie_unreachable'; }
+          return send(res, status, { decision: 'deny', error: err, error_code: rv.code });
+        }
+      }
+    } catch (e) {
+      this._audit({ type: 'action.revalidation_failed', bot: bot.name, tool, error: String(e) });
+      if (!failOpen) return send(res, 502, { decision: 'deny', error: 'aie_unreachable' });
+    }
     try {
       const result = await this._run(bot.name, tool, args);
       this._audit({ type: 'action_executed', bot: bot.name, tool, ok: true });
@@ -598,6 +619,25 @@ class Gateway extends EventEmitter {
     if (this.budgets && !this.budgets.consume(parkedAction.bot).ok) {
       this._audit({ type: 'budget_denied', bot: parkedAction.bot, tool: parkedAction.tool });
       return send(res, 402, { id, status: 'approved', decision: 'deny', error: 'budget_exhausted' });
+    }
+    // TG → AIE execution-time revalidation (TH-12): fail-closed by default
+    const failOpen = process.env.TG_AIE_FAIL_OPEN === 'true';
+    try {
+      const rv = aie_revalidate(parkedAction.action_id || 'tg-' + Date.now());
+      if (!rv.ok) {
+        this._audit({ type: 'action.revalidation_failed', bot: parkedAction.bot, tool: parkedAction.tool, error: rv.code });
+        if (!failOpen) {
+          let status = 403, err = 'revalidation_failed';
+          if (rv.code === 'AIE-AUTH-002') { status = 410; err = 'lease_expired'; }
+          else if (rv.code === 'AIE-AUTH-003') { err = 'authority_revoked'; }
+          else if (rv.code === 'AIE-AUTH-004') { err = 'action_not_admitted'; }
+          else if (rv.code === 'AIE_UNREACHABLE') { err = 'aie_unreachable'; }
+          return send(res, status, { id, status: 'approved', decision: 'deny', error: err, error_code: rv.code });
+        }
+      }
+    } catch (e) {
+      this._audit({ type: 'action.revalidation_failed', bot: parkedAction.bot, tool: parkedAction.tool, error: String(e) });
+      if (!failOpen) return send(res, 502, { id, status: 'approved', decision: 'deny', error: 'aie_unreachable' });
     }
     try {
       const out2 = await this._run(bot.name, parkedAction.tool, parkedAction.args);
