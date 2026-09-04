@@ -13,9 +13,11 @@
 // with ITS OWN tenant id (payload.tenant === id) — never another
 // tenant's entries, never untagged main entries, and never the untagged
 // projection broadcasts (artifact/computer/room) that carry no tenant
-// tag. The `hello` frame stays chain-global (head hash + seq only — no
-// entry content) for every client. Unknown/disabled tenant → 404
-// (anti-enumeration, never 403).
+// The `hello` frame stays chain-global (head hash + seq only — no
+// entry content) for every client. Unknown/disabled tenant → 401
+// at the query-auth layer (FS-A1 slice 2: tenant claim validated
+// fail-closed in _auth before this mount runs — reveals nothing,
+// same anti-enumeration guarantee as a 404).
 //
 // NOTE on plain-`http` testing: works fine — http.get keeps the response
 // streaming and Node's `res.on('data', ...)` is how the test consumes it.
