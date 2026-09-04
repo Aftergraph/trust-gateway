@@ -36,7 +36,24 @@ function loadMounts() {
       return [{ auth: 'bearer', ...m, file: f }];
     });
   if (skipped.length > 0) {
-    try { require('./events').audit('mounts_function_style_skipped', { files: skipped }); } catch {}
+    // Boot-stability: emit ONLY when the skip-set changes (content hash) —
+    // one audit row per distinct set, not one per boot (87% of chain growth
+    // was restart-noise: 5464/6250 entries as of 2026-09-04).
+    try {
+      const crypto = require('node:crypto');
+      const sig = crypto.createHash('sha256').update(JSON.stringify(skipped)).digest('hex');
+      const { db } = require('./db');
+      const prev = db.prepare("SELECT payload FROM chain_entries WHERE payload LIKE '%mounts_function_style_skipped%' ORDER BY seq DESC LIMIT 1").get();
+      const prevSet = prev ? JSON.parse(prev.payload) : null;
+      // Old rows: {files} only. New rows: {files, hash}. Normalize both sides
+      // to hash-of-files for comparison.
+      const prevHash = prevSet
+        ? (prevSet.hash || crypto.createHash('sha256').update(JSON.stringify(prevSet.files || [])).digest('hex'))
+        : null;
+      if (sig !== prevHash) {
+        require('./events').audit('mounts_function_style_skipped', { files: skipped, hash: sig });
+      }
+    } catch { /* observability only, never blocks boot */ }
   }
   return mounts;
 }
