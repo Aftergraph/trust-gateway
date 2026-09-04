@@ -20,7 +20,7 @@ const assert = require('node:assert');
 
 const { spawnGateway, api, TOKENS, JAIL_FILE_TEXT } = require('./fs-helpers.js');
 
-test('FS-D2 integration battery on a real gateway', async () => {
+test('FS-D2 integration battery on a real gateway', { skip: process.platform === 'win32' ? 'Windows: spawned-gateway tree-kill leaves stdio handles open — hangs node --test (see STUDY-011 infra notes)' : false }, async () => {
   const g = await spawnGateway({
     // iteration 1 proposes a jail read (allow → executed), iteration 2
     // (the default plain stub reply) has no action → run completes.
