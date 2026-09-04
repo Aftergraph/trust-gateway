@@ -6,15 +6,15 @@ const { Gateway } = require('../src/gateway/server');
 const H = (t) => require('../src/gateway/server').hashToken(t);
 const { HashChain } = require('../src/gateway/hash-chain');
 
-test('audit-export mount loads', () => {
+test('hash-export mount loads', () => {
   const mounts = require('../src/gateway/http-mounts');
   const loaded = mounts.loadMounts();
-  const auditExport = loaded.find(m => m.name === 'v2-audit-export');
-  assert.ok(auditExport, 'audit-export mount loaded');
-  assert.equal(auditExport.method, 'GET');
-  assert.equal(auditExport.path, '/v2/audit/export');
-  assert.equal(auditExport.auth, 'bearer');
-  assert.equal(auditExport.name, 'v2-audit-export');
+  const hashExport = loaded.find(m => m.name === 'v2-hash-export');
+  assert.ok(hashExport, 'hash-export mount loaded');
+  assert.equal(hashExport.method, 'GET');
+  assert.equal(hashExport.path, '/v2/hash/export');
+  assert.equal(hashExport.auth, 'bearer');
+  assert.equal(hashExport.name, 'v2-hash-export');
 });
 
 function buildServer() {
@@ -48,8 +48,8 @@ test('audit-export returns 404 for non-matching mount path', async () => {
   ctx.attach(new Gateway({ bots: { test: { tokenHash: H('abc123') } }, chain, staticDir: null }));
   const url = await listen(ctx.server);
   try {
-    // GET to /v2/audit/export without auth should return 401
-    const res = await fetch(`${url}/v2/audit/export`);
+    // GET to /v2/hash/export without auth should return 401
+    const res = await fetch(`${url}/v2/hash/export`);
     assert.equal(res.status, 401);
   } finally {
     await ctx.close();
@@ -62,7 +62,7 @@ test('audit-export returns 401 without auth', async () => {
   ctx.attach(new Gateway({ bots: { test: { tokenHash: H('abc123') } }, chain, staticDir: null }));
   const url = await listen(ctx.server);
   try {
-    const res = await fetch(`${url}/v2/audit/export?format=json`);
+    const res = await fetch(`${url}/v2/hash/export?format=json`);
     assert.equal(res.status, 401);
     const body = await res.text();
     assert.match(body, /unauthorized/);
@@ -78,7 +78,7 @@ test('audit-export returns JSON chain with bearer auth', async () => {
   ctx.attach(new Gateway({ bots: { test: { tokenHash: H('abc123') } }, chain, staticDir: null }));
   const url = await listen(ctx.server);
   try {
-    const res = await fetch(`${url}/v2/audit/export?format=json`, {
+    const res = await fetch(`${url}/v2/hash/export?format=json`, {
       headers: { authorization: 'Bearer abc123' }
     });
     assert.equal(res.status, 200);
@@ -105,7 +105,7 @@ test('audit-export returns PDF format with bearer auth', async () => {
   ctx.attach(new Gateway({ bots: { test: { tokenHash: H('abc123') } }, chain, staticDir: null }));
   const url = await listen(ctx.server);
   try {
-    const res = await fetch(`${url}/v2/audit/export?format=pdf`, {
+    const res = await fetch(`${url}/v2/hash/export?format=pdf`, {
       headers: { authorization: 'Bearer abc123' }
     });
     assert.equal(res.status, 200);
@@ -123,7 +123,7 @@ test('audit-export returns 400 for invalid format', async () => {
   ctx.attach(new Gateway({ bots: { test: { tokenHash: H('abc123') } }, chain, staticDir: null }));
   const url = await listen(ctx.server);
   try {
-    const res = await fetch(`${url}/v2/audit/export?format=invalid`, {
+    const res = await fetch(`${url}/v2/hash/export?format=invalid`, {
       headers: { authorization: 'Bearer abc123' }
     });
     assert.equal(res.status, 400);

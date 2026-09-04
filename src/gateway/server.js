@@ -563,7 +563,7 @@ class Gateway extends EventEmitter {
     }
 
     const approver = bot.name;
-    const parkedAction = parked && parked.status === 'pending' ? { tool: parked.tool, args: parked.args } : null;
+    const parkedAction = parked && parked.status === 'pending' ? { tool: parked.tool, args: parked.args, bot: parked.bot } : null;
     const result = this.approvals.resolve(id, verb, approver);
     this._audit({
       type: 'approval_resolved',
@@ -582,6 +582,11 @@ class Gateway extends EventEmitter {
     // Approved → execute the parked decision (survives restart via durable store).
     if (!parkedAction) return send(res, 500, { error: 'parked_action_missing' });
     if (!this.dispatch && !this._findExecutor(parkedAction.tool)) return send(res, 500, { error: 'no_dispatcher' });
+    // Budget check after approval — mirrors _postAction guard.
+    if (this.budgets && !this.budgets.consume(parkedAction.bot).ok) {
+      this._audit({ type: 'budget_denied', bot: parkedAction.bot, tool: parkedAction.tool });
+      return send(res, 402, { id, status: 'approved', decision: 'deny', error: 'budget_exhausted' });
+    }
     try {
       const out2 = await this._run(bot.name, parkedAction.tool, parkedAction.args);
       this._audit({ type: 'action_executed_after_approval', approvalId: id, tool: parkedAction.tool, ok: true });
@@ -632,4 +637,11 @@ function canApprove(bot) {
   return false;
 }
 
-module.exports = { Gateway, send, readBody, canApprove, parseLimit, hashToken };
+// Token rotation gate: operator can rotate any bot; non-operator can rotate only itself.
+function canSelfRotate(caller, target) {
+  if (!caller || !target) return false;
+  if (caller.role === 'operator') return true;
+  return caller.name === target;
+}
+
+module.exports = { Gateway, send, readBody, canApprove, canSelfRotate, parseLimit, hashToken };

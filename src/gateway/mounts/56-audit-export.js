@@ -1,14 +1,14 @@
 'use strict';
-// v2 mount: GET /v2/audit/export?format=json|pdf
+// v2 mount: GET /v2/hash/export?format=json|pdf
 // Exports the full hash-chain as JSON (entries array) or simple PDF summary.
 // Auth: bearer (same as other v2 API routes).
 
-const { HashChain } = require('../hash-chain');
+const { send } = require('../server');
 
 module.exports = {
-  name: 'v2-audit-export',
+  name: 'v2-hash-export',
   method: 'GET',
-  path: '/v2/audit/export',
+  path: '/v2/hash/export',
   auth: 'bearer',
   handle: async (gw, req, res, ctx) => {
     const format = ctx.url.searchParams.get('format') || 'json';
@@ -37,7 +37,7 @@ module.exports = {
         `Verified: ${v.ok ? 'YES' : 'NO'}`,
         ``,
         'Entry Summary:',
-        '-' .repeat(50),
+        '-'.repeat(50),
         ...gw.chain.entries.map(e =>
           `  seq=${e.seq} ts=${new Date(e.ts).toISOString()} hash=${e.hash.slice(0, 16)}...`
         ),
@@ -56,13 +56,3 @@ module.exports = {
     }
   },
 };
-
-function send(res, status, obj, extra = {}) {
-  if (extra.html !== undefined) {
-    res.writeHead(status, { 'content-type': 'text/html; charset=utf-8' });
-    return res.end(extra.html);
-  }
-  const body = JSON.stringify(obj);
-  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' });
-  return res.end(body);
-}

@@ -76,6 +76,7 @@ function validateCardDocument(doc) {
       errors.push('approval.status must be pending, approved, or denied');
     }
     if (typeof doc.reason !== 'string') errors.push('approval.reason must be a string');
+    if (!doc.id || typeof doc.id !== 'string') errors.push('approval.id must be a non-empty string');
   } else if (doc.type === 'progress') {
     if (typeof doc.percentage !== 'number') errors.push('progress.percentage must be a number');
     if (doc.percentage < 0 || doc.percentage > 100) {
@@ -128,6 +129,9 @@ function renderCardDocument(doc) {
     body.appendChild(table);
   } else if (doc.type === 'form') {
     const form = el('form', 'tg-card-form');
+    const action = doc.action || '/v1/actions';
+    form.action = action;
+    form.method = 'POST';
     (doc.fields || []).forEach((field) => {
       const label = el('label', 'tg-form-label', field.label + ': ');
       let input;
@@ -199,8 +203,20 @@ function renderCardDocument(doc) {
     const approval = el('div', 'tg-card-approval');
     const statusBadge = el('span', 'tg-approval-status tg-approval-' + doc.status, doc.status);
     const reason = el('p', 'tg-approval-reason', 'Reason: ' + doc.reason);
+    const btnRow = el('div', 'tg-approval-btns');
+    const approveBtn = el('button', 'tg-approval-btn tg-approval-approve', 'Approve');
+    const denyBtn = el('button', 'tg-approval-btn tg-approval-deny', 'Deny');
+    approveBtn.dataset.action = 'approve';
+    denyBtn.dataset.action = 'deny';
+    if (doc.status !== 'pending') {
+      approveBtn.disabled = true;
+      denyBtn.disabled = true;
+    }
+    btnRow.appendChild(approveBtn);
+    btnRow.appendChild(denyBtn);
     approval.appendChild(statusBadge);
     approval.appendChild(reason);
+    approval.appendChild(btnRow);
     body.appendChild(approval);
   } else if (doc.type === 'progress') {
     const progress = el('div', 'tg-card-progress');
@@ -220,6 +236,7 @@ function renderCardDocument(doc) {
   }
 
   root.appendChild(body);
+  root.dataset.cardJson = JSON.stringify(doc);
   return root;
 }
 
@@ -280,6 +297,32 @@ function renderCardDocument(doc) {
 
       const node = renderCardDocument(doc);
       output.appendChild(node);
+
+      // Wire up approval buttons after render
+      node.querySelectorAll('.tg-approval-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const action = btn.dataset.action;
+          const cardEl = btn.closest('.tg-card-root');
+          if (!cardEl) return;
+          const cardJson = cardEl.dataset.cardJson;
+          if (!cardJson) return;
+          try {
+            const cardDoc = JSON.parse(cardJson);
+            const resp = await tg.api(`/v1/approvals/${cardDoc.id}/${action}`, {
+              method: 'POST'
+            });
+            if (resp.ok) {
+              cardDoc.status = action === 'approve' ? 'approved' : 'denied';
+              const newNode = renderCardDocument(cardDoc);
+              cardEl.parentNode.replaceChild(newNode, cardEl);
+            } else {
+              error.textContent = 'Failed: ' + (resp.errors ? resp.errors.join('; ') : 'unknown');
+            }
+          } catch {
+            error.textContent = 'Failed to parse card document';
+          }
+        });
+      });
     });
 
     selector.addEventListener('change', () => {
@@ -289,7 +332,7 @@ function renderCardDocument(doc) {
         form: { type: 'form', title: 'Contact', fields: [{ name: 'name', label: 'Name', type: 'text' }, { name: 'email', label: 'Email', type: 'email' }] },
         chart: { type: 'chart', title: 'Sales', series: [{ label: 'Q1', value: 30 }, { label: 'Q2', value: 50 }, { label: 'Q3', value: 40 }] },
         timeline: { type: 'timeline', title: 'Roadmap', events: [{ date: '2026-09-01', title: 'Launch v1' }, { date: '2026-10-01', title: 'Release v2' }] },
-        approval: { type: 'approval', title: 'Approval Status', status: 'pending', reason: 'Awaiting review' },
+        approval: { type: 'approval', title: 'Approval Status', id: 'apr-123', status: 'pending', reason: 'Awaiting review' },
         progress: { type: 'progress', title: 'Deployment', label: 'Deployed', percentage: 75 },
         artifact: { type: 'artifact', title: 'Artifact Reference', kind: 'report', title: 'Q3 Report' }
       };

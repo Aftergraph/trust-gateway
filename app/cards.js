@@ -67,6 +67,7 @@ function validateCardDocument(doc) {
       errors.push('approval.status must be pending, approved, or denied');
     }
     if (typeof doc.reason !== 'string') errors.push('approval.reason must be a string');
+    if (!doc.id || typeof doc.id !== 'string') errors.push('approval.id must be a non-empty string');
   } else if (doc.type === 'progress') {
     if (typeof doc.percentage !== 'number') errors.push('progress.percentage must be a number');
     if (doc.percentage < 0 || doc.percentage > 100) {
@@ -126,6 +127,9 @@ function renderCardDocument(doc) {
     body.appendChild(table);
   } else if (doc.type === 'form') {
     const form = el('form', 'tg-card-form');
+    const action = doc.action || '/v1/actions';
+    form.action = action;
+    form.method = 'POST';
     (doc.fields || []).forEach((field) => {
       const label = el('label', 'tg-form-label', field.label + ': ');
       let input;
@@ -197,8 +201,20 @@ function renderCardDocument(doc) {
     const approval = el('div', 'tg-card-approval');
     const statusBadge = el('span', 'tg-approval-status tg-approval-' + doc.status, doc.status);
     const reason = el('p', 'tg-approval-reason', 'Reason: ' + doc.reason);
+    const btnRow = el('div', 'tg-approval-btns');
+    const approveBtn = el('button', 'tg-approval-btn tg-approval-approve', 'Approve');
+    const denyBtn = el('button', 'tg-approval-btn tg-approval-deny', 'Deny');
+    approveBtn.dataset.action = 'approve';
+    denyBtn.dataset.action = 'deny';
+    if (doc.status !== 'pending') {
+      approveBtn.disabled = true;
+      denyBtn.disabled = true;
+    }
+    btnRow.appendChild(approveBtn);
+    btnRow.appendChild(denyBtn);
     approval.appendChild(statusBadge);
     approval.appendChild(reason);
+    approval.appendChild(btnRow);
     body.appendChild(approval);
   } else if (doc.type === 'progress') {
     const progress = el('div', 'tg-card-progress');
@@ -218,6 +234,7 @@ function renderCardDocument(doc) {
   }
 
   root.appendChild(body);
+  root.dataset.cardJson = JSON.stringify(doc);
   return root;
 }
 
