@@ -28,8 +28,8 @@ The current test suite covers:
 - ✅ Persistence verification (audit chain survives restart)
 
 Missing coverage due to gaps:
-- ❌ Full conversation creation and message append
-- ❌ Full NeedsYou item create, view, resolve (tenant-dependent)
+- ✅ Full conversation creation and message append — NOW COVERED (tenant fix 2cd28c7)
+- ✅ Full NeedsYou item create, view, resolve — NOW COVERED (tenant fix 2cd28c7)
 
 ## Resolution (2026-09-04, commit 2cd28c7)
 
