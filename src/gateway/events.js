@@ -152,15 +152,16 @@ module.exports = { EventHub, getHub, HEARTBEAT_MS, wireExportSink,
   audit(type, payload) {
     try {
       const { db } = require('./db');
-      const seqRow = db.prepare('SELECT MAX(seq) AS maxSeq FROM chain_entries').get();
-      const prevRow = db.prepare('SELECT hash FROM chain_entries ORDER BY seq DESC LIMIT 1').get();
-      const seq = (seqRow && seqRow.maxSeq != null ? Number(seqRow.maxSeq) : -1) + 1;
+      const { entryHash } = require('./hash-chain');
+      const prevRow = db.prepare('SELECT seq, hash FROM chain_entries ORDER BY seq DESC LIMIT 1').get();
+      const seq = (prevRow ? Number(prevRow.seq) : -1) + 1;
+      const prevHash = prevRow ? prevRow.hash : '0'.repeat(64);
       const ts = Date.now();
-      const crypto = require('node:crypto');
-      const body = JSON.stringify({ type, ...payload });
-      const hash = crypto.createHash('sha256').update(String(seq) + prevRow?.hash + body + ts).digest('hex');
+      const body = { type, ...payload };
+      const rt = JSON.parse(JSON.stringify(body));
+      const hash = entryHash(seq, prevHash, ts, rt);
       db.prepare('INSERT INTO chain_entries(seq, ts, prev_hash, hash, payload) VALUES(?,?,?,?,?)')
-        .run(seq, ts, prevRow?.hash || '', hash, body);
-    } catch { /* no DB / no chain_entries — observability only, never throws */ }
+        .run(seq, ts, prevHash, hash, JSON.stringify(rt));
+    } catch { /* observability only, never throws */ }
   },
 };
