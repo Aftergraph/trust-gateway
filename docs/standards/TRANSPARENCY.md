@@ -756,4 +756,5 @@ The test compares the table above against a programmatic extraction over
 
 No other exceptions exist. If the extraction finds a `{type: '…'}` string
 that is not in the table (or the table lists something the code no longer
-emits), `tests/standards.test.js` fails — update both in the same commit.
+emits), `tests/standards.test.js` fails — update both in the same commit.| 201 | `chain_verified` | mounts/151-chain-integrity.js (FS-Y2: {by, checked, ok, mismatches} — operator verified audit chain integrity; counts only) |
+| 202 | `chain_verify_denied` | mounts/151-chain-integrity.js (FS-Y2: {bot, reason} — non-operator attempted chain verification) |
