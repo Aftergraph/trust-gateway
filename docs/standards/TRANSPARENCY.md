@@ -778,3 +778,7 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 217 | `skill_search_denied` | mounts/154-skill-market-search.js (FS-Z3: {bot, reason} — non-operator attempted skill search) |
 | 218 | `backup_crypto_status_read` | mounts/155-backup-crypto.js (FS-Z4: {by, enabled} — operator read backup encryption status) |
 | 219 | `backup_crypto_status_denied` | mounts/155-backup-crypto.js (FS-Z4: {bot, reason} — non-operator attempted backup crypto status access) |
+| 220 | `audit_exported` | mounts/156-audit-export.js (FS-Z5: {by, count} — operator exported audit events as JSONL; count only) |
+| 221 | `audit_export_denied` | mounts/156-audit-export.js (FS-Z5: {bot, reason} — non-operator attempted audit export) |
+| 222 | `audit_retention_applied` | mounts/156-audit-export.js (FS-Z5: {by, pruned} — operator applied audit retention policy; pruned count only) |
+| 223 | `audit_retention_denied` | mounts/156-audit-export.js (FS-Z5: {bot, reason} — non-operator attempted audit retention) |
