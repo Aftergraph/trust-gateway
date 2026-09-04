@@ -42,8 +42,10 @@ async function spawnTenantGateway({
   const dbFile = path.join(tmp, 'gateway.db');
   const botsDir = path.join(tmp, 'bots');
   const tenantRoot = path.join(dataDir, 'tenants', tenantId);
+  const approvalsDir = path.join(tenantRoot, 'approvals');
   fs.mkdirSync(botsDir, { recursive: true });
   fs.mkdirSync(tenantRoot, { recursive: true });
+  fs.mkdirSync(approvalsDir, { recursive: true });
 
   // Pre-seed the tenant row in the child's isolated DB (short-lived process —
   // the parent's db.js singleton is already bound to another file).
@@ -78,7 +80,7 @@ async function spawnTenantGateway({
     // audit + approvals live INSIDE the tenant-scoped dir.
     DB_FILE: path.join(tmp, 'chain-absent.db'),
     AUDIT_FILE: path.join(tenantRoot, 'audit.jsonl'),
-    APPROVALS_FILE: path.join(tenantRoot, 'approvals.json'),
+    APPROVALS_FILE: path.join(approvalsDir, 'approvals.json'),
     BOTS_DIR: botsDir,
   }, env);
 

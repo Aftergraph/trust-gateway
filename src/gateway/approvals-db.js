@@ -23,7 +23,15 @@
 // non-pending row (same guarantee as the JSON path scrubbing on save).
 
 const path = require('node:path');
-const { db, tx, json } = require('./db');
+// Lazy-load db.js only when in DB mode (saves DB open for legacy mode tests)
+let db, tx, json;
+function loadDb() {
+  if (db) return;
+  const dbModule = require('./db');
+  db = dbModule.db;
+  tx = dbModule.tx;
+  json = dbModule.json;
+}
 const { ApprovalStore } = require('./approvals');
 
 const DEFAULT_TABLE = 'approvals';
@@ -43,6 +51,7 @@ class ApprovalStoreDb extends ApprovalStore {
     // file: null → the base class never touches the JSON file; persistence is
     // overridden below to write to SQLite instead.
     super({ ttlMs, now, file: null, gw, computeImpactFn });
+    loadDb();
     this.table = String(table);
     if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(this.table)) {
       throw new Error(`approvals-db: invalid table name ${this.table}`);

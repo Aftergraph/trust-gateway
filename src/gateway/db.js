@@ -68,10 +68,11 @@ function open(file = resolveDbFile()) {
 let db = open();
 let openFile = process.env.TG_DB_FILE || path.join(process.cwd(), 'data', 'gateway.db');
 
-// Reset db connection (for tests) - reopens with current TG_DB_FILE
+// Reset db connection (for tests) - replaces with fresh connection at current TG_DB_FILE
 function resetDb() {
   openFile = process.env.TG_DB_FILE || path.join(process.cwd(), 'data', 'gateway.db');
   db = open(openFile);
+  txDepth = 0;
 }
 
 let txDepth = 0;
