@@ -60,7 +60,7 @@ class UserStore {
     if (!this.file) return;
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     const tmp = this.file + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify([...this.users.values()]) + '\n');
+    fs.writeFileSync(tmp, JSON.stringify([...this.users.values()]) + '\n', { mode: 0o600 });
     fs.renameSync(tmp, this.file);
     try { fs.chmodSync(this.file, 0o600); } catch { /* best effort */ }
   }
