@@ -16,7 +16,12 @@ work:
       confidence: development
       os: linux
       arch: amd64
-      pool: avc-core
+      # Dedicated single-worker pool: the suite contains load-sensitive
+      # HTTP tests (chain-archive bloat-guard) that can ECONNRESET when
+      # two suites run concurrently on this box. Serializing trust-gateway
+      # CI through one worker removes the flake; other repos stay on
+      # avc-core (3 parallel workers).
+      pool: tg-ci
 
     nodes:
       test:
