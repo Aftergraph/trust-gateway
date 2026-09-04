@@ -12,6 +12,7 @@ const { computeImpact } = require('./impact');
 const { ApprovalStore } = require('./approvals');
 const { getApprovals } = require('./approvals-db'); // FS-A5: env-gated DB variant
 const { MemoryStore, getMemoryStore } = require('./memory');
+const { BudgetStore } = require('./budgets');
 const disk = require('./disk-audit');
 const { TelemetryRing, DEFAULT_FILE: DEFAULT_TELEMETRY_FILE } = require('./telemetry');
 const { loadMounts, match } = require('./http-mounts');
@@ -55,6 +56,7 @@ class Gateway extends EventEmitter {
     now = () => Date.now(),
     auditFile = null,     // path -> durable append-only JSONL audit
     approvalsFile = null, // path -> durable approvals (pending survive restart)
+    budgets = null,       // v2 Slice 2: BudgetStore instance, or null (feature off)
     mountFiles = true,    // v2: load src/gateway/mounts/*.js plugin routes
     staticDir = null,     // v2: serve SPA from this dir at /
     marketingDir = null,  // v2: serve public site from this dir at /home
@@ -79,6 +81,7 @@ class Gateway extends EventEmitter {
     this.memory = getMemoryStore(this);
     // G12 (§20.4): telemetry ring — observability, NOT the audit chain.
     this.telemetry = new TelemetryRing({ file: telemetryFile !== undefined ? telemetryFile : DEFAULT_TELEMETRY_FILE, now });
+    this.budgets = budgets ?? null; // v2 Slice 2: opt-in; null => feature off => zero behavior change
     this.now = now;
     this.mounts = mountFiles ? loadMounts() : [];
     // Function-style mounts (120+): wire via gw.router facade. Each mount is
@@ -452,6 +455,13 @@ class Gateway extends EventEmitter {
 
     // allow → execute (executor wins for synthetic tools, else jailed dispatch)
     if (!this.dispatch && !this._findExecutor(tool)) return send(res, 500, { error: 'no_dispatcher' });
+    // orchestrator-owned guard (documented exception to ABI mount-only rule):
+    // the dispatch + budget check together form one decision; splitting them
+    // would let the audit chain record 'allow' for an action we then refuse.
+    if (this.budgets && !this.budgets.consume(bot.name).ok) {
+      this._audit({ type: 'budget_denied', bot: bot.name, tool });
+      return send(res, 402, { decision: 'deny', error: 'budget_exhausted' });
+    }
     try {
       const result = await this._run(bot.name, tool, args);
       this._audit({ type: 'action_executed', bot: bot.name, tool, ok: true });
