@@ -107,6 +107,7 @@ async function spawnGateway(opts = {}) {
   if (!up) {
     const err = new Error(`spawned gateway did not become healthy on :${port}\n${proc.log}`);
     err.log = proc.log;
+    console.error('=== spawned gateway stderr (child crash diagnostics) ===\n' + proc.log);
     throw err;
   }
 
