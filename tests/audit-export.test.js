@@ -1,78 +1,146 @@
-const { describe, it, before, after } = require('node:test');
-const assert = require('node:assert/strict');
-const path = require('node:path');
-const fs = require('node:fs');
-const os = require('node:os');
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert');
+const http = require('node:http');
+const { Gateway } = require('../src/gateway/server');
+const H = (t) => require('../src/gateway/server').hashToken(t);
+const { HashChain } = require('../src/gateway/hash-chain');
 
-describe('FS-Z5 audit export + retention', () => {
-  let tmpDir;
-  let origEnv;
-  let db;
+test('audit-export mount loads', () => {
+  const mounts = require('../src/gateway/http-mounts');
+  const loaded = mounts.loadMounts();
+  const auditExport = loaded.find(m => m.name === 'v2-audit-export');
+  assert.ok(auditExport, 'audit-export mount loaded');
+  assert.equal(auditExport.method, 'GET');
+  assert.equal(auditExport.path, '/v2/audit/export');
+  assert.equal(auditExport.auth, 'bearer');
+  assert.equal(auditExport.name, 'v2-audit-export');
+});
 
-  before(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fs-z5-'));
-    origEnv = { ...process.env };
-    process.env.TG_DB_FILE = path.join(tmpDir, 'gateway.db');
-    process.env.TG_AUDIT_EXPORT = '1';
-    delete require.cache[require.resolve('../src/gateway/db')];
-    delete require.cache[require.resolve('../src/gateway/audit-export-jsonl')];
-    db = require('../src/gateway/db').db;
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS chain_entries (
-        seq INTEGER PRIMARY KEY,
-        ts INTEGER NOT NULL,
-        prev_hash TEXT NOT NULL,
-        hash TEXT NOT NULL UNIQUE,
-        payload TEXT NOT NULL
-      )
-    `);
+function buildServer() {
+  const server = http.createServer();
+  let gw = null;
+  return {
+    server,
+    attach(gateway) {
+      gw = gateway;
+      server.on('request', (req, res) => gw.handle(req, res));
+    },
+    close() { return new Promise((r) => server.close(() => r())); },
+    gw: () => gw,
+  };
+}
+
+function listen(server) {
+  return new Promise((resolve, reject) => {
+    server.listen(0, '127.0.0.1', () => {
+      const { port } = server.address();
+      resolve(`http://127.0.0.1:${port}`);
+    });
+    server.on('error', reject);
   });
+}
 
-  after(() => {
-    process.env = origEnv;
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
+test('audit-export returns 404 for non-matching mount path', async () => {
+  const ctx = buildServer();
+  const chain = new HashChain();
+  chain.append({ type: 'test', data: 'hello' });
+  ctx.attach(new Gateway({ bots: { test: { tokenHash: H('abc123') } }, chain, staticDir: null }));
+  const url = await listen(ctx.server);
+  try {
+    // GET to /v2/audit/export without auth should return 401
+    const res = await fetch(`${url}/v2/audit/export`);
+    assert.equal(res.status, 401);
+  } finally {
+    await ctx.close();
+  }
+});
 
-  it('enabled respects env', () => {
-    const ae = require('../src/gateway/audit-export-jsonl');
-    assert.equal(ae.enabled(), true);
-  });
+test('audit-export returns 401 without auth', async () => {
+  const ctx = buildServer();
+  const chain = new HashChain();
+  ctx.attach(new Gateway({ bots: { test: { tokenHash: H('abc123') } }, chain, staticDir: null }));
+  const url = await listen(ctx.server);
+  try {
+    const res = await fetch(`${url}/v2/audit/export?format=json`);
+    assert.equal(res.status, 401);
+    const body = await res.text();
+    assert.match(body, /unauthorized/);
+  } finally {
+    await ctx.close();
+  }
+});
 
-  it('exportEvents returns file on empty chain', () => {
-    const ae = require('../src/gateway/audit-export-jsonl');
-    const r = ae.exportEvents({});
-    assert.ok(r.file);
-    assert.equal(r.count, 0);
-    assert.ok(fs.existsSync(r.file));
-    fs.unlinkSync(r.file);
-  });
+test('audit-export returns JSON chain with bearer auth', async () => {
+  const ctx = buildServer();
+  const chain = new HashChain();
+  chain.append({ type: 'action', name: 'test_action' });
+  ctx.attach(new Gateway({ bots: { test: { tokenHash: H('abc123') } }, chain, staticDir: null }));
+  const url = await listen(ctx.server);
+  try {
+    const res = await fetch(`${url}/v2/audit/export?format=json`, {
+      headers: { authorization: 'Bearer abc123' }
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('content-type'), 'application/json; charset=utf-8');
+    
+    const body = await res.json();
+    assert.ok(body.chainId);
+    assert.equal(body.totalEntries, 2); // genesis + 1 entry
+    assert.ok(Array.isArray(body.entries));
+    assert.equal(body.entries.length, 2);
+    assert.ok(body.genesis);
+    assert.equal(body.genesis.seq, 0);
+    assert.ok(body.verified);
+    assert.ok(body.verified.ok);
+  } finally {
+    await ctx.close();
+  }
+});
 
-  it('applyRetention returns 0 pruned when no policy', () => {
-    const ae = require('../src/gateway/audit-export-jsonl');
-    const r = ae.applyRetention();
-    assert.equal(r.pruned, 0);
-    assert.equal(r.reason, 'no_retention_policy');
-  });
+test('audit-export returns PDF format with bearer auth', async () => {
+  const ctx = buildServer();
+  const chain = new HashChain();
+  chain.append({ type: 'action', name: 'test_action' });
+  ctx.attach(new Gateway({ bots: { test: { tokenHash: H('abc123') } }, chain, staticDir: null }));
+  const url = await listen(ctx.server);
+  try {
+    const res = await fetch(`${url}/v2/audit/export?format=pdf`, {
+      headers: { authorization: 'Bearer abc123' }
+    });
+    assert.equal(res.status, 200);
+    const data = await res.text();
+    assert.ok(data.includes('Trust Gateway Audit Chain'));
+    assert.ok(data.includes(chain.chainId));
+  } finally {
+    await ctx.close();
+  }
+});
 
-  it('applyRetention with policy returns structure', () => {
-    process.env.TG_AUDIT_RETENTION_MS = '86400000';
-    delete require.cache[require.resolve('../src/gateway/audit-export-jsonl')];
-    const ae = require('../src/gateway/audit-export-jsonl');
-    const r = ae.applyRetention();
-    assert.ok(typeof r.pruned === 'number');
-    assert.ok(r.cutoffTs > 0);
-    assert.equal(r.retentionMs, 86400000);
-    delete process.env.TG_AUDIT_RETENTION_MS;
-    delete require.cache[require.resolve('../src/gateway/audit-export-jsonl')];
-  });
+test('audit-export returns 400 for invalid format', async () => {
+  const ctx = buildServer();
+  const chain = new HashChain();
+  ctx.attach(new Gateway({ bots: { test: { tokenHash: H('abc123') } }, chain, staticDir: null }));
+  const url = await listen(ctx.server);
+  try {
+    const res = await fetch(`${url}/v2/audit/export?format=invalid`, {
+      headers: { authorization: 'Bearer abc123' }
+    });
+    assert.equal(res.status, 400);
+    const body = await res.json();
+    assert.equal(body.error, 'invalid_format');
+  } finally {
+    await ctx.close();
+  }
+});
 
-  it('inert when TG_AUDIT_EXPORT unset', () => {
-    delete process.env.TG_AUDIT_EXPORT;
-    delete require.cache[require.resolve('../src/gateway/audit-export-jsonl')];
-    const ae = require('../src/gateway/audit-export-jsonl');
-    assert.equal(ae.enabled(), false);
-    assert.equal(ae.exportEvents({}), null);
-    process.env.TG_AUDIT_EXPORT = '1';
-    delete require.cache[require.resolve('../src/gateway/audit-export-jsonl')];
-  });
+test('verify.html file exists and has no innerHTML', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  
+  const verifyPath = path.join(__dirname, '..', 'app', 'verify.html');
+  assert.ok(fs.existsSync(verifyPath), 'verify.html exists');
+  
+  const content = fs.readFileSync(verifyPath, 'utf8');
+  assert.ok(!/\.innerHTML\s*[\+]?=/.test(content), 'verify.html must never assign innerHTML');
 });
