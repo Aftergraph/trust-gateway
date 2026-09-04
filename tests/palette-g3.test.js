@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 // G3 (§18.5) — fuzzy object-id resolution in the ⌘K palette:
 //   1. bare integer → 'jump to seq N' row (TG_HISTORY.jumpToSeq)
 //   2. 8-hex / sess_<8hex> → 'open transcript /h/<token>' row (client-side

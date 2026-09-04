@@ -28,7 +28,14 @@ function resolveDbFile() {
 function open(file = resolveDbFile()) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const d = new DatabaseSync(file);
-  d.exec('PRAGMA journal_mode = WAL');
+  // WAL on DrvFs (/mnt/* under WSL) throws 'disk I/O error' when -wal/-shm sidecars
+  // are stale-locked (seen after parallel shard runs). Fall back to DELETE journaling
+  // rather than crashing the module import — single-writer semantics still hold.
+  try {
+    d.exec('PRAGMA journal_mode = WAL');
+  } catch {
+    d.exec('PRAGMA journal_mode = DELETE');
+  }
   d.exec('PRAGMA synchronous = NORMAL');
   d.exec('PRAGMA foreign_keys = ON');
   // Shared schema: generic key/value store (JSON-serialized values).
@@ -85,9 +92,16 @@ function open(file = resolveDbFile()) {
 }
 
 // Single shared connection for the process (reuses data/gateway.db — the
-// same file SqlChain already uses; WAL allows both connections to coexist).
-let db = open();
+// same file SqlChain already uses). LAZY: opening at import time made a locked/
+// contended repo db crash EVERY module import (seen when parallel test runners
+// hold the WAL). db opens on first use instead; resetDb() semantics unchanged.
+let db = null;
 let openFile = process.env.TG_DB_FILE || path.join(process.cwd(), 'data', 'gateway.db');
+
+function _db() {
+  if (!db) db = open(openFile);
+  return db;
+}
 
 // Reset db connection (for tests) - replaces with fresh connection at current TG_DB_FILE
 function resetDb() {
@@ -105,6 +119,7 @@ let txDepth = 0;
  * @returns {T}
  */
 function tx(fn) {
+  const db = _db();
   if (txDepth > 0) return fn(); // join the outer transaction
   db.exec('BEGIN IMMEDIATE');
   txDepth++;
@@ -135,12 +150,12 @@ function unjson(s) {
   }
 }
 
-module.exports = { db, tx, json, unjson, open, resetDb };
+module.exports = { get db() { return _db(); }, tx, json, unjson, open, resetDb };
 
 // Auto-create audit_chain compatibility view on first require.
 // Older modules reference audit_chain; sql-chain uses chain_entries.
 try {
-  db.exec(`
+  _db().exec(`
     CREATE VIEW IF NOT EXISTS audit_chain AS
     SELECT seq, ts, prev_hash, hash, payload,
            json_extract(payload, '$.tenant') AS tenant,

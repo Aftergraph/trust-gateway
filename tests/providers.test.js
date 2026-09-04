@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 // W6 tests — provider/model registry + mounts.
 // Mock network with a local http stub; NEVER hit real providers.
 // Key rule: no sk- pattern (and no token-like strings) in ANY response.

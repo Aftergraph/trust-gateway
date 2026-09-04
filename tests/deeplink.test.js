@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 // Phase 2 (§2.2 + §20.3) tests: domain URIs serve the console shell, and the
 // object resolver GET /d/<DOMAIN>/o/<type>/<id> answers correctly, with
 // anti-enumeration for session tokens (G3) and per-store RBAC.

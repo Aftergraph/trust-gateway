@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 // W5 — Live Computer: hash-chained capped frames (summaries only, never raw
 // args), state machine, human control (takeover/release → audited
 // control_taken/control_released; refusals on the record), SSE stream with

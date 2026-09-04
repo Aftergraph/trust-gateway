@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 process.env.TG_AIE_FAIL_OPEN = 'true'; // no AIE runtime in unit tests; fail-open for unit tests only
 // FS-B3 site phase 2 tests — status.html, pricing.html, docs.html, chain
 // stamp, and the extended site guarantees (textContent-only JS across the

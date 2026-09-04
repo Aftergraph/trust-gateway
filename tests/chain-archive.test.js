@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 // FS-I7 tests — chain compaction / archival.
 //
 // Covers: archival of old entries (JSONL + sha256 in manifest), safety

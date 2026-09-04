@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 // C4 tests — adapter registry + /v2/adapters mount.
 // Coverage: validation matrix, persistence (0600, fail-closed, reload),
 // secret hygiene (hash-only storage, no value in disk / chain / HTTP

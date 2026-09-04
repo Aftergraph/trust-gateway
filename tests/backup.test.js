@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 // FS-B1 tests — verified backup/restore.
 //
 // Covers: manifest integrity (sha256 per file + chainHead binding), FIFO

@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 // §19.3/G7 — the spec-named validation harness (was a BACKEND GAP).
 // Loads app/compose.js in a vm sandbox and asserts: every shipped manifest
 // validates; invalid manifests reject with useful errors; the composition

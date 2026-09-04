@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 // Slice 3 acceptance tests: token-hash + rotation.
 //
 // A-001 seeded store contains 64-hex digest, not plaintext

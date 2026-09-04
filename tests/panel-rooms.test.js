@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 // Wave B UI — Rooms panel tests.
 // Covers: file presence, XSS policy (textContent only), TG_PANELS contract,
 // window.TG surface usage, render-cap constant, bot/human badges + kind

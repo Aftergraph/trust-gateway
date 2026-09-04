@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 // W8 marketing site tests — serves site/ through the real Gateway static
 // mount over live HTTP, plus static guarantees (XSS policy, no external
 // assets, comparison facts traceable to docs/COMPARISON-2026-09-02.md).

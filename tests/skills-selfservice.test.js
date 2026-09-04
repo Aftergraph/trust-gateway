@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 // FS-F1 — skills self-service for non-operators.
 //
 // Covers: the 'skills.own' bot capability (access tier 'self' in

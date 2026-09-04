@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 // C4 panel tests — Integrations console panel.
 // Static lint (file presence, no innerHTML, TG_PANELS contract, shared TG
 // surface) + DOM behavior with stubbed TG (cards, register form, secret

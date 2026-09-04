@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 // W10 self-repair tests: diagnosis detects a REAL tamper (forged entry),
 // quarantine copy lands on disk, audit entry sealed, HTTP 503, and the
 // repairer never rewrites hashes (safe isolation only).

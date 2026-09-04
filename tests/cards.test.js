@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 // tests/cards.test.js — Adaptive Cards slice (mount 57 + panel + validator).
 // Covers: mount loads, 401 without auth, validation accepts valid + rejects invalid,
 // renderer uses textContent only (no innerHTML).

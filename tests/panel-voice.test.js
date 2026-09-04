@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 // Wave C UI — Voice panel tests (C2).
 // Covers: file presence, XSS policy (textContent only, no innerHTML), the
 // TG_PANELS registration contract (id 'voice', title 'Voice'), use of the

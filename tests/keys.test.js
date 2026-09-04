@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 // G5 (§18.7) — keyboard map registry tests. Loads app/keys.js in a vm
 // sandbox, asserts the registry shape, that detectConflicts catches
 // duplicate (context,key) bindings, that the shipped set is conflict-free,

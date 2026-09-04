@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 // W4 — plugin / MCP / skills hub tests (src/gateway/plugins.js + mounts/35-plugins.js).
 // Covers: manifest validation (reject bad), install/copy into data/modules/,
 // enable/disable audit, skills frontmatter parse (trigger ≤57), MCP stdio-vs-url

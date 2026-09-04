@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 process.env.TG_AIE_FAIL_OPEN = 'true'; // unit tests: no AIE runtime
 // Tests for the slice: perimeter-guards — rate-limit + audit since-cap.
 // Acceptance: A-001..A-006 + invalid_limit guards (A-004).

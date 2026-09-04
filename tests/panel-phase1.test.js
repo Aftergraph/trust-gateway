@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 // Phase 1 (§20) regression tests: queue-first NOW strip, ⌘K palette wired to
 // /v2/search, and the palette→History seq-jump contract. Source-level checks
 // (same style as panel-*.test.js) + one live-contract check of the search

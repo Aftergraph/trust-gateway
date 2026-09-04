@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 // Wave D — C1 llm-live tests. Local node:http stub upstream — never a
 // real provider. Covers the six required scenarios from the C1 contract:
 //   (a) no-action single turn

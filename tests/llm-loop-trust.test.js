@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 // Wave D (D4) — trust-wired llm-loop observation tests.
 // Covers the E3 contract: external tool results are quarantined
 // and scanned before entering the brain; internal results pass

@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 // D2 tests — outbound Telegram notification adapter (wave D).
 // Coverage: sendNotification unit (success, 400, timeout, validation),
 // mount registration + 401 + role rejection + 503 env-unset, audit hygiene

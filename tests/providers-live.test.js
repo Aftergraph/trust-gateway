@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 // D5 tests — provider observability.
 // Covers: probeAll with injected fetch (reachable 200, unreachable ECONN,
 // 401-as-reachable), no value leak in result or chain, mount role gate

@@ -1,3 +1,5 @@
+'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 const { describe, it, before } = require('node:test');
 const assert = require('node:assert/strict');
 const { Gateway } = require('../src/gateway/server');

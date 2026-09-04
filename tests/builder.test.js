@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 // W3 tests — custom-agent builder + profiles.
 // Covers: validation (no invented caps), RBAC (operator_required → 403 +
 // audit approval_forbidden), durability (agents.json round-trip, corrupt-file

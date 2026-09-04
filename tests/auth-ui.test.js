@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 // FS-A3 — client auth shell source assertions. The console auth layer
 // (app/auth.js) is a browser script with no build step, so these tests pin
 // its contract by source: textContent-only DOM writes, silent 401 handling,

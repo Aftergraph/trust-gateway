@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 // Wave F F1 — first-class Run/Step objects: persistence, lifecycle, HTTP
 // surface, eviction, hygiene, and deepTurn integration. Local stubs only;
 // every store writes to an isolated tmpdir file.

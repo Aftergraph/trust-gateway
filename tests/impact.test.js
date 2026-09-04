@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 // Deterministic impact-analysis tests. Each tool class must return the
 // expected blastRadius and a rollback plan that references the affected
 // path. Unknown tools must return confidence:'missing' with a

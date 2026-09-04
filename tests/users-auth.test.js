@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 // FS-A1 tests — human user accounts + scrypt sessions + /v2/auth mounts.
 // Covers: register/login/logout round-trip over real HTTP, wrong-password
 // generic error (no enumeration), scrypt hash never returned, rate limits,

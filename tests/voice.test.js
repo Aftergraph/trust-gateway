@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
 // C2 voice tests: router unit behavior (echo default, remote mock via
 // injected fetch, validation, audit hygiene), mount registration + 401,
 // real HTTP over the mounts, and response shapes.
