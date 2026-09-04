@@ -404,3 +404,14 @@ header {
 .auth-submit { align-self: flex-start; cursor: pointer; }
 .auth-submit:disabled { opacity: .5; cursor: default; }
 .auth-msg { min-height: 1em; font-size: var(--tg-text-sm); color: var(--tg-risk-destructive); }
+
+/* ── FS-A1 slice 3: tenant picker (operator console) ── */
+.tenant-select {
+  background: var(--tg-surface, #111);
+  color: var(--tg-fg, #eee);
+  border: 1px solid var(--tg-border, #333);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  max-width: 160px;
+}
