@@ -1,6 +1,6 @@
 # Trust Gateway — Roadmap v3 (2026-09-03)
 
-Status basis: `main @ 56765dd` — 916/916 tests grønne, tier-A 9/9 domæner,
+Status basis: `main @ 8b03b54` — 916/916 tests grønne, tier-A 9/9 domæner,
 gateway live på :8800 (chain 513+). Wave v2h (15 slices) konvergeret: G3/G5/
 G12/FE1/FE2, FS-A1–A5, FS-B1–B3, FS-C1–C2, FS-D1 (integration battery +
 load smoke + security sweep). Denne roadmap erstatter den spøjse

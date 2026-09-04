@@ -2,7 +2,7 @@
 status: current
 date: 2026-09-02
 audience: operators, auditors
-authority: derived directly from src/gateway/** as of 264319d; enforced by tests/standards.test.js
+authority: derived directly from src/gateway/** as of 8b03b54; enforced by tests/standards.test.js
 ---
 
 # TRANSPARENCY.md — what every module does, stores, and writes to the record

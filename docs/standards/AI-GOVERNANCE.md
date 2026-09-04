@@ -160,7 +160,7 @@ same commit.
 
 ## 9. Known limitations (audited 2026-09-03)
 
-Audited against `main @ 56765dd` (916/916 tests green). Stated plainly, with
+Audited against `main @ 8b03b54` (916/916 tests green). Stated plainly, with
 the dispatched/planned work that resolves each:
 
 - **The jail is process discipline, not an OS sandbox.** `dispatcher.js`

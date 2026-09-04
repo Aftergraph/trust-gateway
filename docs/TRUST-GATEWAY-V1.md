@@ -1,5 +1,5 @@
 ---
-status: v1-implemented
+status: legacy; see docs/ROADMAP.md for current architecture
 date: 2026-09-02
 related: docs/COMPARISON-2026-09-02.md
 ---

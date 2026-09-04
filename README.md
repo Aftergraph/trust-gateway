@@ -34,7 +34,7 @@ npm test          # unit + integration tests (node:test, 0 dependencies)
 npm run demo      # live HTTP-demo: fuldt bot-workflow inkl. tamper-detektion
 ```
 
-Demo-output (verificeret 2026-09-02):
+Demo-output (verificeret 2026-09-04):
 
 ```
 ✔ unauthenticated → 401
