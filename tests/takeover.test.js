@@ -49,15 +49,18 @@ let capsFromChain = ['read', 'write'];
 function run(mountFn, gw, method, pathStr, body) {
   const res = fakeRes();
   const url = new URL(`http://x${pathStr}`);
-  const req = { method, on: (ev, cb) => { if (ev === 'data') {} if (ev === 'end') cb(); }, headers: {} };
-  // inject body via readBody shim: our mount uses readBody(req) from ../server —
-  // for tests we bypass by making readBody return JSON.stringify(body).
-  const origReadBody = require('../src/gateway/server.js').readBody;
-  require('../src/gateway/server.js').readBody = async () => JSON.stringify(body || {});
-  return mountFn.handle(gw, req, res, { url, bot: { name: 'op-bot' } }).then((r) => {
-    require('../src/gateway/server.js').readBody = origReadBody;
-    return { res, r };
-  });
+  const payload = body ? JSON.stringify(body) : '';
+  const req = {
+    method,
+    headers: {},
+    on(ev, cb) {
+      if (ev === 'data' && payload) setImmediate(() => cb(Buffer.from(payload)));
+      if (ev === 'end') setImmediate(cb);
+      return req;
+    },
+  };
+  return mountFn.handle(gw, req, res, { url, bot: { name: 'op-bot', role: 'operator' } })
+    .then(() => ({ res }));
 }
 
 test('takeover issues subset-only capabilities and revokes pending actions', async () => {
