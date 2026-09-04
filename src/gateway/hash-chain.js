@@ -70,8 +70,24 @@ class HashChain {
     return { ok: true, length: this.entries.length, head: prev.hash, chainId: this.chainId };
   }
 
-  since(seq) {
-    return this.entries.filter((e) => e.seq > seq);
+  // since(seq, opts?) — paged read after `seq`.
+  // opts: { limit?: number = 500, cursor?: number }
+  // Returns { entries, nextSince }: nextSince is the seq to pass on the next
+  // call (the seq of the last entry returned), or null if the page was
+  // complete. Callers should keep paging until nextSince is null.
+  // Backward-compatible note: existing callers passing only `seq` get a
+  // {entries, nextSince:null} envelope (callers that still want an array
+  // must read .entries).
+  since(seq, opts) {
+    const tail = this.entries.filter((e) => e.seq > seq);
+    const o = opts || {};
+    const entries = o.limit == null
+      ? tail
+      : tail.slice(0, Math.max(0, Math.floor(o.limit)));
+    const nextSince = entries.length === 0 || entries.length === tail.length
+      ? null
+      : entries[entries.length - 1].seq;
+    return { entries, nextSince };
   }
   // Rebuild from persisted entries; verifies the whole chain. Throws on any
   // tampering, gap, or missing genesis (fail closed).

@@ -22,6 +22,13 @@ const os = require('node:os');
 const path = require('node:path');
 
 function jest_reset() {
+  // Reset the database connection before clearing cache so tests get fresh connection
+  try {
+    const dbModule = require('../src/gateway/db');
+    if (dbModule.resetDb) dbModule.resetDb();
+  } catch {
+    // Not loaded yet or error
+  }
   for (const m of Object.keys(require.cache)) {
     if (
       m.endsWith('/src/gateway/db.js') ||

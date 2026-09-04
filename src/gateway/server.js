@@ -12,11 +12,16 @@ const { computeImpact } = require('./impact');
 const { ApprovalStore } = require('./approvals');
 const { getApprovals } = require('./approvals-db'); // FS-A5: env-gated DB variant
 const { MemoryStore, getMemoryStore } = require('./memory');
+const { BudgetStore } = require('./budgets');
 const disk = require('./disk-audit');
 const { TelemetryRing, DEFAULT_FILE: DEFAULT_TELEMETRY_FILE } = require('./telemetry');
 const { loadMounts, match } = require('./http-mounts');
 
 const MAX_BODY = 256 * 1024;
+const DEFAULT_RATE_LIMIT = 60;          // req/min/token - env TG_RATE_LIMIT overrides
+const DEFAULT_OPERATOR_MULT = 3;        // operator budget multiplier - env TG_RATE_OPERATOR_MULTIPLIER
+const RATE_WINDOW_MS = 60 * 1000;
+const MAX_PAGE_LIMIT = 5000;
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -55,6 +60,7 @@ class Gateway extends EventEmitter {
     now = () => Date.now(),
     auditFile = null,     // path -> durable append-only JSONL audit
     approvalsFile = null, // path -> durable approvals (pending survive restart)
+    budgets = null,       // v2 Slice 2: BudgetStore instance, or null (feature off)
     mountFiles = true,    // v2: load src/gateway/mounts/*.js plugin routes
     staticDir = null,     // v2: serve SPA from this dir at /
     marketingDir = null,  // v2: serve public site from this dir at /home
@@ -79,6 +85,7 @@ class Gateway extends EventEmitter {
     this.memory = getMemoryStore(this);
     // G12 (§20.4): telemetry ring — observability, NOT the audit chain.
     this.telemetry = new TelemetryRing({ file: telemetryFile !== undefined ? telemetryFile : DEFAULT_TELEMETRY_FILE, now });
+    this.budgets = budgets ?? null; // v2 Slice 2: opt-in; null => feature off => zero behavior change
     this.now = now;
     this.mounts = mountFiles ? loadMounts() : [];
     // Function-style mounts (120+): wire via gw.router facade. Each mount is
@@ -113,6 +120,15 @@ class Gateway extends EventEmitter {
     this.staticDir = staticDir ?? null;
     this.botsDir = botsDir;
     this._executors = []; // v2 wave B: {re, fn(bot,tool,args)} for synthetic tools
+    // Token-bucket per-bot rate limiter (slice: perimeter-guards).
+    const envLimit = Number(process.env.TG_RATE_LIMIT);
+    this.rateLimit = Number.isFinite(envLimit) && envLimit > 0 ? envLimit : DEFAULT_RATE_LIMIT;
+    const envMult = Number(process.env.TG_RATE_OPERATOR_MULTIPLIER);
+    this.rateOperatorMult = Number.isFinite(envMult) && envMult > 0 ? envMult : DEFAULT_OPERATOR_MULT;
+    this._rateBuckets = new Map(); // token -> { count, windowStart }
+    // v2 token-hash: stale digest indices for rotation auditing (A-006).
+    this.knownStaleHashes = new Set();
+    this.knownStaleByBot = Object.create(null);
     // wave C convention: a mount file may ALSO export executors:[{re, make(gw)}]
     // so new tool namespaces never touch bin/gateway.js (single-writer rule).
     for (const m of this.mounts) {
@@ -169,14 +185,69 @@ class Gateway extends EventEmitter {
       } catch { /* tenants table missing → treat as no prefix */ }
     }
     for (const [name, bot] of Object.entries(this.bots)) {
-      if (!bot.token) continue;
       for (const cand of candidates) {
-        if (cryptoSafeEqual(bot.token, cand)) {
+        // wave-B token security: prefer sha256 digest compare (tokenHash at rest,
+        // plaintext never stored); plain token still accepted for legacy rosters.
+        const presentedHash = hashToken(cand);
+        if (bot.tokenHash && cryptoSafeEqual(bot.tokenHash, presentedHash)) {
+          if (this.knownStaleHashes && this.knownStaleHashes.has(bot.tokenHash)) {
+            this.knownStaleHashes.delete(bot.tokenHash);
+            (this.knownStaleByBot[name] || new Set()).delete(bot.tokenHash);
+          }
+          return { name, ...bot, tenantPrefix: tm ? tm[1] : null };
+        }
+        if (bot.token && cryptoSafeEqual(bot.token, cand)) {
           return { name, ...bot, tenantPrefix: tm ? tm[1] : null };
         }
       }
     }
+    // A-006: stale digest rejection — after rotation the OLD bearer must fail
+    // closed with an audited 'token_rejected_stale' naming the bot it belonged to.
+    for (const cand of candidates) {
+      const staleHash = hashToken(cand);
+      for (const [botName, hashes] of Object.entries(this.knownStaleByBot || {})) {
+        if (hashes && hashes.has(staleHash)) {
+          this._audit({ type: 'token_rejected_stale', bot: botName });
+          return null;
+        }
+      }
+    }
     return null;
+  }
+
+  _enforceRateLimit(bot) {
+    const budget = this.rateLimit * (bot.role === 'operator' ? this.rateOperatorMult : 1);
+    const t = this.now();
+    let b = this._rateBuckets.get(bot.name);
+    if (!b || t - b.windowStart >= RATE_WINDOW_MS) {
+      b = { count: 0, windowStart: t };
+      this._rateBuckets.set(bot.name, b);
+    }
+    b.count += 1;
+    if (b.count > budget) {
+      return { status: 429, body: { error: 'rate_limited' }, remaining: 0, budget };
+    }
+    return { status: 200, body: null, remaining: budget - b.count, budget };
+  }
+
+  _rateSnapshot(botName) {
+    const b = this._rateBuckets.get(botName);
+    if (!b) return { remaining: null, budget: null, windowStart: null };
+    const t = this.now();
+    const elapsed = t - b.windowStart;
+    if (elapsed >= RATE_WINDOW_MS) return { remaining: null, budget: null, windowStart: null };
+    const bot = this.bots[botName] || {};
+    const budget = this.rateLimit * (bot.role === 'operator' ? this.rateOperatorMult : 1);
+    return { remaining: Math.max(0, budget - b.count), budget, windowStart: b.windowStart };
+  }
+
+  // v2 token rotation: retain a digest as 'stale' so subsequent requests
+  // with the OLD bearer are audited as 'token_rejected_stale' (A-006).
+  _markStale(botName, tokenHash) {
+    if (!botName || !tokenHash) return;
+    this.knownStaleHashes.add(tokenHash);
+    if (!this.knownStaleByBot[botName]) this.knownStaleByBot[botName] = new Set();
+    this.knownStaleByBot[botName].add(tokenHash);
   }
 
   _audit(payload) {
@@ -271,10 +342,14 @@ class Gateway extends EventEmitter {
       if (mount.auth === 'bearer') {
         bot = this._auth(req);
         if (!bot) { this._audit({ type: 'auth_rejected', path: pathname }); return send(res, 401, { error: 'unauthorized' }); }
+        const rl = this._enforceRateLimit(bot);
+        if (rl.status === 429) { this._audit({ type: 'rate_limited', bot: bot.name, path: pathname }); return send(res, 429, rl.body); }
       } else if (mount.auth === 'query') {
         const token = url.searchParams.get('token') || '';
         bot = this._auth({ headers: { authorization: token ? `Bearer ${token}` : '' } });
         if (!bot) { this._audit({ type: 'auth_rejected', path: pathname }); return send(res, 401, { error: 'unauthorized' }); }
+        const rl = this._enforceRateLimit(bot);
+        if (rl.status === 429) { this._audit({ type: 'rate_limited', bot: bot.name, path: pathname }); return send(res, 429, rl.body); }
       }
       return mount.handle(this, req, res, { url, params, bot });
     }
@@ -295,6 +370,13 @@ class Gateway extends EventEmitter {
     }
     const path = pathname; // legacy handlers below use `path`
 
+    // Rate-limit guard (slice: perimeter-guards) — legacy v1 surface.
+    const rl = this._enforceRateLimit(bot);
+    if (rl.status === 429) {
+      this._audit({ type: 'rate_limited', bot: bot.name, path });
+      return send(res, 429, rl.body);
+    }
+
     if (req.method === 'POST' && path === '/v1/actions') {
       return this._postAction(req, res, bot);
     }
@@ -310,8 +392,12 @@ class Gateway extends EventEmitter {
     }
     if (req.method === 'GET' && path === '/v1/audit') {
       const since = Number(url.searchParams.get('since') || 0);
-      const entries = this.chain.since(since);
-      return send(res, 200, { entries, head: this.chain.head.hash, verified: this.chain.verify() });
+      const limit = parseLimit(url.searchParams.get('limit'));
+      if (limit === null) return send(res, 400, { error: 'invalid_limit' });
+      const page = this.chain.since(since, { limit });
+      const body = { entries: page.entries, nextSince: page.nextSince, head: this.chain.head.hash, verified: this.chain.verify() };
+      if (page.nextSince !== null) body.cursor = page.nextSince;
+      return send(res, 200, body);
     }
     if (req.method === 'GET' && path === '/v1/audit/verify') {
       return send(res, 200, this.chain.verify());
@@ -452,6 +538,13 @@ class Gateway extends EventEmitter {
 
     // allow → execute (executor wins for synthetic tools, else jailed dispatch)
     if (!this.dispatch && !this._findExecutor(tool)) return send(res, 500, { error: 'no_dispatcher' });
+    // orchestrator-owned guard (documented exception to ABI mount-only rule):
+    // the dispatch + budget check together form one decision; splitting them
+    // would let the audit chain record 'allow' for an action we then refuse.
+    if (this.budgets && !this.budgets.consume(bot.name).ok) {
+      this._audit({ type: 'budget_denied', bot: bot.name, tool });
+      return send(res, 402, { decision: 'deny', error: 'budget_exhausted' });
+    }
     try {
       const result = await this._run(bot.name, tool, args);
       this._audit({ type: 'action_executed', bot: bot.name, tool, ok: true });
@@ -482,7 +575,7 @@ class Gateway extends EventEmitter {
     }
 
     const approver = bot.name;
-    const parkedAction = parked && parked.status === 'pending' ? { tool: parked.tool, args: parked.args } : null;
+    const parkedAction = parked && parked.status === 'pending' ? { tool: parked.tool, args: parked.args, bot: parked.bot } : null;
     const result = this.approvals.resolve(id, verb, approver);
     this._audit({
       type: 'approval_resolved',
@@ -501,6 +594,11 @@ class Gateway extends EventEmitter {
     // Approved → execute the parked decision (survives restart via durable store).
     if (!parkedAction) return send(res, 500, { error: 'parked_action_missing' });
     if (!this.dispatch && !this._findExecutor(parkedAction.tool)) return send(res, 500, { error: 'no_dispatcher' });
+    // Budget check after approval — mirrors _postAction guard.
+    if (this.budgets && !this.budgets.consume(parkedAction.bot).ok) {
+      this._audit({ type: 'budget_denied', bot: parkedAction.bot, tool: parkedAction.tool });
+      return send(res, 402, { id, status: 'approved', decision: 'deny', error: 'budget_exhausted' });
+    }
     try {
       const out2 = await this._run(bot.name, parkedAction.tool, parkedAction.args);
       this._audit({ type: 'action_executed_after_approval', approvalId: id, tool: parkedAction.tool, ok: true });
@@ -512,12 +610,26 @@ class Gateway extends EventEmitter {
   }
 }
 
+// sha256 hex digest of a bearer token — the only form persisted at rest.
+function hashToken(token) {
+  return crypto.createHash('sha256').update(token, 'utf8').digest('hex');
+}
+
 function cryptoSafeEqual(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
   const ab = Buffer.from(a);
   const bb = Buffer.from(b);
   if (ab.length !== bb.length) return false;
   return crypto.timingSafeEqual(ab, bb);
+}
+
+// Parses a `limit` query-string value. Returns null on invalid (fail closed),
+// number otherwise. Default 500 when the param is missing.
+function parseLimit(raw) {
+  if (raw === null || raw === undefined || raw === '') return 500;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 1 || n > MAX_PAGE_LIMIT) return null;
+  return n;
 }
 const crypto = require('node:crypto');
 
@@ -537,4 +649,11 @@ function canApprove(bot) {
   return false;
 }
 
-module.exports = { Gateway, send, readBody, canApprove };
+// Token rotation gate: operator can rotate any bot; non-operator can rotate only itself.
+function canSelfRotate(caller, target) {
+  if (!caller || !target) return false;
+  if (caller.role === 'operator') return true;
+  return caller.name === target;
+}
+
+module.exports = { Gateway, send, readBody, canApprove, canSelfRotate, parseLimit, hashToken };

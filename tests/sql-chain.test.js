@@ -70,11 +70,31 @@ test('since() returns lazily-loaded entries with seq > n and reconstructs payloa
     const s = new SqlChain({ file: h.file });
     for (let i = 1; i <= 5; i++) s.append({ i });
     const tail = s.since(2);
-    assert.equal(tail.length, 3);
-    assert.deepStrictEqual(tail.map((e) => e.seq), [3, 4, 5]);
-    assert.deepStrictEqual(tail[0].payload, { i: 3 });
-    assert.equal(typeof tail[0].hash, 'string');
-    assert.equal(tail[0].hash.length, 64);
+    assert.equal(tail.entries.length, 3);
+    assert.deepStrictEqual(tail.entries.map((e) => e.seq), [3, 4, 5]);
+    assert.deepStrictEqual(tail.entries[0].payload, { i: 3 });
+    assert.equal(typeof tail.entries[0].hash, 'string');
+    assert.equal(tail.entries[0].hash.length, 64);
+    assert.equal(tail.nextSince, null); // last page (no cap)
+    s.close();
+  } finally { cleanup(h); }
+});
+
+test('since() with limit returns at most `limit` and exposes nextSince cursor', () => {
+  const h = tmpDb();
+  try {
+    const s = new SqlChain({ file: h.file });
+    for (let i = 1; i <= 7; i++) s.append({ i });
+    const p1 = s.since(0, { limit: 3 });
+    assert.equal(p1.entries.length, 3);
+    assert.deepStrictEqual(p1.entries.map((e) => e.seq), [1, 2, 3]);
+    assert.equal(p1.nextSince, 3);
+    const p2 = s.since(p1.nextSince, { limit: 3 });
+    assert.equal(p2.entries.length, 3);
+    assert.equal(p2.nextSince, 6);
+    const tail = s.since(p2.nextSince, { limit: 100 });
+    assert.equal(tail.entries.length, 1);
+    assert.equal(tail.nextSince, null);
     s.close();
   } finally { cleanup(h); }
 });

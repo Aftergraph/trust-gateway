@@ -125,9 +125,11 @@ test('telemetry: restart persistence — ring reloads data/telemetry.json', asyn
   await fetch(srv1.port, 'POST', '/v2/telemetry', OPERATOR, JSON.stringify({ event: 'migration_phase', fields: { phase: 4, hasFlag: true } }));
   await fetch(srv1.port, 'POST', '/v2/telemetry', OPERATOR, JSON.stringify({ event: 'palette_open' }));
   await srv1.close();
-  // mode 0600 on the durable file
-  const mode = fs.statSync(file).mode & 0o777;
-  assert.strictEqual(mode, 0o600, 'telemetry.json must be 0600');
+  // mode 0600 on the durable file (POSIX only; Windows ignores POSIX mode bits)
+  if (process.platform !== 'win32') {
+    const mode = fs.statSync(file).mode & 0o777;
+    assert.strictEqual(mode, 0o600, 'telemetry.json must be 0600');
+  }
   // "restart": fresh Gateway over the same file sees the events
   const gw2 = makeGw({ telemetryFile: file });
   const events = gw2.telemetry.query({ event: 'migration_phase' });
@@ -197,7 +199,7 @@ test('telemetry: chain length UNCHANGED after telemetry traffic (not audit)', as
     assert.strictEqual(after.length, before.length, 'telemetry must never seal into the audit chain');
     assert.strictEqual(after.head, before.head);
     // and the telemetry types are NOT in the chain payloads
-    const chainTypes = gw.chain.since(0).map((e) => e.payload && e.payload.type);
+    const chainTypes = gw.chain.since(0).entries.map((e) => e.payload && e.payload.type);
     assert.ok(!chainTypes.includes('palette_open'));
   } finally { await srv.close(); }
 });

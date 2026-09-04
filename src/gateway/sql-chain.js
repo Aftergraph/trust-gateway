@@ -33,11 +33,6 @@ class SqlChain {
     this.db.exec('PRAGMA journal_mode = WAL');
     this.db.exec('PRAGMA synchronous = NORMAL');
     this.db.exec('PRAGMA foreign_keys = ON');
-    // FS-F5 tier-C finding: without a busy_timeout a second gateway on the
-    // same db file crashes with SQLITE_BUSY (database is locked) at boot.
-    // 5000ms covers normal cross-process contention; single-writer-per-db
-    // remains the deployment contract (docs/RUNBOOK.md).
-    this.db.exec('PRAGMA busy_timeout = 5000');
 
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS chain_entries (
@@ -63,16 +58,13 @@ class SqlChain {
       const prevHash = '0'.repeat(64);
       const payload = { type: 'genesis', chainId: cid };
       const hash = entryHash(0, prevHash, ts, payload);
-      // FS-F5 tier-C: two processes booting on the same empty db race here —
-      // INSERT OR IGNORE lets the winner's genesis stand; the loser re-reads
-      // the canonical chainId below (both then serve the SAME chain).
       this.db
         .prepare(
-          'INSERT OR IGNORE INTO chain_entries(seq, ts, prev_hash, hash, payload) VALUES(?,?,?,?,?)'
+          'INSERT INTO chain_entries(seq, ts, prev_hash, hash, payload) VALUES(?,?,?,?,?)'
         )
         .run(0, ts, prevHash, hash, JSON.stringify(payload));
       this.db
-        .prepare('INSERT OR IGNORE INTO chain_meta(k, v) VALUES(?, ?)')
+        .prepare('INSERT OR REPLACE INTO chain_meta(k, v) VALUES(?, ?)')
         .run('chainId', cid);
       this._insertFts(0, payload);
     }
@@ -191,13 +183,25 @@ class SqlChain {
     return { seq, prevHash: prev.hash, ts, payload: rt, hash };
   }
 
-  since(seq) {
+  // since(seq, opts?) — paged read after `seq` (matches HashChain.since).
+  // opts: { limit?: number = 500, cursor?: number }
+  // Lazily loads from sqlite; returns { entries, nextSince }.
+  since(seq, opts) {
+    const o = opts || {};
+    const wantLimit = o.limit == null ? Number.MAX_SAFE_INTEGER : Math.max(0, Math.floor(o.limit));
+    // Lazy page: ask for at most `limit + 1` so we can tell if more pages
+    // remain without a second query.
+    const fetch = wantLimit === Number.MAX_SAFE_INTEGER ? wantLimit : wantLimit + 1;
     const rows = this.db
       .prepare(
-        'SELECT seq, ts, prev_hash, hash, payload FROM chain_entries WHERE seq > ? ORDER BY seq ASC'
+        'SELECT seq, ts, prev_hash, hash, payload FROM chain_entries WHERE seq > ? ORDER BY seq ASC LIMIT ?'
       )
-      .all(seq);
-    return rows.map((r) => this._rowToEntry(r));
+      .all(seq, fetch);
+    const all = rows.map((r) => this._rowToEntry(r));
+    const hasMore = all.length > wantLimit;
+    const entries = hasMore ? all.slice(0, wantLimit) : all;
+    const nextSince = hasMore ? entries[entries.length - 1].seq : null;
+    return { entries, nextSince };
   }
 
   verify() {

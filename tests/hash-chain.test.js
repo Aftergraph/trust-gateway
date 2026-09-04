@@ -70,6 +70,21 @@ test('two chains have different genesis (replay protection)', () => {
 test('since() filters by seq', () => {
   const c = new HashChain();
   for (let i = 0; i < 5; i++) c.append({ i });
-  assert.equal(c.since(3).length, 2);
-  assert.equal(c.since(0).length, 5); // genesis is seq 0, excluded
+  assert.equal(c.since(3).entries.length, 2);
+  assert.equal(c.since(0).entries.length, 5); // genesis is seq 0, excluded
+});
+
+test('since() caps by limit and returns nextSince cursor', () => {
+  const c = new HashChain();
+  for (let i = 0; i < 10; i++) c.append({ i });
+  const page = c.since(0, { limit: 4 });
+  assert.equal(page.entries.length, 4);
+  assert.equal(page.nextSince, 4);
+  // next call paginates from after the cursor
+  const page2 = c.since(page.nextSince, { limit: 4 });
+  assert.equal(page2.entries.length, 4);
+  assert.equal(page2.nextSince, 8);
+  const tail = c.since(page2.nextSince);
+  assert.equal(tail.entries.length, 2);
+  assert.equal(tail.nextSince, null); // last page
 });

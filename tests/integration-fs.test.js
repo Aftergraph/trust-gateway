@@ -20,7 +20,7 @@ const assert = require('node:assert');
 
 const { spawnGateway, api, TOKENS, JAIL_FILE_TEXT } = require('./fs-helpers.js');
 
-test('FS-D2 integration battery on a real gateway', async () => {
+test('FS-D2 integration battery on a real gateway', { skip: process.platform === 'win32' ? 'Windows: spawned-gateway tree-kill leaves stdio handles open — hangs node --test (see STUDY-011 infra notes)' : false }, async () => {
   const g = await spawnGateway({
     // iteration 1 proposes a jail read (allow → executed), iteration 2
     // (the default plain stub reply) has no action → run completes.
@@ -237,6 +237,12 @@ test('FS-D2 integration battery on a real gateway', async () => {
     const finalVerify = await api(base, 'GET', '/v1/audit/verify', { token: atlas });
     assert.strictEqual(finalVerify.status, 200);
     assert.strictEqual(finalVerify.json.ok, true);
+  } catch (e) {
+    // Surface the gateway child's stderr on any battery failure (CI diagnostics).
+    if (g && g.proc && g.proc.log) {
+      console.error('=== FS-D2 gateway stderr (last 2000 chars) ===\n' + g.proc.log.slice(-2000));
+    }
+    throw e;
   } finally {
     await g.close();
   }

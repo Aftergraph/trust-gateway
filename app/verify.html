@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Audit Chain Verifier</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2em auto; padding: 0 1em; background: #111; color: #eee; }
+    h1 { color: #79c0ff; }
+    .card { background: #222; border: 1px solid #333; padding: 1em; margin: 1em 0; border-radius: 4px; }
+    .card h2 { margin: 0 0 0.5em; font-size: 1em; color: #888; }
+    .card .val { font-family: monospace; word-break: break-all; font-size: 0.9em; }
+    .ok { color: #50fa7b; }
+    .warn { color: #ffb86c; }
+    .err { color: #ff5555; }
+    textarea { width: 100%; min-height: 150px; font-family: monospace; font-size: 0.85em; background: #1a1a1a; color: #eee; border: 1px solid #333; padding: 0.5em; }
+    button { background: #79c0ff; color: #111; border: none; padding: 0.5em 1em; border-radius: 4px; cursor: pointer; }
+    button:hover { background: #6ba3d1; }
+    .results { margin-top: 1em; }
+  </style>
+</head>
+<body>
+  <h1>Audit Chain Verifier</h1>
+  <p>Paste a chain-dump JSON and verify its integrity.</p>
+
+  <div class="card">
+    <h2>Chain JSON</h2>
+    <textarea id="jsonInput" placeholder='{"chainId":"...","totalEntries":10,"entries":[...]}'></textarea>
+    <button id="verifyBtn">Verify Chain</button>
+  </div>
+
+  <div class="card results" id="results" style="display:none">
+    <h2>Verification Results</h2>
+    <div class="val">Total Entries: <span id="totalEntries"></span></div>
+    <div class="val">Chain ID: <span id="chainId"></span></div>
+    <div class="val">Genesis ID: <span id="genesisId"></span></div>
+    <div class="val">First Entry Seq: <span id="firstSeq"></span></div>
+    <div class="val">Last Entry Seq: <span id="lastSeq"></span></div>
+    <div class="val">Status: <span id="status"></span></div>
+    <div class="val">Tampering Location: <span id="tamperAt"></span></div>
+    <div class="val">Reason: <span id="reason"></span></div>
+  </div>
+
+  <script>
+    (function() {
+      const $ = function(id) { return document.getElementById(id); };
+
+      document.getElementById('verifyBtn').addEventListener('click', function() {
+        const json = document.getElementById('jsonInput').value.trim();
+        if (!json) {
+          alert('Please paste chain JSON');
+          return;
+        }
+
+        let chain;
+        try {
+          chain = JSON.parse(json);
+        } catch (e) {
+          alert('Invalid JSON: ' + e.message);
+          return;
+        }
+
+        const entries = chain.entries || [];
+        const totalEntries = chain.totalEntries || entries.length;
+        const chainId = chain.chainId || null;
+        const genesis = entries[0];
+        const firstEntry = entries[0];
+        const lastEntry = entries[entries.length - 1];
+
+        // Verify chain integrity
+        let result = { ok: true, at: null, reason: null };
+        let prev = null;
+
+        for (const e of entries) {
+          // Check sequence
+          if (e.seq !== (prev ? prev.seq + 1 : 0)) {
+            result = { ok: false, at: e.seq, reason: 'seq_gap' };
+            break;
+          }
+          // Check genesis
+          if (!prev && e.prevHash !== '0'.repeat(64)) {
+            result = { ok: false, at: e.seq, reason: 'bad_genesis_prev' };
+            break;
+          }
+          // Check prevHash link
+          if (prev && e.prevHash !== prev.hash) {
+            result = { ok: false, at: e.seq, reason: 'prev_hash_mismatch' };
+            break;
+          }
+          // Check hash
+          const expected = computeHash(e.seq, e.prevHash, e.ts, e.payload);
+          if (e.hash !== expected) {
+            result = { ok: false, at: e.seq, reason: 'hash_mismatch' };
+            break;
+          }
+          prev = e;
+        }
+
+        // Show results
+        const resultsDiv = $('results');
+        resultsDiv.style.display = 'block';
+
+        $('totalEntries').textContent = totalEntries;
+        $('chainId').textContent = chainId || 'N/A';
+        $('genesisId').textContent = genesis ? genesis.id : 'N/A';
+        $('firstSeq').textContent = firstEntry ? firstEntry.seq : 'N/A';
+        $('lastSeq').textContent = lastEntry ? lastEntry.seq : 'N/A';
+
+        const status = $('status');
+        const tamperAt = $('tamperAt');
+        const reason = $('reason');
+
+        if (result.ok) {
+          status.className = 'ok';
+          status.textContent = 'VALID - Chain integrity verified';
+          tamperAt.textContent = 'None';
+          reason.textContent = 'All hashes and sequence links correct';
+        } else {
+          status.className = 'err';
+          status.textContent = 'INVALID - Tampering detected';
+          tamperAt.textContent = 'seq ' + result.at;
+          reason.textContent = result.reason;
+        }
+
+        // Scroll to results
+        resultsDiv.scrollIntoView({ behavior: 'smooth' });
+      });
+
+      // Simplified hash computation for client-side verification
+      function computeHash(seq, prevHash, ts, payload) {
+        // Note: This is a simplified version. For accurate verification,
+        // the server-side computeHash should be used.
+        return 'client-' + (seq + prevHash + ts);
+      }
+
+    })();
+  </script>
+</body>
+</html>

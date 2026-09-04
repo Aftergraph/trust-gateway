@@ -1,4 +1,5 @@
 'use strict';
+const subprocess = require('node:child_process');
 // FS-D1 shared spawn helper — a REAL gateway process (bin/gateway.js
 // --dispatch) on a random loopback port with:
 //   • an optional stub OpenAI-compatible brain (local http server),
@@ -106,6 +107,7 @@ async function spawnGateway(opts = {}) {
   if (!up) {
     const err = new Error(`spawned gateway did not become healthy on :${port}\n${proc.log}`);
     err.log = proc.log;
+    console.error('=== spawned gateway stderr (child crash diagnostics) ===\n' + proc.log);
     throw err;
   }
 
@@ -119,7 +121,19 @@ async function spawnGateway(opts = {}) {
     jailFile: JAIL_FILE_REL,
     jailText: JAIL_FILE_TEXT,
     async close() {
-      if (!proc.killed) proc.kill('SIGTERM');
+      if (!proc.killed) {
+        if (process.platform === 'win32') {
+          // Windows: SIGTERM kills only the direct child; the gateway's spawned
+          // grandchildren (jailed dispatcher, stub brain) keep the stdio pipes open,
+          // which hangs node --test at file end. Tree-kill instead.
+          try {
+            const { execFile } = require('node:child_process');
+            execFile('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { timeout: 5000 }, () => {});
+          } catch { /* already gone */ }
+        } else {
+          proc.kill('SIGTERM');
+        }
+      }
       if (stub) await new Promise((r) => stub.close(r));
       await new Promise((r) => setTimeout(r, 150));
       try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* best effort */ }

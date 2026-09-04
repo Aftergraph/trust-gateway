@@ -65,7 +65,15 @@ function open(file = resolveDbFile()) {
 
 // Single shared connection for the process (reuses data/gateway.db — the
 // same file SqlChain already uses; WAL allows both connections to coexist).
-const db = open();
+let db = open();
+let openFile = process.env.TG_DB_FILE || path.join(process.cwd(), 'data', 'gateway.db');
+
+// Reset db connection (for tests) - replaces with fresh connection at current TG_DB_FILE
+function resetDb() {
+  openFile = process.env.TG_DB_FILE || path.join(process.cwd(), 'data', 'gateway.db');
+  db = open(openFile);
+  txDepth = 0;
+}
 
 let txDepth = 0;
 
@@ -106,7 +114,7 @@ function unjson(s) {
   }
 }
 
-module.exports = { db, tx, json, unjson, open };
+module.exports = { db, tx, json, unjson, open, resetDb };
 
 // Auto-create audit_chain compatibility view on first require.
 // Older modules reference audit_chain; sql-chain uses chain_entries.

@@ -134,6 +134,40 @@ test('audit verify endpoint returns ok', async () => {
   assert.equal(getBody().ok, true);
 });
 
+// ── perimeter-guards: since() cap (slice 1, A-003) ───────────────────────
+
+test('GET /v1/audit caps result at limit and exposes nextSince cursor (A-003)', async () => {
+  const gw = makeGateway();
+  // Seed >500 entries so the cap is observable.
+  for (let i = 0; i < 600; i++) gw._audit({ type: 'filler', i });
+  const { req, res, getStatus, getBody } = mockReqRes('GET', '/v1/audit?since=0&limit=100', null, 'tok-forge');
+  await gw.handle(req, res);
+  assert.equal(getStatus(), 200);
+  const body = getBody();
+  assert.ok(Array.isArray(body.entries));
+  assert.ok(body.entries.length <= 100, 'page capped at limit');
+  assert.equal(typeof body.nextSince, 'number');
+});
+
+test('GET /v1/audit with default limit returns <=500 entries (A-003)', async () => {
+  const gw = makeGateway();
+  for (let i = 0; i < 600; i++) gw._audit({ type: 'filler', i });
+  const { req, res, getStatus, getBody } = mockReqRes('GET', '/v1/audit?since=0', null, 'tok-forge');
+  await gw.handle(req, res);
+  assert.equal(getStatus(), 200);
+  const body = getBody();
+  assert.ok(body.entries.length <= 500);
+  assert.ok(body.nextSince !== null);
+});
+
+test('GET /v1/audit with bad limit returns 400 invalid_limit (A-004)', async () => {
+  const gw = makeGateway();
+  const { req, res, getStatus, getBody } = mockReqRes('GET', '/v1/audit?limit=abc', null, 'tok-forge');
+  await gw.handle(req, res);
+  assert.equal(getStatus(), 400);
+  assert.equal(getBody().error, 'invalid_limit');
+});
+
 test('bad json → 400', async () => {
   const gw = makeGateway();
   const { req, res, getStatus } = mockReqRes('POST', '/v1/actions', 'not-json', 'tok-forge');
