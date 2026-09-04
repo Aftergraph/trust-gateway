@@ -107,3 +107,17 @@ function unjson(s) {
 }
 
 module.exports = { db, tx, json, unjson, open };
+
+// Auto-create audit_chain compatibility view on first require.
+// Older modules reference audit_chain; sql-chain uses chain_entries.
+try {
+  db.exec(`
+    CREATE VIEW IF NOT EXISTS audit_chain AS
+    SELECT seq, ts, prev_hash, hash, payload,
+           json_extract(payload, '$.tenant') AS tenant,
+           json_extract(payload, '$.type')   AS type,
+           json_extract(payload, '$.data')   AS data,
+           json_extract(payload, '$.bot')    AS bot
+    FROM chain_entries
+  `);
+} catch { /* chain_entries may not exist yet; view created lazily by sql-chain init */ }

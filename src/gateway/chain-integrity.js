@@ -12,42 +12,26 @@ function enabled() {
 }
 
 function _hash(row) {
+  // Recompute hash from the stored payload + metadata fields
   const payload = JSON.stringify({
-    id: row.id,
-    tenant: row.tenant,
-    type: row.type,
-    data: row.data,
+    seq: row.seq,
+    payload: row.payload,
     prev_hash: row.prev_hash,
     ts: row.ts,
   });
   return crypto.createHash('sha256').update(payload).digest('hex');
 }
 
-function _ensureTable() {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS audit_chain (
-      id        INTEGER PRIMARY KEY AUTOINCREMENT,
-      tenant    TEXT,
-      type      TEXT NOT NULL,
-      data      TEXT,
-      prev_hash TEXT,
-      ts        INTEGER NOT NULL,
-      hash      TEXT NOT NULL
-    )
-  `);
-}
-
 function verifyRange(fromId, toId) {
   if (!enabled()) return null;
-  _ensureTable();
   const rows = db.prepare(
-    'SELECT id, tenant, type, data, prev_hash, ts, hash FROM audit_chain WHERE id >= ? AND id <= ? ORDER BY id'
+    'SELECT seq, payload, prev_hash, ts, hash FROM chain_entries WHERE seq >= ? AND seq <= ? ORDER BY seq'
   ).all(Number(fromId), Number(toId));
   const mismatches = [];
   for (const r of rows) {
     const expected = _hash(r);
     if (expected !== r.hash) {
-      mismatches.push({ id: r.id, expected, stored: r.hash });
+      mismatches.push({ id: r.seq, expected, stored: r.hash });
     }
   }
   return { ok: mismatches.length === 0, checked: rows.length, mismatches };
@@ -55,13 +39,12 @@ function verifyRange(fromId, toId) {
 
 function verifyFull() {
   if (!enabled()) return null;
-  _ensureTable();
-  const rows = db.prepare('SELECT id, tenant, type, data, prev_hash, ts, hash FROM audit_chain ORDER BY id').all();
+  const rows = db.prepare('SELECT seq, payload, prev_hash, ts, hash FROM chain_entries ORDER BY seq').all();
   const mismatches = [];
   for (const r of rows) {
     const expected = _hash(r);
     if (expected !== r.hash) {
-      mismatches.push({ id: r.id, expected, stored: r.hash });
+      mismatches.push({ id: r.seq, expected, stored: r.hash });
     }
   }
   return { ok: mismatches.length === 0, checked: rows.length, mismatches };

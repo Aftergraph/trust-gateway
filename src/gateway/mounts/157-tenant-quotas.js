@@ -1,6 +1,6 @@
 // FS-Z6 — tenant quota enforcement mount. Operator-only.
 
-const tq = require('../tenant-quotas');
+const tq = require('../tenant-resource-quotas');
 const { isOperator } = require('../tenants');
 const { audit } = require('../events');
 

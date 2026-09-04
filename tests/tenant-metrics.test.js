@@ -7,6 +7,7 @@ const os = require('node:os');
 describe('FS-Z1 tenant metrics aggregates', () => {
   let tmpDir;
   let origEnv;
+  let db;
 
   before(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fs-z1-'));
@@ -15,6 +16,17 @@ describe('FS-Z1 tenant metrics aggregates', () => {
     process.env.TG_TENANT_METRICS = '1';
     delete require.cache[require.resolve('../src/gateway/db')];
     delete require.cache[require.resolve('../src/gateway/tenant-metrics')];
+    // Ensure chain_entries table exists (same schema as sql-chain.js)
+    db = require('../src/gateway/db').db;
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS chain_entries (
+        seq INTEGER PRIMARY KEY,
+        ts INTEGER NOT NULL,
+        prev_hash TEXT NOT NULL,
+        hash TEXT NOT NULL UNIQUE,
+        payload TEXT NOT NULL
+      )
+    `);
   });
 
   after(() => {
@@ -56,6 +68,21 @@ describe('FS-Z1 tenant metrics aggregates', () => {
     const tm = require('../src/gateway/tenant-metrics');
     const r = tm.getMetrics('acme', 7200000);
     assert.equal(r.windowMs, 7200000);
+  });
+
+  it('getMetrics counts events from chain_entries payload', () => {
+    const tm = require('../src/gateway/tenant-metrics');
+    // Insert test events into chain_entries
+    const now = Date.now();
+    db.prepare('INSERT INTO chain_entries(seq, ts, prev_hash, hash, payload) VALUES(?,?,?,?,?)').run(
+      100, now, 'prev', 'hash1', JSON.stringify({ tenant: 'testco', type: 'login', data: {} })
+    );
+    db.prepare('INSERT INTO chain_entries(seq, ts, prev_hash, hash, payload) VALUES(?,?,?,?,?)').run(
+      101, now, 'prev', 'hash2', JSON.stringify({ tenant: 'testco', type: 'logout', data: {} })
+    );
+    const r = tm.getMetrics('testco');
+    assert.equal(r.totalEvents, 2);
+    assert.ok(r.byType.some(t => t.type === 'login'));
   });
 
   it('inert when TG_TENANT_METRICS unset', () => {
