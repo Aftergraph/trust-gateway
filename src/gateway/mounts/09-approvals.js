@@ -71,16 +71,30 @@ function sha256(s) {
   return crypto.createHash('sha256').update(s).digest('hex');
 }
 
-// Bearer check identical to server.js _auth (timing-safe, bot lookup).
+// Bearer check mirrors server.js _auth: full-token OR stripped tnt_ candidate,
+// tenant existence/disabled checked fail-closed (FS-A1 slice 2).
 function authBot(gw, req) {
   const m = /^Bearer\s+(\S+)$/i.exec(req.headers.authorization || '');
   if (!m) return null;
+  const token = m[1];
+  const candidates = [token];
+  const tm = /^tnt_([a-z0-9-]{3,24})_(.+)$/.exec(token);
+  if (tm) {
+    try {
+      const { db } = require('../db');
+      const row = db.prepare('SELECT id, disabled FROM tenants WHERE id = ?').get(tm[1]);
+      if (!row || row.disabled) return null;
+      candidates.push(tm[2]);
+    } catch { /* tenants table missing */ }
+  }
   for (const [name, bot] of Object.entries(gw.bots)) {
     if (!bot || !bot.token) continue;
-    const a = Buffer.from(String(bot.token));
-    const b = Buffer.from(m[1]);
-    if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
-      return { name, ...bot }; // name from the roster key — server.js contract
+    for (const cand of candidates) {
+      const a = Buffer.from(String(bot.token));
+      const b = Buffer.from(cand);
+      if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
+        return { name, ...bot, tenantPrefix: tm ? tm[1] : null };
+      }
     }
   }
   return null;

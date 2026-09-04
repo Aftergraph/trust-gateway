@@ -153,8 +153,28 @@ class Gateway extends EventEmitter {
     const m = /^Bearer\s+(.+)$/i.exec(h);
     if (!m) return null;
     const token = m[1];
+    // FS-A1 slice 2: tenant-scoped token 'tnt_<tenantId>_<rosterToken>' —
+    // match EITHER the full token (spawned tenant gateways put tnt_-prefixed
+    // tokens in their roster verbatim) OR the stripped roster part (live env
+    // rosters hold plain tokens). Unknown/disabled tenant → 401 fail-closed.
+    let candidates = [token];
+    const tm = /^tnt_([a-z0-9-]{3,24})_(.+)$/.exec(token);
+    if (tm) {
+      try {
+        const { db } = require('./db');
+        const row = db.prepare('SELECT id, disabled FROM tenants WHERE id = ?').get(tm[1]);
+        if (!row) return null; // unknown tenant → fail closed
+        if (row.disabled) return null; // disabled tenant → fail closed
+        candidates.push(tm[2]);
+      } catch { /* tenants table missing → treat as no prefix */ }
+    }
     for (const [name, bot] of Object.entries(this.bots)) {
-      if (bot.token && cryptoSafeEqual(bot.token, token)) return { name, ...bot };
+      if (!bot.token) continue;
+      for (const cand of candidates) {
+        if (cryptoSafeEqual(bot.token, cand)) {
+          return { name, ...bot, tenantPrefix: tm ? tm[1] : null };
+        }
+      }
     }
     return null;
   }
