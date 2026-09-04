@@ -97,18 +97,19 @@ test('Gateway with auditFile survives restart with intact history', async () => 
     else process.nextTick(() => req.emit('end'));
     return { req, res };
   };
-  // Run 1: two read actions → each produces 2 audit entries (decision + executed)
+  // Run 1: two read actions → each produces 3 audit entries
+  // (decision + revalidation-degraded audit [no AIE runtime in tests, fail-open] + executed)
   const gw1 = new Gateway({ bots: { a: { token: 't' } }, auditFile: f, dispatch: async () => ({ ok: 1 }) });
   await gw1.handle(...Object.values(mkReqRes(JSON.stringify({ tool: 'fs.read:x' }), 't')));
   await gw1.handle(...Object.values(mkReqRes(JSON.stringify({ tool: 'fs.read:y' }), 't')));
-  assert.equal(gw1.chain.entries.length, 5);
+  assert.equal(gw1.chain.entries.length, 7);
   // Run 2: restart, history intact + continues
   const gw2 = new Gateway({ bots: { a: { token: 't' } }, auditFile: f, dispatch: async () => ({ ok: 1 }) });
-  assert.equal(gw2.chain.entries.length, 5);
+  assert.equal(gw2.chain.entries.length, 7);
   assert.equal(gw2.chain.chainId, gw1.chain.chainId); // same chain!
   await gw2.handle(...Object.values(mkReqRes(JSON.stringify({ tool: 'fs.read:z' }), 't')));
-  assert.equal(gw2.chain.entries.length, 7);
+  assert.equal(gw2.chain.entries.length, 10);
   assert.equal(gw2.chain.verify().ok, true);
   const onDisk = fs.readFileSync(f, 'utf8').trim().split('\n');
-  assert.equal(onDisk.length, 7);
+  assert.equal(onDisk.length, 10);
 });
