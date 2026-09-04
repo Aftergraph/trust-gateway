@@ -841,6 +841,12 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 278 | `context_forbidden` | mounts/25-context.js (P1 Context Inspector: {bot, target} — non-operator inspected another bot's context) |
 | 279 | `context_inspected` | mounts/25-context.js (P1: {bot, target, snapshot_hash} — context snapshot generated, content-addressed) |
 | 280 | `router_outcome_recorded` | mounts/59-router.js (v0.2: {provider, model, ok} — telemetry outcome recorded for fallback-learning) |
+| 281 | `workflow_created` | mounts/26-workflows.js (P2: {workflow_id, name, version} — workflow created) |
+| 282 | `workflow_updated` | mounts/26-workflows.js (P2: {workflow_id, version} — new version saved) |
+| 283 | `workflow_activated` | mounts/26-workflows.js (P2: {workflow_id} — draft -> active) |
+| 284 | `workflow_archived` | mounts/26-workflows.js (P2: {workflow_id}) |
+| 285 | `workflow_run_forbidden` | mounts/26-workflows.js (P2: {workflow_id, bot} — non-operator attempted run) |
+| 286 | `workflow_run_submitted` | mounts/26-workflows.js (P2: {workflow_id, version, works_ok, work_id} — submitted to WORKS) |
 | 260 | `plugin_forbidden` | mounts/35-plugins.js (W4: {bot, method, path} — non-operator plugin write) |
 | 261 | `plugin_permission_rejected` | mounts/35-plugins.js (W4: declared permission rejected at runtime) |
 | 262 | `plugin_delete_forbidden` | mounts/35-plugins.js (W4: uninstall denied by policy) |
