@@ -826,6 +826,12 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 257 | `refund` | budgets.js (HC4: {bot, amount} — reservation refunded after failure/deny) |
 | 258 | `takeover_forbidden` | mounts/33-takeover.js (HC8: {bot} — non-operator attempted takeover) |
 | 259 | `takeover_issued` | mounts/33-takeover.js (HC8: {takeover_id, principal_id, revoked_actions, granted_capabilities} — takeover envelope issued, subset-only caps) |
+| 266 | `proposal_created` | mounts/23-missions.js (W0.2: {proposal_id, proposer, objective} — MissionProposal created) |
+| 267 | `proposal_submitted` | mounts/23-missions.js (W0.2: {proposal_id, proposer} — draft submitted for approval) |
+| 268 | `proposal_approved` | mounts/23-missions.js (W0.2/W0.3: {proposal_id, approver, mission_id} — approved with WORKS mission correlation) |
+| 269 | `proposal_rejected` | mounts/23-missions.js (W0.2: {proposal_id, reason}) |
+| 270 | `proposal_approve_forbidden` | mounts/23-missions.js (W0.2: {proposal_id, bot} — non-operator attempted approval) |
+| 271 | `proposal_reject_forbidden` | mounts/23-missions.js (W0.2: {proposal_id, bot} — non-operator attempted rejection) |
 | 260 | `plugin_forbidden` | mounts/35-plugins.js (W4: {bot, method, path} — non-operator plugin write) |
 | 261 | `plugin_permission_rejected` | mounts/35-plugins.js (W4: declared permission rejected at runtime) |
 | 262 | `plugin_delete_forbidden` | mounts/35-plugins.js (W4: uninstall denied by policy) |
