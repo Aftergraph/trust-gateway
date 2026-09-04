@@ -188,7 +188,8 @@ class Gateway extends EventEmitter {
       for (const cand of candidates) {
         // wave-B token security: prefer sha256 digest compare (tokenHash at rest,
         // plaintext never stored); plain token still accepted for legacy rosters.
-        if (bot.tokenHash && cryptoSafeEqual(bot.tokenHash, hashToken(cand))) {
+        const presentedHash = hashToken(cand);
+        if (bot.tokenHash && cryptoSafeEqual(bot.tokenHash, presentedHash)) {
           if (this.knownStaleHashes && this.knownStaleHashes.has(bot.tokenHash)) {
             this.knownStaleHashes.delete(bot.tokenHash);
             (this.knownStaleByBot[name] || new Set()).delete(bot.tokenHash);
@@ -197,6 +198,17 @@ class Gateway extends EventEmitter {
         }
         if (bot.token && cryptoSafeEqual(bot.token, cand)) {
           return { name, ...bot, tenantPrefix: tm ? tm[1] : null };
+        }
+      }
+    }
+    // A-006: stale digest rejection — after rotation the OLD bearer must fail
+    // closed with an audited 'token_rejected_stale' naming the bot it belonged to.
+    for (const cand of candidates) {
+      const staleHash = hashToken(cand);
+      for (const [botName, hashes] of Object.entries(this.knownStaleByBot || {})) {
+        if (hashes && hashes.has(staleHash)) {
+          this._audit({ type: 'token_rejected_stale', bot: botName });
+          return null;
         }
       }
     }

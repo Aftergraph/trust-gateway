@@ -100,6 +100,15 @@ function authBot(gw, req) {
         if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
           return { name, ...bot, tenantPrefix: tm ? tm[1] : null };
         }
+        // A-006: stale digest after rotation → audited + fail closed.
+        if (gw.knownStaleByBot) {
+          for (const [staleBot, hashes] of Object.entries(gw.knownStaleByBot)) {
+            if (hashes && hashes.has(digest)) {
+              gw._audit({ type: 'token_rejected_stale', bot: staleBot });
+              return null;
+            }
+          }
+        }
       }
       if (bot.token) {
         const a = Buffer.from(String(bot.token));
