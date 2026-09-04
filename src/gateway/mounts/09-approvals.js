@@ -41,6 +41,7 @@
 
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { parseLimit } = require('../server');
 const { send, readBody, canApprove } = require('../server');
 const { resolveTenant } = require('../tenant-resolve');
 const { enforceQuotas, scopeDir, tenantAuditTag } = require('../tenant-scope');
@@ -88,12 +89,24 @@ function authBot(gw, req) {
     } catch { /* tenants table missing */ }
   }
   for (const [name, bot] of Object.entries(gw.bots)) {
-    if (!bot || !bot.token) continue;
+    if (!bot) continue;
     for (const cand of candidates) {
-      const a = Buffer.from(String(bot.token));
-      const b = Buffer.from(cand);
-      if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
-        return { name, ...bot, tenantPrefix: tm ? tm[1] : null };
+      // wave-B token security: accept sha256 digest (tokenHash at rest) as well as
+      // legacy plaintext, so both roster styles authenticate identically here.
+      if (bot.tokenHash) {
+        const digest = crypto.createHash('sha256').update(String(cand), 'utf8').digest('hex');
+        const a = Buffer.from(String(bot.tokenHash));
+        const b = Buffer.from(digest);
+        if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
+          return { name, ...bot, tenantPrefix: tm ? tm[1] : null };
+        }
+      }
+      if (bot.token) {
+        const a = Buffer.from(String(bot.token));
+        const b = Buffer.from(cand);
+        if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
+          return { name, ...bot, tenantPrefix: tm ? tm[1] : null };
+        }
       }
     }
   }
@@ -112,6 +125,15 @@ module.exports = {
       return send(res, 401, { error: 'unauthorized' });
     }
     req.bot = bot; // resolver operator check
+    // perimeter-guards: the mount runner skips auth:'none' guards, but this mount
+    // did its own auth — enforce the same per-bot rate limit here (A-001 parity).
+    if (typeof gw._enforceRateLimit === 'function') {
+      const rl = gw._enforceRateLimit(bot);
+      if (rl.status === 429) {
+        gw._audit({ type: 'rate_limited', bot: bot.name, path: ctx.url.pathname });
+        return send(res, 429, rl.body);
+      }
+    }
     const { tenant } = resolveTenant(req, gw);
     if (!tenant) return send(res, 404, { error: 'not_found' });
     if (enforceQuotas(gw, tenant, res)) return; // FS-I3: fail-closed quotas
@@ -147,8 +169,12 @@ async function handleMain(gw, req, res, ctx, bot) {
 
   if (req.method === 'GET' && url.pathname === '/v1/audit') {
     const since = Number(url.searchParams.get('since') || 0);
-    const entries = gw.chain.since(since);
-    return send(res, 200, { entries, head: gw.chain.head.hash, verified: gw.chain.verify() });
+    const limit = parseLimit(url.searchParams.get('limit'));
+    if (limit === null) return send(res, 400, { error: 'invalid_limit' });
+    const page = gw.chain.since(since, { limit });
+    const body = { entries: page.entries, nextSince: page.nextSince, head: gw.chain.head.hash, verified: gw.chain.verify() };
+    if (page.nextSince !== null) body.cursor = page.nextSince;
+    return send(res, 200, body);
   }
 
   if (req.method === 'GET' && url.pathname === '/v1/audit/verify') {
@@ -270,10 +296,11 @@ async function handleScoped(gw, req, res, ctx, bot, tenant) {
   // GET /v1/audit — ONLY own tagged entries
   if (req.method === 'GET' && url.pathname === '/v1/audit') {
     const since = Number(url.searchParams.get('since') || 0);
-    const entries = gw.chain.since(since).filter(
-      (e) => e.payload && e.payload.tenant === tenant.id
-    );
-    return send(res, 200, { entries, head: gw.chain.head.hash, verified: gw.chain.verify() });
+    const limit = parseLimit(url.searchParams.get('limit'));
+    if (limit === null) return send(res, 400, { error: 'invalid_limit' });
+    const page = gw.chain.since(since, { limit });
+    const entries = page.entries.filter((e) => e.payload && e.payload.tenant === tenant.id);
+    return send(res, 200, { entries, nextSince: page.nextSince, head: gw.chain.head.hash, verified: gw.chain.verify() });
   }
 
   // GET /v1/audit/verify — operator surface over the FULL chain: non-main → 404

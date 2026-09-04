@@ -126,6 +126,9 @@ class Gateway extends EventEmitter {
     const envMult = Number(process.env.TG_RATE_OPERATOR_MULTIPLIER);
     this.rateOperatorMult = Number.isFinite(envMult) && envMult > 0 ? envMult : DEFAULT_OPERATOR_MULT;
     this._rateBuckets = new Map(); // token -> { count, windowStart }
+    // v2 token-hash: stale digest indices for rotation auditing (A-006).
+    this.knownStaleHashes = new Set();
+    this.knownStaleByBot = Object.create(null);
     // wave C convention: a mount file may ALSO export executors:[{re, make(gw)}]
     // so new tool namespaces never touch bin/gateway.js (single-writer rule).
     for (const m of this.mounts) {
@@ -182,9 +185,17 @@ class Gateway extends EventEmitter {
       } catch { /* tenants table missing → treat as no prefix */ }
     }
     for (const [name, bot] of Object.entries(this.bots)) {
-      if (!bot.token) continue;
       for (const cand of candidates) {
-        if (cryptoSafeEqual(bot.token, cand)) {
+        // wave-B token security: prefer sha256 digest compare (tokenHash at rest,
+        // plaintext never stored); plain token still accepted for legacy rosters.
+        if (bot.tokenHash && cryptoSafeEqual(bot.tokenHash, hashToken(cand))) {
+          if (this.knownStaleHashes && this.knownStaleHashes.has(bot.tokenHash)) {
+            this.knownStaleHashes.delete(bot.tokenHash);
+            (this.knownStaleByBot[name] || new Set()).delete(bot.tokenHash);
+          }
+          return { name, ...bot, tenantPrefix: tm ? tm[1] : null };
+        }
+        if (bot.token && cryptoSafeEqual(bot.token, cand)) {
           return { name, ...bot, tenantPrefix: tm ? tm[1] : null };
         }
       }
@@ -216,6 +227,15 @@ class Gateway extends EventEmitter {
     const bot = this.bots[botName] || {};
     const budget = this.rateLimit * (bot.role === 'operator' ? this.rateOperatorMult : 1);
     return { remaining: Math.max(0, budget - b.count), budget, windowStart: b.windowStart };
+  }
+
+  // v2 token rotation: retain a digest as 'stale' so subsequent requests
+  // with the OLD bearer are audited as 'token_rejected_stale' (A-006).
+  _markStale(botName, tokenHash) {
+    if (!botName || !tokenHash) return;
+    this.knownStaleHashes.add(tokenHash);
+    if (!this.knownStaleByBot[botName]) this.knownStaleByBot[botName] = new Set();
+    this.knownStaleByBot[botName].add(tokenHash);
   }
 
   _audit(payload) {
@@ -573,6 +593,11 @@ class Gateway extends EventEmitter {
   }
 }
 
+// sha256 hex digest of a bearer token — the only form persisted at rest.
+function hashToken(token) {
+  return crypto.createHash('sha256').update(token, 'utf8').digest('hex');
+}
+
 function cryptoSafeEqual(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
   const ab = Buffer.from(a);
@@ -607,4 +632,4 @@ function canApprove(bot) {
   return false;
 }
 
-module.exports = { Gateway, send, readBody, canApprove, parseLimit };
+module.exports = { Gateway, send, readBody, canApprove, parseLimit, hashToken };
