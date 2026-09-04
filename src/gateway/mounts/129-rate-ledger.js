@@ -16,7 +16,7 @@ module.exports = function mountRateLedger(gw) {
       res.statusCode = 404;
       return res.end(JSON.stringify({ error: 'rate_ledger_disabled' }));
     }
-    const m = req.url.match(/^\/v2\/rate\/baskets\/([^/?]+)/);
+    const m = req.url.match(/^\/v2\/rate\/buckets\/([^/?]+)/);
     const key = m ? decodeURIComponent(m[1]) : null;
     if (!key) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'missing_key' })); }
     const url = new URL(req.url, 'http://localhost');
@@ -38,7 +38,7 @@ module.exports = function mountRateLedger(gw) {
       res.statusCode = 404;
       return res.end(JSON.stringify({ error: 'rate_ledger_disabled' }));
     }
-    const m = req.url.match(/^\/v2\/rate\/baskets\/([^/]+)\/reset/);
+    const m = req.url.match(/^\/v2\/rate\/buckets\/([^/]+)\/reset/);
     const key = m ? decodeURIComponent(m[1]) : null;
     if (!key) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'missing_key' })); }
     const removed = ledger.reset(key);
