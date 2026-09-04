@@ -21,6 +21,8 @@ const DOC = path.join(REPO, 'docs', 'standards', 'TRANSPARENCY.md');
 
 // Matches: type: 'foo'  |  type: enabled ? 'foo' : 'bar'
 const TYPE_RE = /type:\s*(?:enabled\s*\?\s*)?'([a-z_]+)'(?:\s*:\s*'([a-z_]+)')?/g;
+// Matches: audit('foo', …) — function-style mount emission (v2 waves K-Z)
+const AUDIT_RE = /\baudit\(\s*'([a-z_]+)'/g;
 
 function walk(dir) {
   const out = [];
@@ -44,6 +46,13 @@ function extractTypesFromCode() {
         if (!found.has(g)) found.set(g, new Set());
         found.get(g).add(path.relative(REPO, file));
       }
+    }
+    AUDIT_RE.lastIndex = 0;
+    while ((m = AUDIT_RE.exec(src))) {
+      const g = m[1];
+      if (!g) continue;
+      if (!found.has(g)) found.set(g, new Set());
+      found.get(g).add(path.relative(REPO, file));
     }
   }
   return found;

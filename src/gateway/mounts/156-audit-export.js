@@ -1,6 +1,6 @@
 // FS-Z5 — audit export + retention mount. Operator-only.
 
-const ae = require('../audit-export');
+const ae = require('../audit-export-jsonl');
 const { isOperator } = require('../tenants');
 const { audit } = require('../events');
 const fs = require('node:fs');

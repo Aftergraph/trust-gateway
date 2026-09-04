@@ -145,4 +145,22 @@ function getHub(gateway) {
   return hub;
 }
 
-module.exports = { EventHub, getHub, HEARTBEAT_MS, wireExportSink };
+module.exports = { EventHub, getHub, HEARTBEAT_MS, wireExportSink,
+  // v2 function-style mounts (120+) use a standalone audit(type, payload)
+  // helper that writes to the shared DB chain when available, and is a
+  // no-op otherwise. Object-style mounts keep using gw._audit().
+  audit(type, payload) {
+    try {
+      const { db } = require('./db');
+      const seqRow = db.prepare('SELECT MAX(seq) AS maxSeq FROM chain_entries').get();
+      const prevRow = db.prepare('SELECT hash FROM chain_entries ORDER BY seq DESC LIMIT 1').get();
+      const seq = (seqRow && seqRow.maxSeq != null ? Number(seqRow.maxSeq) : -1) + 1;
+      const ts = Date.now();
+      const crypto = require('node:crypto');
+      const body = JSON.stringify({ type, ...payload });
+      const hash = crypto.createHash('sha256').update(String(seq) + prevRow?.hash + body + ts).digest('hex');
+      db.prepare('INSERT INTO chain_entries(seq, ts, prev_hash, hash, payload) VALUES(?,?,?,?,?)')
+        .run(seq, ts, prevRow?.hash || '', hash, body);
+    } catch { /* no DB / no chain_entries — observability only, never throws */ }
+  },
+};

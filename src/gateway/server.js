@@ -81,6 +81,35 @@ class Gateway extends EventEmitter {
     this.telemetry = new TelemetryRing({ file: telemetryFile !== undefined ? telemetryFile : DEFAULT_TELEMETRY_FILE, now });
     this.now = now;
     this.mounts = mountFiles ? loadMounts() : [];
+    // Function-style mounts (120+): wire via gw.router facade. Each mount is
+    // called once with (gw) and registers routes on this._fnRoutes.
+    this._fnRoutes = [];
+    if (mountFiles) {
+      const skippedFn = [];
+      for (const f of fs.readdirSync(path.join(__dirname, 'mounts')).sort()) {
+        if (!f.endsWith('.js')) continue;
+        try {
+          const m = require(path.join(__dirname, 'mounts', f));
+          if (typeof m === 'function') skippedFn.push(f);
+        } catch { /* loader already validated the object-style ones */ }
+      }
+      if (skippedFn.length > 0) {
+        this.router = this._makeRouter();
+        // Point route registration at the live route list
+        for (const verb of ['get', 'post', 'put', 'delete', 'patch', 'all']) {
+          const method = verb === 'delete' ? 'DELETE' : verb === 'all' ? '*' : verb.toUpperCase();
+          this.router[verb] = (p, handler) => { this._fnRoutes.push({ method, path: p, handler }); };
+        }
+        for (const f of skippedFn) {
+          try {
+            const m = require(path.join(__dirname, 'mounts', f));
+            m(this);
+          } catch (e) {
+            console.error(`[mounts] function-style mount ${f} failed to wire: ${e.message}`);
+          }
+        }
+      }
+    }
     this.staticDir = staticDir ?? null;
     this.botsDir = botsDir;
     this._executors = []; // v2 wave B: {re, fn(bot,tool,args)} for synthetic tools
@@ -138,6 +167,40 @@ class Gateway extends EventEmitter {
     return entry;
   }
 
+  // v2 function-style mounts (120+): gw.router.get(path, handler) registers
+  // a handler consulted by handle() BEFORE v1 routes. Handlers receive
+  // (req, res, ctx) exactly like object-style mount.handle.
+  // Supported verbs: get/post/put/delete/patch/all.
+  _makeRouter() {
+    const routes = [];
+    const add = (method, path) => (p, handler) => {
+      routes.push({ method, path, handler });
+    };
+    const router = {
+      get: add('GET', null),
+      post: add('POST', null),
+      put: add('PUT', null),
+      delete: add('DELETE', null),
+      patch: add('PATCH', null),
+      all: add('*', null),
+      _routes: routes,
+    };
+    return router;
+  }
+
+  _matchFunctionRoute(method, pathname) {
+    for (const r of this._fnRoutes) {
+      if (r.method !== '*' && r.method !== method) continue;
+      if (typeof r.path === 'string') {
+        if (r.path !== pathname) continue;
+        return { handler: r.handler, params: null };
+      }
+      const m = pathname.match(r.path);
+      if (m) return { handler: r.handler, params: m };
+    }
+    return null;
+  }
+
   async handle(req, res) {
     const url = new URL(req.url, 'http://localhost');
     const pathname = url.pathname;
@@ -162,6 +225,14 @@ class Gateway extends EventEmitter {
     }
     if (this.marketingDir && req.method === 'GET' && pathname.startsWith('/home/')) {
       return this._serveStaticFrom(this.marketingDir, res, pathname.slice('/home/'.length));
+    }
+
+    // ── v2 function-style mount routes (registered via gw.router) ──
+    const fnMatch = this._matchFunctionRoute(req.method, pathname);
+    if (fnMatch) {
+      const bot = this._auth(req);
+      if (!bot) { this._audit({ type: 'auth_rejected', path: pathname }); return send(res, 401, { error: 'unauthorized' }); }
+      return fnMatch.handler(req, res, { url, params: fnMatch.params, bot });
     }
 
     // ── v2 plugin mounts (before v1 auth; each mount declares its auth mode) ──

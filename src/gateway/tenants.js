@@ -168,4 +168,16 @@ function getTenantStore(gw, opts = {}) {
   return s;
 }
 
-module.exports = { TenantStore, getTenantStore, isValidTenantId, slugify, TABLE, SLUG_RE };
+module.exports = { TenantStore, getTenantStore, isValidTenantId, slugify, TABLE, SLUG_RE,
+  // v2 function-style mounts (120+) call isOperator(req) — operator = the
+  // resolved bot is an operator/owner, or the request was flagged by the
+  // tenant resolver. Mirrors tenant-resolve.isOperatorBot semantics.
+  isOperator(req) {
+    if (!req) return null;
+    const { isOperatorBot } = require('./tenant-resolve');
+    if (isOperatorBot(req.bot) || req.__tgOperator === true) {
+      return { name: (req.bot && req.bot.name) || 'operator' };
+    }
+    return null;
+  },
+};

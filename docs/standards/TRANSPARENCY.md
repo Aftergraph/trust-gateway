@@ -791,3 +791,23 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 230 | `op_active_sessions_read` | mounts/158-operator-session-audit.js (FS-Z7: {by, count} — operator listed active sessions) |
 | 231 | `op_active_sessions_denied` | mounts/158-operator-session-audit.js (FS-Z7: {bot, reason} — non-operator attempted active sessions access) |
 | 232 | `mounts_function_style_skipped` | http-mounts.js (P0 loader fix: {files} — function-style mount files skipped at static load; they register via gw.router on a live gateway. Boot no longer throws on v2r+ mounts) |
+| 233 | `obsv_snapshot_capture_denied` | mounts/121-obsv-history.js (FS-K3: {bot} — non-operator attempted snapshot capture) |
+| 234 | `obsv_history_read_denied` | mounts/121-obsv-history.js (FS-K3: {bot} — non-operator attempted history read) |
+| 235 | `obsv_snapshot_cleanup_denied` | mounts/121-obsv-history.js (FS-K3: {bot} — non-operator attempted cleanup) |
+| 236 | `quota_alerts_read_denied` | mounts/122-quota-alerts.js (FS-K4: {bot} — non-operator attempted quota alert read) |
+| 237 | `webhook_subs_denied` | mounts/125-webhook-subs.js (FS-L2: {bot} — non-operator touched webhook subscription route) |
+| 238 | `flag_list_denied` | mounts/126-feature-flags.js (FS-L3: {bot} — non-operator attempted flag list) |
+| 239 | `flag_set_denied` | mounts/126-feature-flags.js (FS-L3: {bot} — non-operator attempted flag set) |
+| 240 | `flag_reset_denied` | mounts/126-feature-flags.js (FS-L3: {bot} — non-operator attempted flag reset) |
+| 241 | `tenant_cleanup_candidates_denied` | mounts/127-tenant-lifecycle.js (FS-M1: {bot} — non-operator attempted cleanup candidate list) |
+| 242 | `tenant_auto_disable_denied` | mounts/127-tenant-lifecycle.js (FS-M1: {bot} — non-operator attempted auto-disable) |
+| 243 | `skill_version_denied` | mounts/128-skill-versions.js (FS-M2: {bot} — non-operator attempted version read) |
+| 244 | `skill_rollback_denied` | mounts/128-skill-versions.js (FS-M2: {bot} — non-operator attempted rollback) |
+| 245 | `rate_bucket_denied` | mounts/129-rate-ledger.js (FS-M3: {bot} — non-operator attempted rate bucket access) |
+| 246 | `tenant_flag_denied` | mounts/130-tenant-flags.js (FS-N1: {bot} — non-operator attempted tenant flag access) |
+| 247 | `skill_io_denied` | mounts/133-skill-io.js (FS-O1: {bot} — non-operator attempted skill export) |
+| 248 | `skill_import_denied` | mounts/133-skill-io.js (FS-O1: {bot} — non-operator attempted skill import) |
+| 249 | `tenant_activity_denied` | mounts/141-tenant-activity.js (FS-W1: {bot} — non-operator attempted tenant activity read) |
+| 250 | `tenant_webhook_denied` | mounts/150-webhook-subs-tenant.js (FS-Y1: {bot} — non-operator touched tenant webhook route) |
+| 251 | `restricted` | telemetry-tenant.js (FS-K2: tenant-scoped telemetry projection for unknown types — the scalar projection itself, never entry contents) |
+| 252 | `tenant_quota_read` | mounts/157-tenant-quotas.js (FS-Z6: {by, tenant, resource} — operator read tenant quota/usage) |
