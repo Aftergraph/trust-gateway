@@ -853,6 +853,11 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 290 | `workflow_sweep_forbidden` | mounts/26-workflows.js (P2: {bot} — non-operator attempted schedule sweep) |
 | 291 | `evals_forbidden` | mounts/06-evals.js (P2: {bot} — non-operator attempted eval run) |
 | 292 | `evals_run` | mounts/06-evals.js (P2: {gate, total, failed, snapshot_hash} — golden-set eval executed) |
+| 293 | `knowledge_created` | mounts/18-knowledge.js (P2: {source_id, title} — knowledge source created) |
+| 294 | `knowledge_searched` | mounts/18-knowledge.js (P2: {query, hits} — token-index search executed) |
+| 295 | `knowledge_cited` | mounts/18-knowledge.js (P2: {source_id, ref_type, ref_id} — citation recorded) |
+| 296 | `knowledge_removed` | mounts/18-knowledge.js (P2: {source_id} — source deleted) |
+| 297 | `knowledge_delete_forbidden` | mounts/18-knowledge.js (P2: {source_id, bot} — non-operator attempted delete) |
 | 260 | `plugin_forbidden` | mounts/35-plugins.js (W4: {bot, method, path} — non-operator plugin write) |
 | 261 | `plugin_permission_rejected` | mounts/35-plugins.js (W4: declared permission rejected at runtime) |
 | 262 | `plugin_delete_forbidden` | mounts/35-plugins.js (W4: uninstall denied by policy) |
