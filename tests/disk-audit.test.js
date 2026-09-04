@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_AIE_FAIL_OPEN = 'true'; // no AIE runtime in unit tests; fail-open for unit tests only
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');

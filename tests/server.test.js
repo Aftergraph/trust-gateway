@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_AIE_FAIL_OPEN = 'true'; // unit tests: no AIE runtime
 const test = require('node:test');
 const assert = require('node:assert');
 const { Gateway } = require('../src/gateway/server');

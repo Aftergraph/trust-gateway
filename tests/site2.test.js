@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_AIE_FAIL_OPEN = 'true'; // no AIE runtime in unit tests; fail-open for unit tests only
 // FS-B3 site phase 2 tests — status.html, pricing.html, docs.html, chain
 // stamp, and the extended site guarantees (textContent-only JS across the
 // whole site, no remote assets anywhere, quickstart grounded in the real

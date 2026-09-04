@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_AIE_FAIL_OPEN = 'true'; // unit tests: no AIE runtime
 // Integration tests for GatewayClient — boots a real Gateway on an
 // ephemeral port and exercises every documented method end-to-end.
 

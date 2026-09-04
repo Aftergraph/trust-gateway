@@ -11,7 +11,9 @@ class BudgetLedger {
     this.budgetUsd = budgetUsd || 0;
     this.spentUsd = 0;
     this.reservedUsd = 0;
-    this.committed = new Map(); // actionId -> cost
+    this.committed = new Map(); // actionId -> final cost (settled/committed)
+    this.reservations = new Map(); // actionId -> reserved cost (HC4: reservation registry)
+    this.settled = new Set(); // actionIds already settled (settle idempotency)
     this.actionHistory = []; // replay-safe audit trail
     this.file = file;
     this.now = now || (() => Date.now());
@@ -30,6 +32,8 @@ class BudgetLedger {
     this.spentUsd = data.spentUsd || 0;
     this.reservedUsd = data.reservedUsd || 0;
     this.committed = new Map(Object.entries(data.committed || {}));
+    this.reservations = new Map(Object.entries(data.reservations || {}));
+    this.settled = new Set(data.settled || []);
     this.actionHistory = data.actionHistory || [];
   }
 
@@ -41,6 +45,8 @@ class BudgetLedger {
       spentUsd: this.spentUsd,
       reservedUsd: this.reservedUsd,
       committed: Object.fromEntries(this.committed),
+      reservations: Object.fromEntries(this.reservations),
+      settled: [...this.settled],
       actionHistory: this.actionHistory,
     }), { mode: 0o600 });
     if (process.platform !== 'win32') fs.chmodSync(tmpFile, 0o600);
@@ -49,13 +55,14 @@ class BudgetLedger {
 
   /** Reserve budget for action; returns true if successful. */
   reserve(actionId, cost) {
-    if (this.committed.has(actionId)) {
-      return false; // idempotent: already committed
+    if (this.committed.has(actionId) || (this.reservations && this.reservations.has(actionId))) {
+      return false; // idempotent: already reserved or committed
     }
     if (this.spentUsd + this.reservedUsd + cost > this.budgetUsd) {
       return false; // budget exceeded
     }
     this.reservedUsd += cost;
+    this.reservations.set(actionId, cost);
     this.actionHistory.push({ actionId, cost, type: 'reserve', ts: new Date(this.now()).toISOString() });
     this._save();
     return true;
@@ -63,11 +70,12 @@ class BudgetLedger {
 
   /** Commit reserved budget to spent; returns true if successful. */
   commit(actionId) {
-    if (!this.committed.has(actionId)) {
+    if (!this.reservations.has(actionId)) {
       return false; // idempotent: never reserved
     }
-    const cost = this.committed.get(actionId);
-    this.committed.delete(actionId);
+    const cost = this.reservations.get(actionId);
+    this.reservations.delete(actionId);
+    this.committed.set(actionId, cost);
     this.reservedUsd -= cost;
     this.spentUsd += cost;
     this.actionHistory.push({ actionId, cost, type: 'commit', ts: new Date(this.now()).toISOString() });
@@ -77,11 +85,13 @@ class BudgetLedger {
 
   /** Settle final cost after execution; returns true if successful. */
   settle(actionId, cost) {
-    if (this.committed.has(actionId)) {
-      return false; // idempotent: already settled
+    if (!this.reservations.has(actionId) || this.settled.has(actionId)) {
+      return false; // idempotent: settle once after reserve
     }
-    this.committed.set(actionId, cost);
-    this.reservedUsd += cost;
+    const reserved = this.reservations.get(actionId);
+    this.reservations.set(actionId, cost);
+    this.reservedUsd += (cost - reserved); // adjust to final cost (may be negative = refund)
+    this.settled.add(actionId);
     this.actionHistory.push({ actionId, cost, type: 'settle', ts: new Date(this.now()).toISOString() });
     this._save();
     return true;
@@ -89,11 +99,11 @@ class BudgetLedger {
 
   /** Refund budget if action failed; returns true if successful. */
   refund(actionId) {
-    if (!this.committed.has(actionId)) {
+    if (!this.reservations.has(actionId)) {
       return false; // idempotent: never reserved
     }
-    const cost = this.committed.get(actionId);
-    this.committed.delete(actionId);
+    const cost = this.reservations.get(actionId);
+    this.reservations.delete(actionId);
     this.reservedUsd -= cost;
     this.actionHistory.push({ actionId, cost, type: 'refund', ts: new Date(this.now()).toISOString() });
     this._save();

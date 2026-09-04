@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_AIE_FAIL_OPEN = 'true'; // no AIE runtime in unit tests; fail-open for unit tests only
 // FS-G1 — cross-tenant skills federation: env-gated, read-only
 // cross-tenant, running-tenant approvals.
 //

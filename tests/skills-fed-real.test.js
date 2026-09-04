@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_AIE_FAIL_OPEN = 'true'; // no AIE runtime in unit tests; fail-open for unit tests only
 // FS-I1 — cross-tenant REAL skill runs under DUAL approval.
 //
 // Covers (per the slice spec):

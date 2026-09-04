@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_AIE_FAIL_OPEN = 'true'; // unit tests: no AIE runtime
 // Slice 2 acceptance — per-bot spend caps.
 // Acceptance: A-001..A-008. All drive the real Gateway via HTTP (or mock
 // req/res for the in-process path) to exercise both the BudgetStore and

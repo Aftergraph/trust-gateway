@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_AIE_FAIL_OPEN = 'true'; // no AIE runtime in unit tests; fail-open for unit tests only
 // v2 wave C — C3 SSRF-guarded web fetch/extract tests.
 // Covers: isPrivateAddress matrix, htmlToText projection, fetchPage
 // with an injectable transport (no real network, no real DNS), SSRF

@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_AIE_FAIL_OPEN = 'true'; // no AIE runtime in unit tests; fail-open for unit tests only
 // W1 llm-brain tests — mock-upstream integration (rule 8: local
 // http.createServer stub, never a real provider). Covers: chat wire format,
 // proposal-goes-through-policy, no-args-leak-to-audit, empty response,

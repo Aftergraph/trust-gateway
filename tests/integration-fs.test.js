@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_AIE_FAIL_OPEN = 'true'; // unit tests: no AIE runtime
 // FS-D2 — integration battery over a REAL spawned gateway process
 // (tests/fs-helpers.js: bin/gateway.js --dispatch, stub OpenAI brain,
 // jailed dispatcher, isolated tmp storage). One gateway for the whole

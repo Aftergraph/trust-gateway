@@ -7,6 +7,7 @@ const { canApprove } = require('../src/gateway/server');
 const { EventEmitter } = require('node:events');
 
 function makeGateway(dispatch) {
+  process.env.TG_AIE_FAIL_OPEN = 'true'; // no AIE runtime in unit tests; revalidation skips
   return new Gateway({
     bots: {
       // operator: role === 'operator'

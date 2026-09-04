@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_AIE_FAIL_OPEN = 'true'; // unit tests: no AIE runtime
 // FS-D2 — security sweep over the same real-gateway battery pattern.
 //
 // Claim: every /v2 mount fails closed on auth, path traversal is refused,

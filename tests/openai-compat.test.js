@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_AIE_FAIL_OPEN = 'true'; // unit tests: no AIE runtime
 // C7 tests — OpenAI-compatible surface (src/gateway/openai-compat.js +
 // mounts/85-openai.js + mounts/85b-openai-models.js).
 //

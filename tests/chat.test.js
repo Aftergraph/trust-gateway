@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_AIE_FAIL_OPEN = 'true'; // unit tests: no AIE runtime
 // Tests for the deterministic chat planner (orchestrator-built slice).
 const test = require('node:test');
 const assert = require('node:assert');

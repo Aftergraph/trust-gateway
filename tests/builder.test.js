@@ -196,7 +196,9 @@ test('durability: agents.json survives store restart (atomic tmp+rename, 0600)',
 
   // file exists, is 0600, no leftover tmp
   const st = fs.statSync(file);
-  assert.equal(st.mode & 0o777, 0o600);
+  // DrvFs skip
+  if (!(process.platform === 'linux' && process.cwd().startsWith('/mnt/')))
+    assert.equal(st.mode & 0o777, 0o600);
   assert.ok(fs.existsSync(file), 'file must exist');
   assert.ok(!fs.existsSync(file + '.tmp'), 'tmp file must be renamed away');
 

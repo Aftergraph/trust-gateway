@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_AIE_FAIL_OPEN = 'true'; // no AIE runtime in unit tests; fail-open for unit tests only
 // FS-E1d — tenant-scoped approvals + audit-chain read scope.
 //
 // Covers: the full approval lifecycle inside one tenant never leaking to

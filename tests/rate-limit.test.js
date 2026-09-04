@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_AIE_FAIL_OPEN = 'true'; // unit tests: no AIE runtime
 // Tests for the slice: perimeter-guards — rate-limit + audit since-cap.
 // Acceptance: A-001..A-006 + invalid_limit guards (A-004).
 //

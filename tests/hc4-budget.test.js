@@ -1,117 +1,106 @@
+'use strict';
+// HC4 budget conservation tests (node:test port of the jest-drafted suite).
+// Frozen semantics: reserve()/settle()/commit()/refund() with actionId idempotency,
+// monotonic spend, ceiling enforcement. File-based persistence tested across instances.
+const test = require('node:test');
+const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
 
 const { BudgetLedger } = require('../src/gateway/budgets.js');
 
-describe('HC4: Budget Conservation', () => {
-  let tempFile;
+function mkLedger(budgetUsd) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hc4-'));
+  const file = path.join(dir, 'ledger.json');
+  const ledger = new BudgetLedger({ budgetUsd, file });
+  return { ledger, dir, file };
+}
 
-  beforeEach(() => {
-    tempFile = fs.mkdtempSync(path.join(os.tmpdir(), 'budget-test-'));
-  });
+function cleanup({ dir }) {
+  try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
+}
 
-  afterEach(() => {
-    if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
-  });
+test('HC4-02: reserve/settle/commit/refund semantics', () => {
+  const h = mkLedger(50);
+  try {
+    assert.equal(h.ledger.reserve('act-001', 15), true);
+    assert.equal(h.ledger.reservedUsd, 15);
+    assert.equal(h.ledger.spentUsd, 0);
 
-  it('HC4-02: Ledger reserve/settle/commit/refund semantics', () => {
-    const ledger = new BudgetLedger({ budgetUsd: 50, file: tempFile });
-    const now = Date.now();
+    // Idempotent reserve: same actionId cannot double-reserve
+    assert.equal(h.ledger.reserve('act-001', 10), false);
+    assert.equal(h.ledger.reservedUsd, 15);
 
-    // Reserve succeeds
-    expect(ledger.reserve('act-001', 15)).toBe(true);
-    expect(ledger.reservedUsd).toBe(15);
-    expect(ledger.spentUsd).toBe(0);
+    assert.equal(h.ledger.commit('act-001'), true);
+    assert.equal(h.ledger.spentUsd, 15);
+    assert.equal(h.ledger.reservedUsd, 0);
+  } finally { cleanup(h); }
+});
 
-    // Idempotent reserve
-    expect(ledger.reserve('act-001', 10)).toBe(false);
-    expect(ledger.reservedUsd).toBe(15);
+test('HC4-02: budget exhausted blocks new reservations', () => {
+  const h = mkLedger(20);
+  try {
+    assert.equal(h.ledger.reserve('act-a', 15), true);
+    assert.equal(h.ledger.reserve('act-b', 10), false, 'would exceed ceiling');
+    assert.equal(h.ledger.reservedUsd, 15);
+  } finally { cleanup(h); }
+});
 
-    // Settle adds to committed
-    expect(ledger.settle('act-001', 15)).toBe(true);
+test('HC4-02: refund returns reserved budget', () => {
+  const h = mkLedger(50);
+  try {
+    assert.equal(h.ledger.reserve('act-fail', 20), true);
+    assert.equal(h.ledger.reservedUsd, 20);
+    assert.equal(h.ledger.refund('act-fail'), true);
+    assert.equal(h.ledger.reservedUsd, 0);
+    assert.equal(h.ledger.refund('act-fail'), false, 'idempotent');
+  } finally { cleanup(h); }
+});
 
-    // Commit moves from reserved to spent
-    expect(ledger.commit('act-001')).toBe(true);
-    expect(ledger.spentUsd).toBe(15);
-    expect(ledger.reservedUsd).toBe(0);
-  });
+test('HC4-02: parallel execution budget accounting', () => {
+  const h = mkLedger(20);
+  try {
+    assert.equal(h.ledger.reserve('act-a', 15), true);
+    assert.equal(h.ledger.reserve('act-b', 10), false);
+    assert.equal(h.ledger.reservedUsd, 15);
+  } finally { cleanup(h); }
+});
 
-  it('HC4-02: Budget exhausted blocks new reservations', () => {
-    const ledger = new BudgetLedger({ budgetUsd: 20, file: tempFile });
-    
-    expect(ledger.reserve('act-a', 15)).toBe(true);
-    expect(ledger.reserve('act-b', 10)).toBe(false); // Would exceed
-    expect(ledger.available).toBe(5);
-  });
+test('HC4-01: delegation chain budget enforcement', () => {
+  const h = mkLedger(50);
+  try {
+    let n = 0;
+    const reserveBudget = (budget) => h.ledger.reserve(`del-${Date.now()}-${n++}`, budget);
+    assert.equal(reserveBudget(30), true);
+    assert.equal(reserveBudget(30), false, 'two children of 30 exceed root 50');
+  } finally { cleanup(h); }
+});
 
-  it('HC4-02: Refund returns reserved budget', () => {
-    const ledger = new BudgetLedger({ budgetUsd: 50, file: tempFile });
-    
-    expect(ledger.reserve('act-fail', 20)).toBe(true);
-    expect(ledger.reservedUsd).toBe(20);
+test('HC4-02: idempotent operations', () => {
+  const h = mkLedger(50);
+  try {
+    assert.equal(h.ledger.reserve('idemp-test', 10), true);
+    assert.equal(h.ledger.reserve('idemp-test', 10), false);
+    assert.equal(h.ledger.reservedUsd, 10);
 
-    expect(ledger.refund('act-fail')).toBe(true);
-    expect(ledger.reservedUsd).toBe(0);
+    assert.equal(h.ledger.settle('idemp-test', 10), true);
+    assert.equal(h.ledger.settle('idemp-test', 10), false);
 
-    // Idempotent refund
-    expect(ledger.refund('act-fail')).toBe(false);
-  });
+    assert.equal(h.ledger.commit('idemp-test'), true);
+    assert.equal(h.ledger.commit('idemp-test'), false);
+    assert.equal(h.ledger.spentUsd, 10);
+  } finally { cleanup(h); }
+});
 
-  it('HC4-02: Parallel execution budget accounting', () => {
-    const ledger = new BudgetLedger({ budgetUsd: 20, file: tempFile });
+test('HC4-02: persisted ledger state across instances', () => {
+  const h = mkLedger(50);
+  try {
+    assert.equal(h.ledger.reserve('persist-test', 25), true);
+    assert.equal(h.ledger.reservedUsd, 25);
 
-    // agent-a reserves 15.0
-    expect(ledger.reserve('act-a', 15)).toBe(true);
-    expect(ledger.reservedUsd).toBe(15);
-
-    // agent-b should be budget-limited (total would be 25 > 20)
-    expect(ledger.reserve('act-b', 10)).toBe(false);
-    expect(ledger.available).toBe(5);
-  });
-
-  it('HC4-01: Delegation chain budget enforcement', () => {
-    const ledger = new BudgetLedger({ budgetUsd: 50, file: tempFile });
-    
-    // Root has 50, children should not aggregate to > 50
-    const reserveBudget = (budget) => {
-      const now = Date.now();
-      const actionId = `del-${now}`;
-      return ledger.reserve(actionId, budget);
-    };
-
-    // Two child delegations of 30 each = 60 > 50
-    expect(reserveBudget(30)).toBe(true);
-    expect(reserveBudget(30)).toBe(false); // Exceeds root
-  });
-
-  it('HC4-02: Idempotent operations', () => {
-    const ledger = new BudgetLedger({ budgetUsd: 50, file: tempFile });
-
-    // Reserve once
-    expect(ledger.reserve('idemp-test', 10)).toBe(true);
-    expect(ledger.reserve('idemp-test', 10)).toBe(false); // Idempotent
-    expect(ledger.reservedUsd).toBe(10);
-
-    // Settle once
-    expect(ledger.settle('idemp-test', 10)).toBe(true);
-    expect(ledger.settle('idemp-test', 10)).toBe(false); // Idempotent
-
-    // Commit once
-    expect(ledger.commit('idemp-test')).toBe(true);
-    expect(ledger.commit('idemp-test')).toBe(false); // Idempotent
-    expect(ledger.spentUsd).toBe(10);
-  });
-
-  it('HC4-02: Persisted ledger state', () => {
-    // Create ledger and reserve
-    const ledger1 = new BudgetLedger({ budgetUsd: 50, file: tempFile });
-    expect(ledger1.reserve('persist-test', 25)).toBe(true);
-    expect(ledger1.reservedUsd).toBe(25);
-
-    // Create new instance from same file
-    const ledger2 = new BudgetLedger({ budgetUsd: 50, file: tempFile });
-    expect(ledger2.reservedUsd).toBe(25);
-    expect(ledger2.reserve('persist-test', 25)).toBe(false); // Idempotent across instances
-  });
+    const ledger2 = new BudgetLedger({ budgetUsd: 50, file: h.file });
+    assert.equal(ledger2.reservedUsd, 25);
+    assert.equal(ledger2.reserve('persist-test', 25), false, 'idempotent across instances');
+  } finally { cleanup(h); }
 });

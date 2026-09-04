@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_AIE_FAIL_OPEN = 'true'; // unit tests: no AIE runtime
 // W2 group rooms — tests.
 // Covers: RoomStore durability (atomic 0600, fail-closed, reload), caps
 // (msgCap + turnLimit) enforced with room_limit_hit audits, bot-mention

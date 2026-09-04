@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_AIE_FAIL_OPEN = 'true'; // no AIE runtime in unit tests; fail-open for unit tests only
 // v2 wave B — backend harness + worktree trees tests.
 //
 // Covers: executors registered only with --dispatch semantics (server's

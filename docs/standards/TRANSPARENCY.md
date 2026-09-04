@@ -820,3 +820,13 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 252 | `tenant_quota_read` | mounts/157-tenant-quotas.js (FS-Z6: {by, tenant, resource} — operator read tenant quota/usage) |
 | 253 | `tenant_access_listed` | mounts/159-tenant-access.js (FS-A1-S3: {by, count} — operator listed accessible tenants; ids + names only, no secrets) |
 | 254 | `tenant_access_denied` | mounts/159-tenant-access.js (FS-A1-S3: {bot, reason} — non-operator attempted tenant listing) |
+| 254 | `reserve` | budgets.js (A-008/HC4: {bot, amount} — budget reserved for an admitted action) |
+| 255 | `commit` | budgets.js (A-008/HC4: {bot, amount} — reserved budget settled after execution) |
+| 256 | `settle` | budgets.js (HC4: {bot, amount} — explicit settlement of a reservation) |
+| 257 | `refund` | budgets.js (HC4: {bot, amount} — reservation refunded after failure/deny) |
+| 258 | `takeover_forbidden` | mounts/33-takeover.js (HC8: {bot} — non-operator attempted takeover) |
+| 259 | `takeover_issued` | mounts/33-takeover.js (HC8: {takeover_id, principal_id, revoked_actions, granted_capabilities} — takeover envelope issued, subset-only caps) |
+| 260 | `plugin_forbidden` | mounts/35-plugins.js (W4: {bot, method, path} — non-operator plugin write) |
+| 261 | `plugin_permission_rejected` | mounts/35-plugins.js (W4: declared permission rejected at runtime) |
+| 262 | `plugin_delete_forbidden` | mounts/35-plugins.js (W4: uninstall denied by policy) |
+| 263 | `model_route` | mounts/59-router.js (HC4/router: {capability, model, provider} — routing decision) |

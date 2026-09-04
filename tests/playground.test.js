@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_AIE_FAIL_OPEN = 'true'; // no AIE runtime in unit tests; fail-open for unit tests only
 // tests/playground.test.js — wave C playground runner + mount (C6).
 //
 // Covers: js run stdout/exitCode, infinite loop → timedOut + SIGKILL, env

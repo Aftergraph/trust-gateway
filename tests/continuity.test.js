@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_AIE_FAIL_OPEN = 'true'; // unit tests: no AIE runtime
 // W10 continuity tests: goals + policy-gated steps + approval integration,
 // loops on an injected fake clock, slash dispatcher, corrupt-file fail-closed,
 // and real HTTP smoke tests over the mounts.

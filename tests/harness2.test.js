@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_AIE_FAIL_OPEN = 'true'; // unit tests: no AIE runtime
 // FS-C2 — harness v2 tests: project model, jailed build/run, approval gate.
 //
 // Covers: create→build→run happy path (hello world), timeout SIGKILL, path

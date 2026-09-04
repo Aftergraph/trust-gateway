@@ -19,7 +19,19 @@ describe('FS-M3 rate-limit ledger', () => {
 
   after(() => {
     process.env = origEnv;
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    // Windows keeps SQLite handles open briefly after require-cache purges; a
+    // single rmSync races the GC and throws EPERM. Retry briefly, then leave
+    // the dir for OS temp cleanup — never fail the suite on temp cleanup.
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+        break;
+      } catch (e) {
+        if (attempt === 4 && e.code === 'EPERM') break; // best-effort cleanup
+        const until = Date.now() + 100;
+        while (Date.now() < until) {} // ponytail: 100ms busy-wait, adequate for test cleanup
+      }
+    }
   });
 
   it('hit increments count', () => {

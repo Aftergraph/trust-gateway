@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_AIE_FAIL_OPEN = 'true'; // unit tests: no AIE runtime
 // D3 — transparent deep-chat browsing: public transcript pages at /h/<token>
 // and the operator index at /h. Exercises the mount over REAL HTTP.
 const test = require('node:test');

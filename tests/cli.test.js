@@ -1,4 +1,5 @@
 'use strict';
+process.env.TG_AIE_FAIL_OPEN = 'true'; // unit tests: no AIE runtime
 // W7 CLI/TUI tests — boots the real Gateway in-process on an ephemeral port
 // and spawns bin/tg.js against it via child_process (execFile/spawn with an
 // argument array; no shell string interpolation). Covers: every subcommand,
