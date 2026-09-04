@@ -243,3 +243,43 @@ løb tør for OpenRouter-credits:
 - **FS-W5**: Deep healthz endpoint — /v2/healthz/deep returns
   per-subsystem status (chain, db, disk, gateway). Public, no auth,
   no audit row.
+
+---
+
+## 12. Regression-elimination + live verification (2026-09-04)
+
+De 252 "pre-existing" integration-test-fejl siden v2r var **ikke**
+miljø-relaterede — de var strukturelle. Tre rodårsager, alle P0-fixet:
+
+1. **Function-style mounts var dead code**: mounts 120-158
+   (`module.exports = function mount(gw)`) kaldte `gw.router.get(...)`,
+   men Gateway havde ingen router og `loadMounts()` kastede på
+   funktions-eksports → alle gateway-spawning tests crashede ved load
+   (~283 tests kørte aldrig). Fix: tolerant loader (skip + audit) +
+   `gw.router` facade i server.js (66 routes live, dispatched før v1
+   med bearer auth, `req.bot` sat for isOperator, `:param` matching).
+2. **Z-wave overskrivelser**: FS-Z6 overskrev FS-I3 `tenant-quotas.js`
+   (→ `getTenantQuotas is not a function`), FS-Z5 overskrev FS-I4
+   `audit-export.js`. Begge originaler gendannet; Z-versioner flyttet
+   til `tenant-resource-quotas.js` / `audit-export-jsonl.js`.
+3. **Manglende eksports**: `events.audit()` (nu via hash-chain
+   entryHash) + `tenants.isOperator()` tilføjet.
+
+**Live-verifikation på :8800 (atlas operator / forge worker):**
+- 8/8 fn-route GETs → 200 (metrics, fed-audit, skill-search,
+  backup-crypto, operator-sessions, chain/verify, audit-export,
+  tenant-metrics)
+- RBAC-falsification: worker → 403, anon/bad-token → 401 (PASS)
+- Mutation smoke: retention POST, webhook create/list/delete,
+  rate-limits PUT/GET, sandbox PUT/GET, dashboard, notify → 200
+- Tenant-isolation: iso-a webhook usynlig for iso-b; wildcard (*) som
+  designet
+- **Conformance tier-A: 9/9 domæner PASS** på live gateway
+- Suite: **1356/1356 grønne** (fra 590 pass + 252 fail)
+- Chain repaired: healthz ok:true, chain verify ok:true (1427+ checked)
+
+systemd env aktiverer nu z-wave flags (TG_TENANT_METRICS,
+TG_FED_AUDIT_DASH, TG_SKILL_MARKET_SEARCH, TG_CHAIN_INTEGRITY,
+TG_AUDIT_EXPORT, TG_OPERATOR_SESSION_AUDIT, TG_ROUTE_LIMITS,
+TG_WEBHOOK_SUBS_TENANT, TG_SKILL_SANDBOX, TG_OPERATOR_DASHBOARD,
+TG_OPERATOR_NOTIFY). TRANSPARENCY: 252 rækker.
