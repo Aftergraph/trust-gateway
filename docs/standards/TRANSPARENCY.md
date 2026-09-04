@@ -853,6 +853,7 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 290 | `workflow_sweep_forbidden` | mounts/26-workflows.js (P2: {bot} — non-operator attempted schedule sweep) |
 | 291 | `evals_forbidden` | mounts/06-evals.js (P2: {bot} — non-operator attempted eval run) |
 | 292 | `evals_run` | mounts/06-evals.js (P2: {gate, total, failed, snapshot_hash} — golden-set eval executed) |
+| 298 | `http` | mounts/07-api-contract.js (P2 developer platform: OpenAPI securitySchemes value 'http' in the generated contract — extractor false-positive documented; not a runtime audit event) |
 | 293 | `knowledge_created` | mounts/18-knowledge.js (P2: {source_id, title} — knowledge source created) |
 | 294 | `knowledge_searched` | mounts/18-knowledge.js (P2: {query, hits} — token-index search executed) |
 | 295 | `knowledge_cited` | mounts/18-knowledge.js (P2: {source_id, ref_type, ref_id} — citation recorded) |
