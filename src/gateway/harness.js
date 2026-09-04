@@ -16,6 +16,7 @@
 // pure state + process discipline, like the dispatcher.
 
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 
@@ -249,7 +250,9 @@ function makeHarness({ botsDir } = {}) {
     const rootDir = ensureDir(botRoot(bot));
     const src = jailResolve(`${HARNESS_DIR}/${name}`, rootDir);
     if (!fs.existsSync(src)) return { ok: false, error: 'not_found', name };
-    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    // ms-precision timestamp alone collides when two snapshots land in the same
+    // millisecond (seen under parallel shard load); add a random suffix.
+    const ts = new Date().toISOString().replace(/[:.]/g, '-') + '-' + crypto.randomBytes(3).toString('hex');
     const id = `${name}-${ts}`;
     const dest = jailResolve(`${TREES_DIR}/${id}`, rootDir);
     copyDir(src, dest);

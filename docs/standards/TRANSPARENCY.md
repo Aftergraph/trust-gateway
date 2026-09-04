@@ -840,6 +840,7 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 277 | `takeover_handed_back` | mounts/33-takeover.js (HC8: {takeover_id, principal_id, restored_capabilities} — ownership returned to agent, pre-takeover envelope restored) |
 | 278 | `context_forbidden` | mounts/25-context.js (P1 Context Inspector: {bot, target} — non-operator inspected another bot's context) |
 | 279 | `context_inspected` | mounts/25-context.js (P1: {bot, target, snapshot_hash} — context snapshot generated, content-addressed) |
+| 280 | `router_outcome_recorded` | mounts/59-router.js (v0.2: {provider, model, ok} — telemetry outcome recorded for fallback-learning) |
 | 260 | `plugin_forbidden` | mounts/35-plugins.js (W4: {bot, method, path} — non-operator plugin write) |
 | 261 | `plugin_permission_rejected` | mounts/35-plugins.js (W4: declared permission rejected at runtime) |
 | 262 | `plugin_delete_forbidden` | mounts/35-plugins.js (W4: uninstall denied by policy) |
