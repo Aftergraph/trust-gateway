@@ -172,6 +172,57 @@ class MemoryStore {
     }
     throw err('not_found', 'memory fact not found');
   }
+  // ── P1: usage-trace + "what does this agent know about X" ────────────────
+
+  /** Record a use of a fact (query paths call this — reading = using). */
+  touch(botName, id) {
+    const bot = this.bots[botName];
+    if (!bot) return null;
+    const f = bot.facts.find((x) => x.id === id);
+    if (!f) return null;
+    f.lastUsedAt = new Date(this.now()).toISOString();
+    f.usageCount = (f.usageCount || 0) + 1;
+    this._save();
+    return f;
+  }
+
+  /** Usage trace: per-fact usage stats (decay-aware default reads only). */
+  usageTrace(botName) {
+    const facts = this.list(botName);
+    return {
+      bot: botName,
+      total_active: facts.length,
+      facts: facts
+        .map((f) => ({
+          id: f.id,
+          text: f.text.slice(0, 80),
+          tags: f.tags || [],
+          usageCount: f.usageCount || 0,
+          lastUsedAt: f.lastUsedAt || null,
+          pin: !!f.pin,
+          decayAt: f.decayAt || null,
+        }))
+        .sort((a, b) => (b.usageCount || 0) - (a.usageCount || 0)),
+    };
+  }
+
+  /**
+   * "What does this agent know about X" — tag/text search over decay-aware facts.
+   * Every matched fact gets a usage touch (spec: reading = using).
+   */
+  knowsAbout(botName, topic, { limit = 10 } = {}) {
+    if (!topic || typeof topic !== 'string')
+      throw err('E_TOPIC', 'topic required');
+    const q = topic.toLowerCase();
+    const matched = this.list(botName).filter((f) => {
+      const inText = f.text.toLowerCase().includes(q);
+      const inTags = (f.tags || []).some((t) => String(t).toLowerCase().includes(q));
+      return inText || inTags;
+    });
+    for (const f of matched) this.touch(botName, f.id);
+    return matched.slice(0, limit);
+  }
+
 }
 
 // Single MemoryStore instance per gateway, like artifacts pattern.
@@ -183,6 +234,7 @@ function getMemoryStore(gw) {
     _instances.set(gw, s);
   }
   return s;
+
 }
 
 module.exports = { MemoryStore, DEFAULT_FILE, getMemoryStore };

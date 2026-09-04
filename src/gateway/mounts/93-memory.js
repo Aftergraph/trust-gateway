@@ -78,6 +78,25 @@ module.exports = {
         return send(res, 200, { facts: projected, bot: targetBot });
       }
 
+      // ── GET /v2/memory/knows?bot=<name>&topic=<q> — P1 usage-traced search ──
+      if (req.method === 'GET' && pathname.endsWith('/knows')) {
+        const targetBot = url.searchParams.get('bot');
+        const topic = url.searchParams.get('topic');
+        if (!targetBot) return send(res, 400, { error: 'bot query param required' });
+        if (!topic) return send(res, 400, { error: 'topic query param required' });
+        if (!botAllowed(gw, bot, targetBot)) return send(res, 403, { error: 'forbidden' });
+        const hits = store.knowsAbout(targetBot, topic);
+        return send(res, 200, { bot: targetBot, topic, hits });
+      }
+
+      // ── GET /v2/memory/usage?bot=<name> — per-fact usage stats ──
+      if (req.method === 'GET' && pathname.endsWith('/usage')) {
+        const targetBot = url.searchParams.get('bot');
+        if (!targetBot) return send(res, 400, { error: 'bot query param required' });
+        if (!botAllowed(gw, bot, targetBot)) return send(res, 403, { error: 'forbidden' });
+        return send(res, 200, store.usageTrace(targetBot));
+      }
+
       // ── GET /v2/memory/:id — get one fact ──
       if (req.method === 'GET' && hasIdSegment(pathname)) {
         const id = decodeURIComponent(seg(pathname)[2]);
