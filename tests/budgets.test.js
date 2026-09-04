@@ -11,7 +11,7 @@ const os = require('node:os');
 const path = require('node:path');
 const http = require('node:http');
 const { EventEmitter } = require('node:events');
-const { Gateway } = require('../src/gateway/server');
+const { Gateway, hashToken } = require('../src/gateway/server');
 const { BudgetStore } = require('../src/gateway/budgets');
 
 function tmpfile(name) {
@@ -21,8 +21,8 @@ function tmpfile(name) {
 function makeGateway({ dispatch = async () => ({ ok: true }), budgets = null, now = () => Date.now() } = {}) {
   return new Gateway({
     bots: {
-      forge: { name: 'forge', token: 'tok-forge', role: 'worker', capabilities: ['fs.write:*', 'fs.read'] },
-      atlas: { name: 'atlas', token: 'tok-atlas', role: 'operator', capabilities: ['*'] },
+      forge: { name: 'forge', tokenHash: hashToken('tok-forge'), role: 'worker', capabilities: ['fs.write:*', 'fs.read'] },
+      atlas: { name: 'atlas', tokenHash: hashToken('tok-atlas'), role: 'operator', capabilities: ['*'] },
     },
     dispatch,
     budgets,

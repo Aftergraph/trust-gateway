@@ -12,7 +12,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { EventEmitter } = require('node:events');
-const { Gateway, parseLimit } = require('../src/gateway/server');
+const { Gateway, parseLimit, hashToken } = require('../src/gateway/server');
 const { HashChain } = require('../src/gateway/hash-chain');
 
 // ── harness ───────────────────────────────────────────────────────────────
@@ -50,8 +50,8 @@ function makeReqRes({ method = 'GET', url = '/', token = null, body = null, cont
 function makeGateway(opts = {}) {
   return new Gateway(Object.assign({
     bots: {
-      forge: { token: 'tok-forge', role: 'worker', capabilities: ['fs.write:*', 'fs.read'] },
-      atlas: { token: 'tok-atlas', role: 'operator', capabilities: [] },
+      forge: { tokenHash: hashToken('tok-forge'), role: 'worker', capabilities: ['fs.write:*', 'fs.read'] },
+      atlas: { tokenHash: hashToken('tok-atlas'), role: 'operator', capabilities: [] },
     },
     dispatch: async (bot, tool) => ({ ok: true, tool }),
   }, opts));
