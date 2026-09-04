@@ -84,7 +84,11 @@ module.exports = {
     if (req.method !== 'GET') return send(res, 405, { error: 'method_not_allowed' });
     const run = store.getById(id);
     if (!run) return send(res, 404, { error: 'not_found' });
-    const chainRefs = gw.chain.since(0)
+    // chain.since(seq, opts?) returns { entries, nextSince } (perimeter-guards
+    // paging contract) — unwrap .entries before filtering (was: array in v1).
+    const sincePage = gw.chain.since(0);
+    const chainEntries = Array.isArray(sincePage) ? sincePage : sincePage.entries;
+    const chainRefs = chainEntries
       .filter((e) => e.payload && e.payload.runId === id)
       .slice(-CHAIN_REFS_KEEP)
       .map((e) => ({ seq: e.seq, ts: e.ts, type: e.payload.type, hash: e.hash }));
