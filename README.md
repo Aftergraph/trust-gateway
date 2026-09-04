@@ -106,3 +106,7 @@ Hver fil eksporterer `{ name, method, path, auth, handle }`. Auth-modes:
 - v2: container-isolation pr. bot (gVisor), persistence af approvals, TLS
 - ADR: AG-UI vs. OpenAI-compat som agent-protokol
 - Hosted multi-tenant edition (SMB-pakken)
+
+---
+
+**Brand status:** Aftergraph / ABDE Intelligence are PROVISIONAL — NOT TRADEMARK CLEARED. No irreversible branding until clearance.
