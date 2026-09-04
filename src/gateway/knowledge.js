@@ -88,27 +88,35 @@ class KnowledgeStore {
   get(id) { return this.sources.get(id) || null; }
 
   /** Search: token-index intersect (AND over query tokens), title-ranked. */
-  search(query, { limit = 10 } = {}) {
+  /**
+   * Semantic-ranked search v1: score = Σ TF(source,token) × IDF(token) over the
+   * inverted index. Candidates are OR-matched (any query token) but scored so
+   * sources matching more/rarer tokens rank higher — partial matches surface
+   * instead of being dropped by AND-intersect. Pure stdlib math; no embedding API.
+   */
+  search(query, { limit = 10, min_score = 0.05 } = {}) {
     if (!query || typeof query !== 'string') throw new Error('knowledge: query required');
-    const toks = new Set(tokenize(query.toLowerCase()));
-    if (toks.size === 0) return [];
-    let candidates = null;
-    for (const tok of toks) {
-      const ids = this._index.get(tok) || new Set();
-      candidates = candidates === null
-        ? new Set(ids)
-        : new Set([...candidates].filter((x) => ids.has(x)));
-      if (candidates.size === 0) break;
+    const qtoks = [...new Set(tokenize(query.toLowerCase()))];
+    if (qtoks.length === 0) return [];
+    const N = Math.max(1, this.sources.size);
+    const scored = [];
+    for (const [id, src] of this.sources) {
+      const srcTokens = new Set([...tokenize(src.title), ...tokenize(src.content), ...(src.tags || [])]);
+      let score = 0;
+      for (const tok of qtoks) {
+        if (!srcTokens.has(tok)) continue;
+        const df = (this._index.get(tok) || new Set()).size;
+        const idf = Math.log((N + 1) / (df + 1)) + 1;
+        const tf = tokenize(src.content).filter((t) => t === tok).length
+          + tokenize(src.title).filter((t) => t === tok).length * 2;
+        score += tf * idf;
+      }
+      if (score >= min_score) scored.push({ id, score });
     }
-    return [...candidates]
-      .map((id) => this.sources.get(id))
-      .filter(Boolean)
-      .sort((a, b) => {
-        const as = tokenize(a.title).filter((t) => toks.has(t)).length;
-        const bs = tokenize(b.title).filter((t) => toks.has(t)).length;
-        return bs - as;
-      })
-      .slice(0, limit);
+    return scored
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map((x) => ({ ...this.sources.get(x.id), score: Number(x.score.toFixed(4)) }));
   }
 
   /** Citation: another surface (proposal/mission/project) used this source. */

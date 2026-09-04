@@ -37,13 +37,16 @@ test('search: token-index AND semantics, title-ranked, decay-free', () => {
 
   const hits = s.search('lash');
   assert.equal(hits.length, 2, 'both lash-related sources');
-  // title match ranks first
+  // title match ranks first (title boost ×2)
   assert.equal(hits[0].title, 'Lash aftercare guide');
-  // AND semantics: 'coffee' only matches Unrelated
-  assert.equal(s.search('coffee').length, 1);
-  assert.equal(s.search('coffee machine').length, 1);
-  // AND semantics: no match for disjoint tokens
-  assert.equal(s.search('lash coffee').length, 0);
+  // ranked semantics: 'coffee machine' ranks Unrelated first but partial matches
+  // for 'machine'-less sources may still surface below
+  const cm = s.search('coffee');
+  assert.equal(cm[0].title, 'Unrelated');
+  // disjoint tokens still surface partially-matching sources, ranked by score
+  const mixed = s.search('lash coffee');
+  assert.equal(mixed[0].title, 'Lash aftercare guide', 'higher-scored first');
+  assert.ok(mixed[0].score > mixed[1].score, 'scored ordering');
 });
 
 test('citations: ref tracked with timestamp; unknown id throws', () => {
