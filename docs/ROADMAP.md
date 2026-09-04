@@ -1,3 +1,57 @@
+# Trust Gateway — Roadmap (2026-09-04 re-basis)
+
+> **RE-BASIS 2026-09-04 (P0 Trust-Spine + P1 complete):** Denne sektion er den
+> aktuelle sandhed; v3-sektionerne nedenfor er historiske wave-log.
+>
+> **Basis:** `main @ 2cd28c7→34177e9` (Tier C grøn: 9 shards, ~80s).
+>
+> **P0 Trust-Spine — COMPLETE (W0.1–W0.6):**
+> - W0.1 Durable conversations (SQLite, replay, tenant-scoped) — `584a0cd`
+> - W0.2 MissionProposal objekt + lifecycle — `19580b1`
+> - W0.3 mission_id-korrelation: TG-side (synthetic + WORKS live via works-client)
+>   + WORKS-side verificeret LIVE (Work QUEUED→SUCCEEDED med correlation_id) —
+>   `8200cd0`, works-execution `ff8fb72`
+> - W0.4 AIE persistent lease-state (SQLite + HMAC-tamper-evidence, overlever
+>   restart) — aie `58fd5e1`, 207/207
+> - W0.5 NeedsYouItem v1 (4 typer + NOW-projektion) — `6befea3`
+> - W0.6 Alpha E2E mod real booted gateway — 8/8 inkl. conversation + NeedsYou
+>   flows (tenant-fix `2cd28c7`) — `8ac9d95`
+>
+> **HC hard-cases runtime-implementeret:** HC4 (BudgetLedger reserve/settle/
+> commit/refund med idempotens i AIE + TG), HC7 (WORKS VerifyBundle),
+> HC8 (takeover mount + WORKS TakeoverHandler; revalidate-hook FØR
+> permissions-check så fail-closed altid ekserceres), HC1/HC6 (demo v2 S2/S3).
+>
+> **P1 — COMPLETE:**
+> - Project primitive v1 + /v2/projects (overview, needs_you, blockers, health)
+> - Approvals-v2: batch + metrics
+> - Takeover/hand-back med ownership-audit (idempotent, envelope-restore)
+> - Context Inspector v1: /v2/context/:bot (6 lag med provenance + snapshot-hash)
+> - Memory usage-trace + knows-about (reading=using, decay-aware)
+> - Model Router v0.2: telemetry-driven fallback-learning (RouterTelemetry)
+> - Universal composer v1: meta (attachments + mentions) i tamper-evident
+>   payload hash + /preview
+> - Computer takeover-flow UI: kontrol-bar (takeover/release/stop) +
+>   checkpoint-annotations
+> - A11y smoke: aria-labels, textContent-only pin, prefers-reduced-motion
+> - ADR/doc-gæld repareret: README 175 test-filer (faktisk count),
+>   reconciliation-matrix Budget-row korrigeret til verified reality
+>
+> **Fund & fixet undervejs (root-cause, ikke symptomer):**
+> - db.js lazy singleton (import-tids open krasjede på locked WAL)
+> - per-shard/per-file TG_DB_FILE isolation (SQLite cross-process contention)
+> - sessions/users tmp-filer med eksplicit 0600 (0666-vindue under umask=0)
+> - worktree snapshot id ms-kollision → random suffix
+> - TG_AIE_FAIL_OPEN i 24 testfiler (revalidation fail-closed var korrekt,
+>   testene manglede escape-hatchen)
+> - BudgetLedger reservation-semantik korrekt implementeret i AIE + TG
+>
+> **Næste (P2 / eksterne aktører):** Track A live GO (real API-kreditter —
+> owner-godkendelse), STUDY-013 G-13a implementer-rekruttering, STUDY-006
+> deltagere, WORKS mission-contract SUCCEEDED-kæde med worker-scope.
+
+---
+
 # Trust Gateway — Roadmap v3 (2026-09-03)
 
 Status basis: `main @ 8b03b54` — 916/916 tests grønne, tier-A 9/9 domæner,
