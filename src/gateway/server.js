@@ -18,6 +18,10 @@ const { TelemetryRing, DEFAULT_FILE: DEFAULT_TELEMETRY_FILE } = require('./telem
 const { loadMounts, match } = require('./http-mounts');
 
 const MAX_BODY = 256 * 1024;
+const DEFAULT_RATE_LIMIT = 60;          // req/min/token - env TG_RATE_LIMIT overrides
+const DEFAULT_OPERATOR_MULT = 3;        // operator budget multiplier - env TG_RATE_OPERATOR_MULTIPLIER
+const RATE_WINDOW_MS = 60 * 1000;
+const MAX_PAGE_LIMIT = 5000;
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -116,6 +120,12 @@ class Gateway extends EventEmitter {
     this.staticDir = staticDir ?? null;
     this.botsDir = botsDir;
     this._executors = []; // v2 wave B: {re, fn(bot,tool,args)} for synthetic tools
+    // Token-bucket per-bot rate limiter (slice: perimeter-guards).
+    const envLimit = Number(process.env.TG_RATE_LIMIT);
+    this.rateLimit = Number.isFinite(envLimit) && envLimit > 0 ? envLimit : DEFAULT_RATE_LIMIT;
+    const envMult = Number(process.env.TG_RATE_OPERATOR_MULTIPLIER);
+    this.rateOperatorMult = Number.isFinite(envMult) && envMult > 0 ? envMult : DEFAULT_OPERATOR_MULT;
+    this._rateBuckets = new Map(); // token -> { count, windowStart }
     // wave C convention: a mount file may ALSO export executors:[{re, make(gw)}]
     // so new tool namespaces never touch bin/gateway.js (single-writer rule).
     for (const m of this.mounts) {
@@ -180,6 +190,32 @@ class Gateway extends EventEmitter {
       }
     }
     return null;
+  }
+
+  _enforceRateLimit(bot) {
+    const budget = this.rateLimit * (bot.role === 'operator' ? this.rateOperatorMult : 1);
+    const t = this.now();
+    let b = this._rateBuckets.get(bot.name);
+    if (!b || t - b.windowStart >= RATE_WINDOW_MS) {
+      b = { count: 0, windowStart: t };
+      this._rateBuckets.set(bot.name, b);
+    }
+    b.count += 1;
+    if (b.count > budget) {
+      return { status: 429, body: { error: 'rate_limited' }, remaining: 0, budget };
+    }
+    return { status: 200, body: null, remaining: budget - b.count, budget };
+  }
+
+  _rateSnapshot(botName) {
+    const b = this._rateBuckets.get(botName);
+    if (!b) return { remaining: null, budget: null, windowStart: null };
+    const t = this.now();
+    const elapsed = t - b.windowStart;
+    if (elapsed >= RATE_WINDOW_MS) return { remaining: null, budget: null, windowStart: null };
+    const bot = this.bots[botName] || {};
+    const budget = this.rateLimit * (bot.role === 'operator' ? this.rateOperatorMult : 1);
+    return { remaining: Math.max(0, budget - b.count), budget, windowStart: b.windowStart };
   }
 
   _audit(payload) {
@@ -274,10 +310,14 @@ class Gateway extends EventEmitter {
       if (mount.auth === 'bearer') {
         bot = this._auth(req);
         if (!bot) { this._audit({ type: 'auth_rejected', path: pathname }); return send(res, 401, { error: 'unauthorized' }); }
+        const rl = this._enforceRateLimit(bot);
+        if (rl.status === 429) { this._audit({ type: 'rate_limited', bot: bot.name, path: pathname }); return send(res, 429, rl.body); }
       } else if (mount.auth === 'query') {
         const token = url.searchParams.get('token') || '';
         bot = this._auth({ headers: { authorization: token ? `Bearer ${token}` : '' } });
         if (!bot) { this._audit({ type: 'auth_rejected', path: pathname }); return send(res, 401, { error: 'unauthorized' }); }
+        const rl = this._enforceRateLimit(bot);
+        if (rl.status === 429) { this._audit({ type: 'rate_limited', bot: bot.name, path: pathname }); return send(res, 429, rl.body); }
       }
       return mount.handle(this, req, res, { url, params, bot });
     }
@@ -298,6 +338,13 @@ class Gateway extends EventEmitter {
     }
     const path = pathname; // legacy handlers below use `path`
 
+    // Rate-limit guard (slice: perimeter-guards) — legacy v1 surface.
+    const rl = this._enforceRateLimit(bot);
+    if (rl.status === 429) {
+      this._audit({ type: 'rate_limited', bot: bot.name, path });
+      return send(res, 429, rl.body);
+    }
+
     if (req.method === 'POST' && path === '/v1/actions') {
       return this._postAction(req, res, bot);
     }
@@ -313,8 +360,12 @@ class Gateway extends EventEmitter {
     }
     if (req.method === 'GET' && path === '/v1/audit') {
       const since = Number(url.searchParams.get('since') || 0);
-      const entries = this.chain.since(since);
-      return send(res, 200, { entries, head: this.chain.head.hash, verified: this.chain.verify() });
+      const limit = parseLimit(url.searchParams.get('limit'));
+      if (limit === null) return send(res, 400, { error: 'invalid_limit' });
+      const page = this.chain.since(since, { limit });
+      const body = { entries: page.entries, nextSince: page.nextSince, head: this.chain.head.hash, verified: this.chain.verify() };
+      if (page.nextSince !== null) body.cursor = page.nextSince;
+      return send(res, 200, body);
     }
     if (req.method === 'GET' && path === '/v1/audit/verify') {
       return send(res, 200, this.chain.verify());
@@ -529,6 +580,15 @@ function cryptoSafeEqual(a, b) {
   if (ab.length !== bb.length) return false;
   return crypto.timingSafeEqual(ab, bb);
 }
+
+// Parses a `limit` query-string value. Returns null on invalid (fail closed),
+// number otherwise. Default 500 when the param is missing.
+function parseLimit(raw) {
+  if (raw === null || raw === undefined || raw === '') return 500;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 1 || n > MAX_PAGE_LIMIT) return null;
+  return n;
+}
 const crypto = require('node:crypto');
 
 // Operator gate for /v1/approvals/:id/approve|deny. A bot may approve if:
@@ -547,4 +607,4 @@ function canApprove(bot) {
   return false;
 }
 
-module.exports = { Gateway, send, readBody, canApprove };
+module.exports = { Gateway, send, readBody, canApprove, parseLimit };
