@@ -237,6 +237,12 @@ test('FS-D2 integration battery on a real gateway', { skip: process.platform ===
     const finalVerify = await api(base, 'GET', '/v1/audit/verify', { token: atlas });
     assert.strictEqual(finalVerify.status, 200);
     assert.strictEqual(finalVerify.json.ok, true);
+  } catch (e) {
+    // Surface the gateway child's stderr on any battery failure (CI diagnostics).
+    if (g && g.proc && g.proc.log) {
+      console.error('=== FS-D2 gateway stderr (last 2000 chars) ===\n' + g.proc.log.slice(-2000));
+    }
+    throw e;
   } finally {
     await g.close();
   }
