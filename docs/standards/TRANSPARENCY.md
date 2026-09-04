@@ -786,3 +786,7 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 225 | `tenant_quota_set` | mounts/157-tenant-quotas.js (FS-Z6: {by, tenant, resource, maxValue} — operator set tenant quota) |
 | 226 | `tenant_quota_denied` | mounts/157-tenant-quotas.js (FS-Z6: {bot, reason} — non-operator attempted quota access) |
 | 227 | `tenant_quota_set_denied` | mounts/157-tenant-quotas.js (FS-Z6: {bot, reason} — non-operator attempted quota set) |
+| 228 | `op_session_audit_read` | mounts/158-operator-session-audit.js (FS-Z7: {by, target, count} — operator read session audit trail) |
+| 229 | `op_session_audit_denied` | mounts/158-operator-session-audit.js (FS-Z7: {bot, reason} — non-operator attempted session audit access) |
+| 230 | `op_active_sessions_read` | mounts/158-operator-session-audit.js (FS-Z7: {by, count} — operator listed active sessions) |
+| 231 | `op_active_sessions_denied` | mounts/158-operator-session-audit.js (FS-Z7: {bot, reason} — non-operator attempted active sessions access) |
