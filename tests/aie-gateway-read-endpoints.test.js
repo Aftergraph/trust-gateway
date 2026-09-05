@@ -28,7 +28,9 @@ const ENV = { ...process.env, PYTHONPATH: path.join(AIE_DIR, 'src') };
 
 // ── Contract file (from GOV frozen schemas) ───────────────────────────
 
-const CONTRACT_DIR = path.join(__dirname, '..', '..', 'after-graph-governance', 'docs', 'contracts', 'frozen');
+const CONTRACT_DIR = process.env.GOVERNANCE_DIR
+  ? path.join(process.env.GOVERNANCE_DIR, 'docs', 'contracts', 'frozen')
+  : path.join(__dirname, '..', '..', 'after-graph-governance', 'docs', 'contracts', 'frozen');
 
 test('frozen schemas exist in after-graph-governance (cross-repo mirror)', () => {
   for (const f of ['kernel.budget.schema.json', 'identity.schema.json', 'policy.token.schema.json', 'evidence.schema.schema.json']) {
