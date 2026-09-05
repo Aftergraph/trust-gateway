@@ -1,3 +1,8 @@
+## 2026-09-05 — F2: integrity-badge i mission-detail
+- feat: hash-chain verify-badge (OK/broken) i drawer — broken ALDRIG skjult
+- Fail-closed: verify-fejl → broken-visning
+- integrity 1/1 + missions 6/6
+
 ## 2026-09-05 — F1: mission-detail drawer (WORKS + evidence i ét view)
 - feat: detail-knap → drawer med objective/criteria/WORKS-status/evidence
 - Fail-closed: utilgængelig WORKS vises ærligt; XSS-loven textContent
