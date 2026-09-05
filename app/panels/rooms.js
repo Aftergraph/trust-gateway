@@ -146,7 +146,25 @@
         roomSession = branchName; // efterfølgende ask/ask-stream bruger branchen
       }).catch(() => { /* branch fejlede — fail-closed i UI'et */ });
     });
-    actions.append(replyBtn, copyBtn, branchBtn);
+    if (kind === 'assistant') {
+      const ttsBtn = el('button', 'roommsg-tts', '\U0001F50A');
+      ttsBtn.title = 'laes op (TTS)';
+      ttsBtn.addEventListener('click', () => {
+        api('/v2/voice/tts', { method: 'POST', body: JSON.stringify({ text: bodyText(m).slice(0, 2000) }) })
+          .then((out) => {
+            if (out && out.audioB64) {
+              try {
+                const audio = new Audio('data:audio/mpeg;base64,' + out.audioB64);
+                audio.play && audio.play();
+              } catch { /* afspilning ej tilgaengelig i shim */ }
+            }
+          })
+          .catch(() => { /* TTS utilgaengelig */ });
+      });
+      actions.append(replyBtn, copyBtn, ttsBtn, branchBtn);
+    } else {
+      actions.append(replyBtn, copyBtn, branchBtn);
+    }
     row.append(actions);
     return row;
   }
@@ -394,7 +412,28 @@
             };
             reader.readAsText(f);
           });
-          send.append(mentions, bodyIn, sendBtn, askBtn, attachBtn, fileIn, sendMsg);
+          // B2: push-to-talk mic -> /v2/voice/stt via Web Speech API (fallback hint)
+          const micBtn = el('button', 'btn roommic', '\U0001F3A4');
+          micBtn.title = 'push-to-talk (stemme til tekst)';
+          micBtn.addEventListener('click', (ev2) => {
+            ev2.preventDefault();
+            const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SR) { sendMsg.textContent = 'voice ej understoettet i denne browser'; return; }
+            try {
+              const rec = new SR();
+              rec.lang = 'da-DK';
+              micBtn.textContent = '\u25CF';
+              rec.onresult = (e) => {
+                const t = e.results && e.results[0] && e.results[0][0] && e.results[0][0].transcript;
+                if (t) { bodyIn.value = (bodyIn.value ? bodyIn.value + ' ' : '') + t; }
+                micBtn.textContent = '\u1F3A4';
+              };
+              rec.onerror = () => { micBtn.textContent = '\U0001F3A4'; sendMsg.textContent = 'voice-fejl'; };
+              rec.onend = () => { micBtn.textContent = '\U0001F3A4'; };
+              rec.start();
+            } catch { sendMsg.textContent = 'voice-fejl'; }
+          });
+          send.append(mentions, bodyIn, sendBtn, askBtn, attachBtn, micBtn, fileIn, sendMsg);
           askBtn.addEventListener('click', (ev2) => {
             ev2.preventDefault();
             const body = bodyIn.value.trim();
