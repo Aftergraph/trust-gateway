@@ -510,50 +510,51 @@ plugins.js) across all files under `src/gateway/`.
 | 165 | `skill_version_read` | mounts/128-skill-versions.js (FS-M2: {by, skillId, version?, count?} — operator listed/read a skill version; version + count only, never step bodies) |
 | 166 | `skill_rolled_back` | mounts/128-skill-versions.js (FS-M2: {by, skillId, version} — operator rolled a skill back to a prior version; the steps themselves are NEVER logged, audited, or returned in the audit row) |
 | 167 | `rate_bucket_read` | mounts/129-rate-ledger.js (FS-M3: {by, key, count} — operator queried a rate-limit bucket; count + key only, no caller identity) |
-| 168 | `rate_bucket_reset` | mounts/129-rate-ledger.js (FS-M3: {by, key, removed} — operator reset a rate-limit bucket; key + rows removed only) |
-| 169 | `tenant_flag_set` | mounts/130-tenant-flags.js (FS-N1: {by, tenant, name, enabled, value} — operator set a per-tenant feature flag override; flag name + enabled + value, no secret material; TG_TENANT_FLAGS=1 only) |
-| 170 | `tenant_flag_reset` | mounts/130-tenant-flags.js (FS-N1: {by, tenant, name} — operator reset a per-tenant feature flag to global default) |
-| 171 | `tenant_flag_listed` | mounts/130-tenant-flags.js (FS-N1: {by, tenant, count} — operator listed per-tenant feature flags; tenant id + count only) |
-| 172 | `audit_search_read` | mounts/131-audit-search.js (FS-N2: {by, filters, count} — operator searched audit_chain; filter keys + count only, never raw payloads; TG_AUDIT_SEARCH=1 only) |
-| 173 | `audit_search_denied` | mounts/131-audit-search.js (FS-N2: {bot} — non-operator touched /v2/audit/search; RBAC refusal audited) |
-| 174 | `chain_prune_preview_read` | mounts/132-chain-prune-preview.js (FS-N3: {by, beforeTs, wouldRemove} — operator previewed chain pruning; counts + timestamps only, no row payloads; TG_CHAIN_PRUNE_PREVIEW=1 only) |
-| 175 | `chain_prune_preview_denied` | mounts/132-chain-prune-preview.js (FS-N3: {bot} — non-operator touched /v2/chain/prune-preview; RBAC refusal audited) |
-| 176 | `skill_exported` | mounts/133-skill-io.js (FS-O1: {by, skillId} — operator exported a skill; id only, never step bodies; TG_SKILL_IO=1 only) |
-| 177 | `skill_bulk_exported` | mounts/133-skill-io.js (FS-O1: {by, count} — operator exported all skills; count only) |
-| 178 | `skill_imported` | mounts/133-skill-io.js (FS-O1: {by, id} — operator imported a single skill; id only, steps never logged) |
-| 179 | `skill_bulk_imported` | mounts/133-skill-io.js (FS-O1: {by, ok, failed} — operator bulk-imported skills; counts only) |
-| 180 | `impersonation_issued` | mounts/134-tenant-impersonation.js (FS-O2: {by, targetTenant, expiresAt, reason} — operator issued a tenant-impersonation token; max ttl 1h; TG_TENANT_IMPERSONATION=1 only) |
-| 181 | `impersonation_revoked` | mounts/134-tenant-impersonation.js (FS-O2: {by, token, removed} — operator revoked an impersonation token; token shown as first 8 chars only) |
-| 182 | `impersonation_listed` | mounts/134-tenant-impersonation.js (FS-O2: {by, count} — operator listed active impersonation tokens) |
-| 183 | `operator_dashboard_read` | mounts/135-operator-dashboard.js (FS-O3: {by, sections[]} — operator read the aggregated dashboard; section names only, no row data) |
-| 184 | `operator_dashboard_denied` | mounts/135-operator-dashboard.js (FS-O3: {bot} — non-operator touched /v2/dashboard; RBAC refusal audited) |
-| 184 | `operator_dashboard_denied` | mounts/135-operator-dashboard.js (FS-O3: {bot} — non-operator touched /v2/dashboard; RBAC refusal audited) |
-| 185 | `tenant_activity_read` | mounts/141-tenant-activity.js (FS-W1: {by, tenant} — operator read a tenant's activity; tenant id only; TG_TENANT_ACTIVITY=1 only) |
-| 186 | `tenant_inactive_listed` | mounts/141-tenant-activity.js (FS-W1: {by, count, thresholdMs} — operator listed inactive tenants; count + threshold only) |
-| 187 | `chain_pruned` | mounts/142-chain-prune.js (FS-W2: {by, removed, beforeTs, manifestPath} — operator executed a real chain prune; counts + manifest path only; TG_CHAIN_PRUNE=1 only) |
-| 188 | `chain_prune_refused` | mounts/142-chain-prune.js (FS-W2: {by, reason, current?} — prune refused (below_safety_threshold without force, invalid_before, no_audit_chain); nothing deleted on refusal) |
-| 189 | `operator_notify_read` | mounts/143-operator-notify.js (FS-W3: {by, count} — operator read their own notify preferences; count only; TG_OPERATOR_NOTIFY=1 only) |
-| 190 | `operator_notify_set` | mounts/143-operator-notify.js (FS-W3: {by, eventType, channel, enabled} — operator subscribed/unsubscribed to an event category) |
-| 191 | `operator_notify_deleted` | mounts/143-operator-notify.js (FS-W3: {by, eventType, channel, removed} — operator removed a notification preference) |
-| 192 | `skill_deps_validated` | mounts/144-skill-deps.js (FS-W4: {by, skillId, requires[]} — operator validated a skill's dependency graph; skill id + slugs only, never step bodies; TG_SKILL_DEPS=1 only) |
-| 193 | `skill_deps_rejected` | mounts/144-skill-deps.js (FS-W4: {by, skillId, reason} — operator's skill was rejected: self_reference, invalid_dependency_slug, missing_dependency, or cycle_detected) |
-| 193 | `skill_deps_rejected` | mounts/144-skill-deps.js (FS-W4: {by, skillId, reason} — operator's skill was rejected: self_reference, invalid_dependency_slug, missing_dependency, or cycle_detected) |
-| 194 | `notify_delivery_test` | mounts/146-notify-delivery.js (FS-X1: {by, type, delivered} — operator manually triggered a notification delivery; type + count only; TG_NOTIFY_DELIVERY=1 only) |
-| 195 | `skill_sandbox_set` | mounts/147-skill-sandbox.js (FS-X2: {by, skillId, network, fsWrite} — operator set a per-skill sandbox profile; TG_SKILL_SANDBOX=1 only) |
-| 196 | `skill_sandbox_reset` | mounts/147-skill-sandbox.js (FS-X2: {by, skillId, removed} — operator removed a sandbox profile; id only) |
-| 197 | `skill_sandbox_listed` | mounts/147-skill-sandbox.js (FS-X2: {by, count} — operator listed sandbox profiles; count only) |
-| 198 | `route_limit_set` | mounts/148-route-limits.js (FS-X3: {by, pattern, maxHits, windowMs} — operator set a per-route rate limit; TG_ROUTE_LIMITS=1 only) |
-| 199 | `route_limit_listed` | mounts/148-route-limits.js (FS-X3: {by, count} — operator listed per-route rate limits; count only) |
-| 200 | `route_limit_removed` | mounts/148-route-limits.js (FS-X3: {by, pattern, removed} — operator removed a per-route rate limit; pattern only) |
-| 201 | `graceful_shutdown_initiated` | mounts/149-shutdown.js (FS-Y3: {by, graceMs} — operator initiated a graceful shutdown; grace period in ms; TG_GRACEFUL_SHUTDOWN=1 only) |
-| 202 | `graceful_shutdown_denied` | mounts/149-shutdown.js (FS-Y3: {bot, reason} — non-operator, missing_confirm, or already_draining) |
-| 203 | `rate_limited` | server.js, mounts/09-approvals.js, mounts/101-auth.js, mounts/103-chat-user.js |
-| 204 | `budget_forbidden` | mounts/52-budgets.js |
-| 205 | `budget_set` | mounts/52-budgets.js |
-| 206 | `token_forbidden` | mounts/54-tokens.js |
-| 207 | `token_rotated` | mounts/54-tokens.js |
-| 208 | `budget_denied` | server.js |
-| 209 | `token_rejected_stale` | server.js |
+| 168 | `rate_buckets_read` | mounts/129-rate-ledger.js (FS-M3: {by, count} — operator listed current-window rate buckets for the dashboard; count only, no bucket contents) |
+| 170 | `rate_bucket_reset` | mounts/129-rate-ledger.js (FS-M3: {by, key, removed} — operator reset a rate-limit bucket; key + rows removed only) |
+| 170 | `tenant_flag_set` | mounts/130-tenant-flags.js (FS-N1: {by, tenant, name, enabled, value} — operator set a per-tenant feature flag override; flag name + enabled + value, no secret material; TG_TENANT_FLAGS=1 only) |
+| 171 | `tenant_flag_reset` | mounts/130-tenant-flags.js (FS-N1: {by, tenant, name} — operator reset a per-tenant feature flag to global default) |
+| 172 | `tenant_flag_listed` | mounts/130-tenant-flags.js (FS-N1: {by, tenant, count} — operator listed per-tenant feature flags; tenant id + count only) |
+| 173 | `audit_search_read` | mounts/131-audit-search.js (FS-N2: {by, filters, count} — operator searched audit_chain; filter keys + count only, never raw payloads; TG_AUDIT_SEARCH=1 only) |
+| 174 | `audit_search_denied` | mounts/131-audit-search.js (FS-N2: {bot} — non-operator touched /v2/audit/search; RBAC refusal audited) |
+| 175 | `chain_prune_preview_read` | mounts/132-chain-prune-preview.js (FS-N3: {by, beforeTs, wouldRemove} — operator previewed chain pruning; counts + timestamps only, no row payloads; TG_CHAIN_PRUNE_PREVIEW=1 only) |
+| 176 | `chain_prune_preview_denied` | mounts/132-chain-prune-preview.js (FS-N3: {bot} — non-operator touched /v2/chain/prune-preview; RBAC refusal audited) |
+| 177 | `skill_exported` | mounts/133-skill-io.js (FS-O1: {by, skillId} — operator exported a skill; id only, never step bodies; TG_SKILL_IO=1 only) |
+| 178 | `skill_bulk_exported` | mounts/133-skill-io.js (FS-O1: {by, count} — operator exported all skills; count only) |
+| 179 | `skill_imported` | mounts/133-skill-io.js (FS-O1: {by, id} — operator imported a single skill; id only, steps never logged) |
+| 180 | `skill_bulk_imported` | mounts/133-skill-io.js (FS-O1: {by, ok, failed} — operator bulk-imported skills; counts only) |
+| 181 | `impersonation_issued` | mounts/134-tenant-impersonation.js (FS-O2: {by, targetTenant, expiresAt, reason} — operator issued a tenant-impersonation token; max ttl 1h; TG_TENANT_IMPERSONATION=1 only) |
+| 182 | `impersonation_revoked` | mounts/134-tenant-impersonation.js (FS-O2: {by, token, removed} — operator revoked an impersonation token; token shown as first 8 chars only) |
+| 183 | `impersonation_listed` | mounts/134-tenant-impersonation.js (FS-O2: {by, count} — operator listed active impersonation tokens) |
+| 184 | `operator_dashboard_read` | mounts/135-operator-dashboard.js (FS-O3: {by, sections[]} — operator read the aggregated dashboard; section names only, no row data) |
+| 185 | `operator_dashboard_denied` | mounts/135-operator-dashboard.js (FS-O3: {bot} — non-operator touched /v2/dashboard; RBAC refusal audited) |
+| 185 | `operator_dashboard_denied` | mounts/135-operator-dashboard.js (FS-O3: {bot} — non-operator touched /v2/dashboard; RBAC refusal audited) |
+| 186 | `tenant_activity_read` | mounts/141-tenant-activity.js (FS-W1: {by, tenant} — operator read a tenant's activity; tenant id only; TG_TENANT_ACTIVITY=1 only) |
+| 187 | `tenant_inactive_listed` | mounts/141-tenant-activity.js (FS-W1: {by, count, thresholdMs} — operator listed inactive tenants; count + threshold only) |
+| 188 | `chain_pruned` | mounts/142-chain-prune.js (FS-W2: {by, removed, beforeTs, manifestPath} — operator executed a real chain prune; counts + manifest path only; TG_CHAIN_PRUNE=1 only) |
+| 189 | `chain_prune_refused` | mounts/142-chain-prune.js (FS-W2: {by, reason, current?} — prune refused (below_safety_threshold without force, invalid_before, no_audit_chain); nothing deleted on refusal) |
+| 190 | `operator_notify_read` | mounts/143-operator-notify.js (FS-W3: {by, count} — operator read their own notify preferences; count only; TG_OPERATOR_NOTIFY=1 only) |
+| 191 | `operator_notify_set` | mounts/143-operator-notify.js (FS-W3: {by, eventType, channel, enabled} — operator subscribed/unsubscribed to an event category) |
+| 192 | `operator_notify_deleted` | mounts/143-operator-notify.js (FS-W3: {by, eventType, channel, removed} — operator removed a notification preference) |
+| 193 | `skill_deps_validated` | mounts/144-skill-deps.js (FS-W4: {by, skillId, requires[]} — operator validated a skill's dependency graph; skill id + slugs only, never step bodies; TG_SKILL_DEPS=1 only) |
+| 194 | `skill_deps_rejected` | mounts/144-skill-deps.js (FS-W4: {by, skillId, reason} — operator's skill was rejected: self_reference, invalid_dependency_slug, missing_dependency, or cycle_detected) |
+| 194 | `skill_deps_rejected` | mounts/144-skill-deps.js (FS-W4: {by, skillId, reason} — operator's skill was rejected: self_reference, invalid_dependency_slug, missing_dependency, or cycle_detected) |
+| 195 | `notify_delivery_test` | mounts/146-notify-delivery.js (FS-X1: {by, type, delivered} — operator manually triggered a notification delivery; type + count only; TG_NOTIFY_DELIVERY=1 only) |
+| 196 | `skill_sandbox_set` | mounts/147-skill-sandbox.js (FS-X2: {by, skillId, network, fsWrite} — operator set a per-skill sandbox profile; TG_SKILL_SANDBOX=1 only) |
+| 197 | `skill_sandbox_reset` | mounts/147-skill-sandbox.js (FS-X2: {by, skillId, removed} — operator removed a sandbox profile; id only) |
+| 198 | `skill_sandbox_listed` | mounts/147-skill-sandbox.js (FS-X2: {by, count} — operator listed sandbox profiles; count only) |
+| 199 | `route_limit_set` | mounts/148-route-limits.js (FS-X3: {by, pattern, maxHits, windowMs} — operator set a per-route rate limit; TG_ROUTE_LIMITS=1 only) |
+| 200 | `route_limit_listed` | mounts/148-route-limits.js (FS-X3: {by, count} — operator listed per-route rate limits; count only) |
+| 201 | `route_limit_removed` | mounts/148-route-limits.js (FS-X3: {by, pattern, removed} — operator removed a per-route rate limit; pattern only) |
+| 202 | `graceful_shutdown_initiated` | mounts/149-shutdown.js (FS-Y3: {by, graceMs} — operator initiated a graceful shutdown; grace period in ms; TG_GRACEFUL_SHUTDOWN=1 only) |
+| 203 | `graceful_shutdown_denied` | mounts/149-shutdown.js (FS-Y3: {bot, reason} — non-operator, missing_confirm, or already_draining) |
+| 204 | `rate_limited` | server.js, mounts/09-approvals.js, mounts/101-auth.js, mounts/103-chat-user.js |
+| 205 | `budget_forbidden` | mounts/52-budgets.js |
+| 206 | `budget_set` | mounts/52-budgets.js |
+| 207 | `token_forbidden` | mounts/54-tokens.js |
+| 208 | `token_rotated` | mounts/54-tokens.js |
+| 209 | `budget_denied` | server.js |
+| 210 | `token_rejected_stale` | server.js |
 
 ### `secrets-vault.js` + mounts `115-secrets.js` / `119-secrets-rotate.js` — tenant secrets vault + master-key rotation (FS-I5, FS-J2)
 - **Endpoints:** `PUT/GET/DELETE /v2/tenants/:id/secrets[/:key]` (operator;
@@ -766,116 +767,116 @@ The test compares the table above against a programmatic extraction over
 No other exceptions exist. If the extraction finds a `{type: '…'}` string
 that is not in the table (or the table lists something the code no longer
 emits), `tests/standards.test.js` fails — update both in the same commit.
-| 201 | `graceful_shutdown_initiated` | mounts/149-shutdown.js (FS-Y3: {by} — operator initiated graceful shutdown; TG_SHUTDOWN_ENDPOINT=1 only) |
-| 202 | `graceful_shutdown_denied` | mounts/149-shutdown.js (FS-Y3: {bot, reason} — non-operator, missing_confirm, or already_draining) |
-| 203 | `tenant_webhook_created` | mounts/150-webhook-subs-tenant.js (FS-Y1: {by, tenant, id, url} — operator created a per-tenant webhook subscription; TG_WEBHOOK_SUBS_TENANT=1 only) |
-| 204 | `tenant_webhook_listed` | mounts/150-webhook-subs-tenant.js (FS-Y1: {by, tenant, count} — operator listed per-tenant webhook subscriptions; tenant id + count only) |
-| 205 | `tenant_webhook_deleted` | mounts/150-webhook-subs-tenant.js (FS-Y1: {by, tenant, id} — operator removed a per-tenant webhook subscription; id only) |
-| 206 | `chain_verified` | mounts/151-chain-integrity.js (FS-Y2: {by, checked, ok, mismatches} — operator verified audit chain integrity; counts only) |
-| 207 | `chain_verify_denied` | mounts/151-chain-integrity.js (FS-Y2: {bot, reason} — non-operator attempted chain verification) |
-| 208 | `tenant_metrics_read` | mounts/152-tenant-metrics.js (FS-Z1: {by, tenant, totalEvents} — operator read per-tenant metrics; counts only) |
-| 209 | `tenant_metrics_denied` | mounts/152-tenant-metrics.js (FS-Z1: {bot, reason} — non-operator attempted tenant metrics access) |
-| 210 | `metrics_summary_read` | mounts/152-tenant-metrics.js (FS-Z1: {by, tenantCount} — operator read all-tenant summary; count only) |
-| 211 | `metrics_summary_denied` | mounts/152-tenant-metrics.js (FS-Z1: {bot, reason} — non-operator attempted metrics summary access) |
-| 212 | `fed_audit_queried` | mounts/153-fed-audit-dash.js (FS-Z2: {by, total, returned} — operator queried federation audit events via /v2/federation/audit/events; counts only) |
-| 213 | `fed_audit_denied` | mounts/153-fed-audit-dash.js (FS-Z2: {bot, reason} — non-operator attempted federation audit access) |
-| 214 | `fed_audit_summary_read` | mounts/153-fed-audit-dash.js (FS-Z2: {by, totalEvents} — operator read federation audit summary; count only) |
-| 215 | `fed_audit_summary_denied` | mounts/153-fed-audit-dash.js (FS-Z2: {bot, reason} — non-operator attempted federation audit summary access) |
-| 216 | `skill_searched` | mounts/154-skill-market-search.js (FS-Z3: {by, total, returned} — operator searched skill marketplace; counts only) |
-| 217 | `skill_search_denied` | mounts/154-skill-market-search.js (FS-Z3: {bot, reason} — non-operator attempted skill search) |
-| 218 | `backup_crypto_status_read` | mounts/155-backup-crypto.js (FS-Z4: {by, enabled} — operator read backup encryption status) |
-| 219 | `backup_crypto_status_denied` | mounts/155-backup-crypto.js (FS-Z4: {bot, reason} — non-operator attempted backup crypto status access) |
-| 220 | `audit_exported` | mounts/156-audit-export.js (FS-Z5: {by, count} — operator exported audit events as JSONL; count only) |
-| 221 | `audit_export_denied` | mounts/156-audit-export.js (FS-Z5: {bot, reason} — non-operator attempted audit export) |
-| 222 | `audit_retention_applied` | mounts/156-audit-export.js (FS-Z5: {by, pruned} — operator applied audit retention policy; pruned count only) |
-| 223 | `audit_retention_denied` | mounts/156-audit-export.js (FS-Z5: {bot, reason} — non-operator attempted audit retention) |
-| 224 | `tenant_quota_read` | mounts/157-tenant-quotas.js (FS-Z6: {by, tenant, resource} — operator read tenant quota/usage) |
-| 225 | `tenant_quota_set` | mounts/157-tenant-quotas.js (FS-Z6: {by, tenant, resource, maxValue} — operator set tenant quota) |
-| 226 | `tenant_quota_denied` | mounts/157-tenant-quotas.js (FS-Z6: {bot, reason} — non-operator attempted quota access) |
-| 227 | `tenant_quota_set_denied` | mounts/157-tenant-quotas.js (FS-Z6: {bot, reason} — non-operator attempted quota set) |
-| 228 | `op_session_audit_read` | mounts/158-operator-session-audit.js (FS-Z7: {by, target, count} — operator read session audit trail) |
-| 229 | `op_session_audit_denied` | mounts/158-operator-session-audit.js (FS-Z7: {bot, reason} — non-operator attempted session audit access) |
-| 230 | `op_active_sessions_read` | mounts/158-operator-session-audit.js (FS-Z7: {by, count} — operator listed active sessions) |
-| 231 | `op_active_sessions_denied` | mounts/158-operator-session-audit.js (FS-Z7: {bot, reason} — non-operator attempted active sessions access) |
-| 232 | `mounts_function_style_skipped` | http-mounts.js (P0 loader fix: {files} — function-style mount files skipped at static load; they register via gw.router on a live gateway. Boot no longer throws on v2r+ mounts) |
-| 233 | `obsv_snapshot_capture_denied` | mounts/121-obsv-history.js (FS-K3: {bot} — non-operator attempted snapshot capture) |
-| 234 | `obsv_history_read_denied` | mounts/121-obsv-history.js (FS-K3: {bot} — non-operator attempted history read) |
-| 235 | `obsv_snapshot_cleanup_denied` | mounts/121-obsv-history.js (FS-K3: {bot} — non-operator attempted cleanup) |
-| 236 | `quota_alerts_read_denied` | mounts/122-quota-alerts.js (FS-K4: {bot} — non-operator attempted quota alert read) |
-| 237 | `webhook_subs_denied` | mounts/125-webhook-subs.js (FS-L2: {bot} — non-operator touched webhook subscription route) |
-| 238 | `flag_list_denied` | mounts/126-feature-flags.js (FS-L3: {bot} — non-operator attempted flag list) |
-| 239 | `flag_set_denied` | mounts/126-feature-flags.js (FS-L3: {bot} — non-operator attempted flag set) |
-| 240 | `flag_reset_denied` | mounts/126-feature-flags.js (FS-L3: {bot} — non-operator attempted flag reset) |
-| 241 | `tenant_cleanup_candidates_denied` | mounts/127-tenant-lifecycle.js (FS-M1: {bot} — non-operator attempted cleanup candidate list) |
-| 242 | `tenant_auto_disable_denied` | mounts/127-tenant-lifecycle.js (FS-M1: {bot} — non-operator attempted auto-disable) |
-| 243 | `skill_version_denied` | mounts/128-skill-versions.js (FS-M2: {bot} — non-operator attempted version read) |
-| 244 | `skill_rollback_denied` | mounts/128-skill-versions.js (FS-M2: {bot} — non-operator attempted rollback) |
-| 245 | `rate_bucket_denied` | mounts/129-rate-ledger.js (FS-M3: {bot} — non-operator attempted rate bucket access) |
-| 246 | `tenant_flag_denied` | mounts/130-tenant-flags.js (FS-N1: {bot} — non-operator attempted tenant flag access) |
-| 247 | `skill_io_denied` | mounts/133-skill-io.js (FS-O1: {bot} — non-operator attempted skill export) |
-| 248 | `skill_import_denied` | mounts/133-skill-io.js (FS-O1: {bot} — non-operator attempted skill import) |
-| 249 | `tenant_activity_denied` | mounts/141-tenant-activity.js (FS-W1: {bot} — non-operator attempted tenant activity read) |
-| 250 | `tenant_webhook_denied` | mounts/150-webhook-subs-tenant.js (FS-Y1: {bot} — non-operator touched tenant webhook route) |
-| 251 | `restricted` | telemetry-tenant.js (FS-K2: tenant-scoped telemetry projection for unknown types — the scalar projection itself, never entry contents) |
-| 252 | `tenant_quota_read` | mounts/157-tenant-quotas.js (FS-Z6: {by, tenant, resource} — operator read tenant quota/usage) |
-| 253 | `tenant_access_listed` | mounts/159-tenant-access.js (FS-A1-S3: {by, count} — operator listed accessible tenants; ids + names only, no secrets) |
-| 254 | `tenant_access_denied` | mounts/159-tenant-access.js (FS-A1-S3: {bot, reason} — non-operator attempted tenant listing) |
-| 254 | `reserve` | budgets.js (A-008/HC4: {bot, amount} — budget reserved for an admitted action) |
-| 255 | `commit` | budgets.js (A-008/HC4: {bot, amount} — reserved budget settled after execution) |
-| 256 | `settle` | budgets.js (HC4: {bot, amount} — explicit settlement of a reservation) |
-| 257 | `refund` | budgets.js (HC4: {bot, amount} — reservation refunded after failure/deny) |
-| 258 | `takeover_forbidden` | mounts/33-takeover.js (HC8: {bot} — non-operator attempted takeover) |
-| 259 | `takeover_issued` | mounts/33-takeover.js (HC8: {takeover_id, principal_id, revoked_actions, granted_capabilities} — takeover envelope issued, subset-only caps) |
-| 266 | `proposal_created` | mounts/23-missions.js (W0.2: {proposal_id, proposer, objective} — MissionProposal created) |
-| 267 | `proposal_submitted` | mounts/23-missions.js (W0.2: {proposal_id, proposer} — draft submitted for approval) |
-| 268 | `proposal_approved` | mounts/23-missions.js (W0.2/W0.3: {proposal_id, approver, mission_id} — approved with WORKS mission correlation) |
-| 269 | `proposal_rejected` | mounts/23-missions.js (W0.2: {proposal_id, reason}) |
-| 270 | `proposal_approve_forbidden` | mounts/23-missions.js (W0.2: {proposal_id, bot} — non-operator attempted approval) |
-| 271 | `proposal_reject_forbidden` | mounts/23-missions.js (W0.2: {proposal_id, bot} — non-operator attempted rejection) |
-| 272 | `project_created` | mounts/24-projects.js (P1: {project_id, title} — Project primitive created) |
-| 273 | `approvals_batch_resolved` | mounts/07-approvals-v2.js (P1: {approver, ops, approved} — batch resolution summary) |
-| 274 | `approvals_batch_forbidden` | mounts/07-approvals-v2.js (P1: {bot} — non-operator attempted batch) |
-| 275 | `approvals_metrics_forbidden` | mounts/07-approvals-v2.js (P1: {bot} — non-operator attempted metrics read) |
-| 276 | `takeover_handback_forbidden` | mounts/33-takeover.js (HC8: {bot} — non-operator attempted hand-back) |
-| 277 | `takeover_handed_back` | mounts/33-takeover.js (HC8: {takeover_id, principal_id, restored_capabilities} — ownership returned to agent, pre-takeover envelope restored) |
-| 278 | `context_forbidden` | mounts/25-context.js (P1 Context Inspector: {bot, target} — non-operator inspected another bot's context) |
-| 279 | `context_inspected` | mounts/25-context.js (P1: {bot, target, snapshot_hash} — context snapshot generated, content-addressed) |
-| 280 | `router_outcome_recorded` | mounts/59-router.js (v0.2: {provider, model, ok} — telemetry outcome recorded for fallback-learning) |
-| 281 | `workflow_created` | mounts/26-workflows.js (P2: {workflow_id, name, version} — workflow created) |
-| 282 | `workflow_updated` | mounts/26-workflows.js (P2: {workflow_id, version} — new version saved) |
-| 283 | `workflow_activated` | mounts/26-workflows.js (P2: {workflow_id} — draft -> active) |
-| 284 | `workflow_archived` | mounts/26-workflows.js (P2: {workflow_id}) |
-| 285 | `workflow_run_forbidden` | mounts/26-workflows.js (P2: {workflow_id, bot} — non-operator attempted run) |
-| 286 | `workflow_run_submitted` | mounts/26-workflows.js (P2: {workflow_id, version, works_ok, work_id} — submitted to WORKS) |
-| 287 | `workflow_webhook_rejected` | mounts/26-workflows.js (P2: {workflow_id} — webhook HMAC signature invalid) |
-| 288 | `workflow_webhook_run` | mounts/26-workflows.js (P2: {workflow_id, work_id} — webhook-triggered WORKS run) |
-| 289 | `workflow_schedule_run` | mounts/26-workflows.js (P2: {workflow_id, works_ok} — schedule-sweep run submission) |
-| 290 | `workflow_sweep_forbidden` | mounts/26-workflows.js (P2: {bot} — non-operator attempted schedule sweep) |
-| 291 | `evals_forbidden` | mounts/06-evals.js (P2: {bot} — non-operator attempted eval run) |
-| 292 | `evals_run` | mounts/06-evals.js (P2: {gate, total, failed, snapshot_hash} — golden-set eval executed) |
-| 298 | `http` | mounts/07-api-contract.js (P2 developer platform: OpenAPI securitySchemes value 'http' in the generated contract — extractor false-positive documented; not a runtime audit event) |
-| 293 | `knowledge_created` | mounts/18-knowledge.js (P2: {source_id, title} — knowledge source created) |
-| 294 | `knowledge_searched` | mounts/18-knowledge.js (P2: {query, hits} — token-index search executed) |
-| 295 | `knowledge_cited` | mounts/18-knowledge.js (P2: {source_id, ref_type, ref_id} — citation recorded) |
-| 296 | `knowledge_removed` | mounts/18-knowledge.js (P2: {source_id} — source deleted) |
-| 297 | `knowledge_delete_forbidden` | mounts/18-knowledge.js (P2: {source_id, bot} — non-operator attempted delete) |
-| 260 | `plugin_forbidden` | mounts/35-plugins.js (W4: {bot, method, path} — non-operator plugin write) |
-| 261 | `plugin_permission_rejected` | mounts/35-plugins.js (W4: declared permission rejected at runtime) |
-| 262 | `plugin_delete_forbidden` | mounts/35-plugins.js (W4: uninstall denied by policy) |
-| 263 | `model_route` | mounts/59-router.js (HC4/router: {capability, model, provider} — routing decision) |
-| 264 | `needyou_created` | mounts/08-need-you.js (W0.5: {id, tenantId, type, subject} — new NeedsYouItem created) |
-| 265 | `needyou_resolved` | mounts/08-need-you.js (W0.5: {id, resolvedBy} — NeedsYouItem resolved) |
-| 266 | `approval_notify_sent` | approval-notify.js (W6: approval notification dispatched) |
-| 267 | `approval_notify_failed` | approval-notify.js (W6: approval notification delivery failed) |
-| 268 | `secret_vault_status` | mounts/120-secrets-status.js (SecretsVault: enabled/disabled + master-key rotation timestamp) |
-| 269 | `authority_lease_revoke` | mounts/132-authority-proxy.js (authority: lease revoked) |
-| 270 | `room_ask` | mounts/146-rooms-ask.js (rooms: ask submitted) |
-| 271 | `chat_llm_stream` | mounts/147-chat-llm-stream.js (chat: LLM stream) |
-| 272 | `room_attach` | mounts/148-rooms-attach.js (rooms: attachment) |
-| 273 | `mission_timeline` | mounts/149-mission-timeline.js (mission: timeline event) |
-| 274 | `approval` | mounts/150-rooms-hil.js (rooms HIL: approval) |
-| 275 | `needyou` | mounts/150-rooms-hil.js (rooms HIL: needyou) |
-| 276 | `takeover` | mounts/150-rooms-hil.js (rooms HIL: takeover) |
-| 277 | `rooms_hil` | mounts/150-rooms-hil.js (rooms HIL: hil event) |
-| 278 | `chat_branch` | mounts/151-chat-llm-branch.js (chat: branch) |
-| 279 | `proposal_leases` | mounts/153-proposal-leases.js (proposal: leases) |
+| 202 | `graceful_shutdown_initiated` | mounts/149-shutdown.js (FS-Y3: {by} — operator initiated graceful shutdown; TG_SHUTDOWN_ENDPOINT=1 only) |
+| 203 | `graceful_shutdown_denied` | mounts/149-shutdown.js (FS-Y3: {bot, reason} — non-operator, missing_confirm, or already_draining) |
+| 204 | `tenant_webhook_created` | mounts/150-webhook-subs-tenant.js (FS-Y1: {by, tenant, id, url} — operator created a per-tenant webhook subscription; TG_WEBHOOK_SUBS_TENANT=1 only) |
+| 205 | `tenant_webhook_listed` | mounts/150-webhook-subs-tenant.js (FS-Y1: {by, tenant, count} — operator listed per-tenant webhook subscriptions; tenant id + count only) |
+| 206 | `tenant_webhook_deleted` | mounts/150-webhook-subs-tenant.js (FS-Y1: {by, tenant, id} — operator removed a per-tenant webhook subscription; id only) |
+| 207 | `chain_verified` | mounts/151-chain-integrity.js (FS-Y2: {by, checked, ok, mismatches} — operator verified audit chain integrity; counts only) |
+| 208 | `chain_verify_denied` | mounts/151-chain-integrity.js (FS-Y2: {bot, reason} — non-operator attempted chain verification) |
+| 209 | `tenant_metrics_read` | mounts/152-tenant-metrics.js (FS-Z1: {by, tenant, totalEvents} — operator read per-tenant metrics; counts only) |
+| 210 | `tenant_metrics_denied` | mounts/152-tenant-metrics.js (FS-Z1: {bot, reason} — non-operator attempted tenant metrics access) |
+| 211 | `metrics_summary_read` | mounts/152-tenant-metrics.js (FS-Z1: {by, tenantCount} — operator read all-tenant summary; count only) |
+| 212 | `metrics_summary_denied` | mounts/152-tenant-metrics.js (FS-Z1: {bot, reason} — non-operator attempted metrics summary access) |
+| 213 | `fed_audit_queried` | mounts/153-fed-audit-dash.js (FS-Z2: {by, total, returned} — operator queried federation audit events via /v2/federation/audit/events; counts only) |
+| 214 | `fed_audit_denied` | mounts/153-fed-audit-dash.js (FS-Z2: {bot, reason} — non-operator attempted federation audit access) |
+| 215 | `fed_audit_summary_read` | mounts/153-fed-audit-dash.js (FS-Z2: {by, totalEvents} — operator read federation audit summary; count only) |
+| 216 | `fed_audit_summary_denied` | mounts/153-fed-audit-dash.js (FS-Z2: {bot, reason} — non-operator attempted federation audit summary access) |
+| 217 | `skill_searched` | mounts/154-skill-market-search.js (FS-Z3: {by, total, returned} — operator searched skill marketplace; counts only) |
+| 218 | `skill_search_denied` | mounts/154-skill-market-search.js (FS-Z3: {bot, reason} — non-operator attempted skill search) |
+| 219 | `backup_crypto_status_read` | mounts/155-backup-crypto.js (FS-Z4: {by, enabled} — operator read backup encryption status) |
+| 220 | `backup_crypto_status_denied` | mounts/155-backup-crypto.js (FS-Z4: {bot, reason} — non-operator attempted backup crypto status access) |
+| 221 | `audit_exported` | mounts/156-audit-export.js (FS-Z5: {by, count} — operator exported audit events as JSONL; count only) |
+| 222 | `audit_export_denied` | mounts/156-audit-export.js (FS-Z5: {bot, reason} — non-operator attempted audit export) |
+| 223 | `audit_retention_applied` | mounts/156-audit-export.js (FS-Z5: {by, pruned} — operator applied audit retention policy; pruned count only) |
+| 224 | `audit_retention_denied` | mounts/156-audit-export.js (FS-Z5: {bot, reason} — non-operator attempted audit retention) |
+| 225 | `tenant_quota_read` | mounts/157-tenant-quotas.js (FS-Z6: {by, tenant, resource} — operator read tenant quota/usage) |
+| 226 | `tenant_quota_set` | mounts/157-tenant-quotas.js (FS-Z6: {by, tenant, resource, maxValue} — operator set tenant quota) |
+| 227 | `tenant_quota_denied` | mounts/157-tenant-quotas.js (FS-Z6: {bot, reason} — non-operator attempted quota access) |
+| 228 | `tenant_quota_set_denied` | mounts/157-tenant-quotas.js (FS-Z6: {bot, reason} — non-operator attempted quota set) |
+| 229 | `op_session_audit_read` | mounts/158-operator-session-audit.js (FS-Z7: {by, target, count} — operator read session audit trail) |
+| 230 | `op_session_audit_denied` | mounts/158-operator-session-audit.js (FS-Z7: {bot, reason} — non-operator attempted session audit access) |
+| 231 | `op_active_sessions_read` | mounts/158-operator-session-audit.js (FS-Z7: {by, count} — operator listed active sessions) |
+| 232 | `op_active_sessions_denied` | mounts/158-operator-session-audit.js (FS-Z7: {bot, reason} — non-operator attempted active sessions access) |
+| 233 | `mounts_function_style_skipped` | http-mounts.js (P0 loader fix: {files} — function-style mount files skipped at static load; they register via gw.router on a live gateway. Boot no longer throws on v2r+ mounts) |
+| 234 | `obsv_snapshot_capture_denied` | mounts/121-obsv-history.js (FS-K3: {bot} — non-operator attempted snapshot capture) |
+| 235 | `obsv_history_read_denied` | mounts/121-obsv-history.js (FS-K3: {bot} — non-operator attempted history read) |
+| 236 | `obsv_snapshot_cleanup_denied` | mounts/121-obsv-history.js (FS-K3: {bot} — non-operator attempted cleanup) |
+| 237 | `quota_alerts_read_denied` | mounts/122-quota-alerts.js (FS-K4: {bot} — non-operator attempted quota alert read) |
+| 238 | `webhook_subs_denied` | mounts/125-webhook-subs.js (FS-L2: {bot} — non-operator touched webhook subscription route) |
+| 239 | `flag_list_denied` | mounts/126-feature-flags.js (FS-L3: {bot} — non-operator attempted flag list) |
+| 240 | `flag_set_denied` | mounts/126-feature-flags.js (FS-L3: {bot} — non-operator attempted flag set) |
+| 241 | `flag_reset_denied` | mounts/126-feature-flags.js (FS-L3: {bot} — non-operator attempted flag reset) |
+| 242 | `tenant_cleanup_candidates_denied` | mounts/127-tenant-lifecycle.js (FS-M1: {bot} — non-operator attempted cleanup candidate list) |
+| 243 | `tenant_auto_disable_denied` | mounts/127-tenant-lifecycle.js (FS-M1: {bot} — non-operator attempted auto-disable) |
+| 244 | `skill_version_denied` | mounts/128-skill-versions.js (FS-M2: {bot} — non-operator attempted version read) |
+| 245 | `skill_rollback_denied` | mounts/128-skill-versions.js (FS-M2: {bot} — non-operator attempted rollback) |
+| 246 | `rate_bucket_denied` | mounts/129-rate-ledger.js (FS-M3: {bot} — non-operator attempted rate bucket access) |
+| 247 | `tenant_flag_denied` | mounts/130-tenant-flags.js (FS-N1: {bot} — non-operator attempted tenant flag access) |
+| 248 | `skill_io_denied` | mounts/133-skill-io.js (FS-O1: {bot} — non-operator attempted skill export) |
+| 249 | `skill_import_denied` | mounts/133-skill-io.js (FS-O1: {bot} — non-operator attempted skill import) |
+| 250 | `tenant_activity_denied` | mounts/141-tenant-activity.js (FS-W1: {bot} — non-operator attempted tenant activity read) |
+| 251 | `tenant_webhook_denied` | mounts/150-webhook-subs-tenant.js (FS-Y1: {bot} — non-operator touched tenant webhook route) |
+| 252 | `restricted` | telemetry-tenant.js (FS-K2: tenant-scoped telemetry projection for unknown types — the scalar projection itself, never entry contents) |
+| 253 | `tenant_quota_read` | mounts/157-tenant-quotas.js (FS-Z6: {by, tenant, resource} — operator read tenant quota/usage) |
+| 254 | `tenant_access_listed` | mounts/159-tenant-access.js (FS-A1-S3: {by, count} — operator listed accessible tenants; ids + names only, no secrets) |
+| 255 | `tenant_access_denied` | mounts/159-tenant-access.js (FS-A1-S3: {bot, reason} — non-operator attempted tenant listing) |
+| 255 | `reserve` | budgets.js (A-008/HC4: {bot, amount} — budget reserved for an admitted action) |
+| 256 | `commit` | budgets.js (A-008/HC4: {bot, amount} — reserved budget settled after execution) |
+| 257 | `settle` | budgets.js (HC4: {bot, amount} — explicit settlement of a reservation) |
+| 258 | `refund` | budgets.js (HC4: {bot, amount} — reservation refunded after failure/deny) |
+| 259 | `takeover_forbidden` | mounts/33-takeover.js (HC8: {bot} — non-operator attempted takeover) |
+| 260 | `takeover_issued` | mounts/33-takeover.js (HC8: {takeover_id, principal_id, revoked_actions, granted_capabilities} — takeover envelope issued, subset-only caps) |
+| 267 | `proposal_created` | mounts/23-missions.js (W0.2: {proposal_id, proposer, objective} — MissionProposal created) |
+| 268 | `proposal_submitted` | mounts/23-missions.js (W0.2: {proposal_id, proposer} — draft submitted for approval) |
+| 269 | `proposal_approved` | mounts/23-missions.js (W0.2/W0.3: {proposal_id, approver, mission_id} — approved with WORKS mission correlation) |
+| 270 | `proposal_rejected` | mounts/23-missions.js (W0.2: {proposal_id, reason}) |
+| 271 | `proposal_approve_forbidden` | mounts/23-missions.js (W0.2: {proposal_id, bot} — non-operator attempted approval) |
+| 272 | `proposal_reject_forbidden` | mounts/23-missions.js (W0.2: {proposal_id, bot} — non-operator attempted rejection) |
+| 273 | `project_created` | mounts/24-projects.js (P1: {project_id, title} — Project primitive created) |
+| 274 | `approvals_batch_resolved` | mounts/07-approvals-v2.js (P1: {approver, ops, approved} — batch resolution summary) |
+| 275 | `approvals_batch_forbidden` | mounts/07-approvals-v2.js (P1: {bot} — non-operator attempted batch) |
+| 276 | `approvals_metrics_forbidden` | mounts/07-approvals-v2.js (P1: {bot} — non-operator attempted metrics read) |
+| 277 | `takeover_handback_forbidden` | mounts/33-takeover.js (HC8: {bot} — non-operator attempted hand-back) |
+| 278 | `takeover_handed_back` | mounts/33-takeover.js (HC8: {takeover_id, principal_id, restored_capabilities} — ownership returned to agent, pre-takeover envelope restored) |
+| 279 | `context_forbidden` | mounts/25-context.js (P1 Context Inspector: {bot, target} — non-operator inspected another bot's context) |
+| 280 | `context_inspected` | mounts/25-context.js (P1: {bot, target, snapshot_hash} — context snapshot generated, content-addressed) |
+| 281 | `router_outcome_recorded` | mounts/59-router.js (v0.2: {provider, model, ok} — telemetry outcome recorded for fallback-learning) |
+| 282 | `workflow_created` | mounts/26-workflows.js (P2: {workflow_id, name, version} — workflow created) |
+| 283 | `workflow_updated` | mounts/26-workflows.js (P2: {workflow_id, version} — new version saved) |
+| 284 | `workflow_activated` | mounts/26-workflows.js (P2: {workflow_id} — draft -> active) |
+| 285 | `workflow_archived` | mounts/26-workflows.js (P2: {workflow_id}) |
+| 286 | `workflow_run_forbidden` | mounts/26-workflows.js (P2: {workflow_id, bot} — non-operator attempted run) |
+| 287 | `workflow_run_submitted` | mounts/26-workflows.js (P2: {workflow_id, version, works_ok, work_id} — submitted to WORKS) |
+| 288 | `workflow_webhook_rejected` | mounts/26-workflows.js (P2: {workflow_id} — webhook HMAC signature invalid) |
+| 289 | `workflow_webhook_run` | mounts/26-workflows.js (P2: {workflow_id, work_id} — webhook-triggered WORKS run) |
+| 290 | `workflow_schedule_run` | mounts/26-workflows.js (P2: {workflow_id, works_ok} — schedule-sweep run submission) |
+| 291 | `workflow_sweep_forbidden` | mounts/26-workflows.js (P2: {bot} — non-operator attempted schedule sweep) |
+| 292 | `evals_forbidden` | mounts/06-evals.js (P2: {bot} — non-operator attempted eval run) |
+| 293 | `evals_run` | mounts/06-evals.js (P2: {gate, total, failed, snapshot_hash} — golden-set eval executed) |
+| 299 | `http` | mounts/07-api-contract.js (P2 developer platform: OpenAPI securitySchemes value 'http' in the generated contract — extractor false-positive documented; not a runtime audit event) |
+| 294 | `knowledge_created` | mounts/18-knowledge.js (P2: {source_id, title} — knowledge source created) |
+| 295 | `knowledge_searched` | mounts/18-knowledge.js (P2: {query, hits} — token-index search executed) |
+| 296 | `knowledge_cited` | mounts/18-knowledge.js (P2: {source_id, ref_type, ref_id} — citation recorded) |
+| 297 | `knowledge_removed` | mounts/18-knowledge.js (P2: {source_id} — source deleted) |
+| 298 | `knowledge_delete_forbidden` | mounts/18-knowledge.js (P2: {source_id, bot} — non-operator attempted delete) |
+| 261 | `plugin_forbidden` | mounts/35-plugins.js (W4: {bot, method, path} — non-operator plugin write) |
+| 262 | `plugin_permission_rejected` | mounts/35-plugins.js (W4: declared permission rejected at runtime) |
+| 263 | `plugin_delete_forbidden` | mounts/35-plugins.js (W4: uninstall denied by policy) |
+| 264 | `model_route` | mounts/59-router.js (HC4/router: {capability, model, provider} — routing decision) |
+| 265 | `needyou_created` | mounts/08-need-you.js (W0.5: {id, tenantId, type, subject} — new NeedsYouItem created) |
+| 266 | `needyou_resolved` | mounts/08-need-you.js (W0.5: {id, resolvedBy} — NeedsYouItem resolved) |
+| 267 | `approval_notify_sent` | approval-notify.js (W6: approval notification dispatched) |
+| 268 | `approval_notify_failed` | approval-notify.js (W6: approval notification delivery failed) |
+| 269 | `secret_vault_status` | mounts/120-secrets-status.js (SecretsVault: enabled/disabled + master-key rotation timestamp) |
+| 270 | `authority_lease_revoke` | mounts/132-authority-proxy.js (authority: lease revoked) |
+| 271 | `room_ask` | mounts/146-rooms-ask.js (rooms: ask submitted) |
+| 272 | `chat_llm_stream` | mounts/147-chat-llm-stream.js (chat: LLM stream) |
+| 273 | `room_attach` | mounts/148-rooms-attach.js (rooms: attachment) |
+| 274 | `mission_timeline` | mounts/149-mission-timeline.js (mission: timeline event) |
+| 275 | `approval` | mounts/150-rooms-hil.js (rooms HIL: approval) |
+| 276 | `needyou` | mounts/150-rooms-hil.js (rooms HIL: needyou) |
+| 277 | `takeover` | mounts/150-rooms-hil.js (rooms HIL: takeover) |
+| 278 | `rooms_hil` | mounts/150-rooms-hil.js (rooms HIL: hil event) |
+| 279 | `chat_branch` | mounts/151-chat-llm-branch.js (chat: branch) |
+| 280 | `proposal_leases` | mounts/153-proposal-leases.js (proposal: leases) |

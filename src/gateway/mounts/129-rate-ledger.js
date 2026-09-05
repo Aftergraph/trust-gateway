@@ -5,6 +5,29 @@ const { isOperator } = require('../tenants');
 const { audit } = require('../events');
 
 module.exports = function mountRateLedger(gw) {
+  gw.router.get('/v2/rate/buckets', async (req, res) => {
+    const op = isOperator(req);
+    if (!op) {
+      audit('rate_bucket_denied', { bot: req.bot?.name || 'anonymous' });
+      res.statusCode = 403;
+      return res.end(JSON.stringify({ error: 'operator_required' }));
+    }
+    if (!ledger.enabled()) {
+      res.statusCode = 404;
+      return res.end(JSON.stringify({ error: 'rate_ledger_disabled' }));
+    }
+    const url = new URL(req.url, 'http://localhost');
+    const windowMs = url.searchParams.has('windowMs') ? Number(url.searchParams.get('windowMs')) : 60_000;
+    if (!Number.isFinite(windowMs) || windowMs <= 0) {
+      res.statusCode = 400;
+      return res.end(JSON.stringify({ error: 'invalid_windowMs' }));
+    }
+    const buckets = ledger.listCurrent(windowMs);
+    audit('rate_buckets_read', { by: op.name, count: buckets.length });
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ count: buckets.length, windowMs, buckets, observedAt: Date.now() }));
+  });
+
   gw.router.get('/v2/rate/buckets/:key', async (req, res) => {
     const op = isOperator(req);
     if (!op) {

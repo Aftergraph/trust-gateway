@@ -91,10 +91,42 @@ function reset(bucketKey) {
   return Number(info.changes || 0);
 }
 
+/**
+ * List all buckets with counts in the CURRENT window (dashboard view).
+ * Returns per-key: { key, count, windowMs, windowStart, updatedAt } ranked
+ * by count desc. windowMs defaults to 60s to keep the view focused on the
+ * active sliding window; keys with zero current-window hits are omitted.
+ * @param {number|null} windowMs
+ * @returns {Array<object>}
+ */
+function listCurrent(windowMs, now) {
+  if (!enabled()) return [];
+  _ensureTable();
+  const at = Number.isFinite(now) ? now : Date.now();
+  const wMs = Number.isFinite(windowMs) && windowMs > 0 ? windowMs : 60_000;
+  const wStart = _windowStart(at, wMs);
+  let rows = [];
+  try {
+    rows = db.prepare(
+      `SELECT bucket_key, count, updated_at FROM ${TABLE}
+       WHERE window_start = ?
+       ORDER BY count DESC, updated_at DESC`
+    ).all(wStart);
+  } catch { return []; }
+  return rows.map(r => ({
+    key: String(r.bucket_key),
+    count: Number(r.count),
+    windowMs: wMs,
+    windowStart: wStart,
+    updatedAt: Number(r.updated_at),
+  }));
+}
+
 module.exports = {
   enabled,
   hit,
   getCount,
   reset,
+  listCurrent,
   TABLE,
 };
