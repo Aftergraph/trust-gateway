@@ -512,6 +512,7 @@ plugins.js) across all files under `src/gateway/`.
 | 167 | `rate_bucket_read` | mounts/129-rate-ledger.js (FS-M3: {by, key, count} — operator queried a rate-limit bucket; count + key only, no caller identity) |
 | 168 | `rate_buckets_read` | mounts/129-rate-ledger.js (FS-M3: {by, count} — operator listed current-window rate buckets for the dashboard; count only, no bucket contents) |
 | 170 | `rate_bucket_reset` | mounts/129-rate-ledger.js (FS-M3: {by, key, removed} — operator reset a rate-limit bucket; key + rows removed only) |
+| 281 | `route_rate_limited` | server.js (FS-X3: {bot, pattern, path} — a persistent route rule (via /v2/rate/limits) refused the request 429 after the token budget; sealed before dispatch; TG_ROUTE_LIMITS=1 only) |
 | 170 | `tenant_flag_set` | mounts/130-tenant-flags.js (FS-N1: {by, tenant, name, enabled, value} — operator set a per-tenant feature flag override; flag name + enabled + value, no secret material; TG_TENANT_FLAGS=1 only) |
 | 171 | `tenant_flag_reset` | mounts/130-tenant-flags.js (FS-N1: {by, tenant, name} — operator reset a per-tenant feature flag to global default) |
 | 172 | `tenant_flag_listed` | mounts/130-tenant-flags.js (FS-N1: {by, tenant, count} — operator listed per-tenant feature flags; tenant id + count only) |

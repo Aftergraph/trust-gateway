@@ -254,6 +254,20 @@ class Gateway extends EventEmitter {
     return { status: 200, body: null, remaining: budget - b.count, budget };
   }
 
+  // FS-X3: persistent route rules (opsat via /v2/rate/limits) håndhæves her,
+  // efter token-budget. Kun eksplicit opsatte patterns rammes (skipped ellers).
+  // Returnerer 429-payload eller null.
+  // Lazy require: server.js loads mounts uafhængigt af test-env cache-cykler.
+  _enforceRouteLimit(bot, method, pathname) {
+    let routeLimits;
+    try { routeLimits = require('./route-limits'); } catch { return null; }
+    if (!routeLimits.enabled()) return null;
+    const r = routeLimits.check(method, pathname, this.now());
+    if (r.skipped || r.allowed) return null;
+    this._audit({ type: 'route_rate_limited', bot: bot.name, pattern: r.pattern, path: pathname });
+    return { error: 'route_rate_limited', pattern: r.pattern, retryAfterMs: r.retryAfterMs, count: r.count, maxHits: r.maxHits };
+  }
+
   _rateSnapshot(botName) {
     const b = this._rateBuckets.get(botName);
     if (!b) return { remaining: null, budget: null, windowStart: null };
@@ -354,6 +368,8 @@ class Gateway extends EventEmitter {
     if (fnMatch) {
       const bot = this._auth(req);
       if (!bot) { this._audit({ type: 'auth_rejected', path: pathname }); return send(res, 401, { error: 'unauthorized' }); }
+      const rr = this._enforceRouteLimit(bot, req.method, pathname);
+      if (rr) return send(res, 429, rr);
       req.bot = bot; // fn-mount handlers call isOperator(req) on the raw req
       const { resolveTenant } = require('./tenant-resolve');
       const { tenant } = resolveTenant(req, this);
@@ -376,6 +392,14 @@ class Gateway extends EventEmitter {
         if (!bot) { this._audit({ type: 'auth_rejected', path: pathname }); return send(res, 401, { error: 'unauthorized' }); }
         const rl = this._enforceRateLimit(bot);
         if (rl.status === 429) { this._audit({ type: 'rate_limited', bot: bot.name, path: pathname }); return send(res, 429, rl.body); }
+      }
+      // FS-X3 route rules — every mount surface (incl. auth:'none' mounts
+      // that re-auth internally, e.g. 09-approvals). Cheap double lookup when
+      // the mount did its own bearer check and left no bot on req.
+      const effBot = bot || req.bot || this._auth(req) || null;
+      if (effBot) {
+        const rr = this._enforceRouteLimit(effBot, req.method, pathname);
+        if (rr) return send(res, 429, rr);
       }
       const { resolveTenant } = require('./tenant-resolve');
       const { tenant } = resolveTenant(req, this);
@@ -404,6 +428,9 @@ class Gateway extends EventEmitter {
       this._audit({ type: 'rate_limited', bot: bot.name, path });
       return send(res, 429, rl.body);
     }
+    // FS-X3 route rules — same position as the token-budget guard.
+    const rr = this._enforceRouteLimit(bot, req.method, path);
+    if (rr) return send(res, 429, rr);
 
     if (req.method === 'POST' && path === '/v1/actions') {
       return this._postAction(req, res, bot);

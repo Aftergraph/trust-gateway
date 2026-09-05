@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
+const { EventEmitter } = require('node:events');
+const { Gateway, hashToken } = require('../src/gateway/server');
 
 describe('FS-X3 route limits', () => {
   let tmpDir;
@@ -125,4 +127,67 @@ describe('FS-X3 route limits', () => {
     process.env.TG_ROUTE_LIMITS = '1';
     delete require.cache[require.resolve('../src/gateway/route-limits')];
   });
+
+  it('e2e: route rule enforced on legacy surface — 429 + audit-sealed', async () => {
+    const rl = require('../src/gateway/route-limits');
+    rl.set('GET /v1/audit', { maxHits: 2, windowMs: 60000 }, 'op1');
+    const gw = new Gateway({
+      bots: { atlas: { tokenHash: hashToken('e2e-atlas'), role: 'operator', capabilities: [] } },
+      dispatch: async () => ({ ok: true }),
+    });
+    const statuses = [];
+    for (let i = 0; i < 3; i++) {
+      const { req, res, getStatus } = makeReqRes({ method: 'GET', url: '/v1/audit', token: 'e2e-atlas' });
+      gw.handle(req, res);
+      await new Promise((r) => setImmediate(r));
+      statuses.push(getStatus());
+    }
+    assert.deepEqual(statuses, [200, 200, 429], 'third request must be 429');
+    const sealed = gw.chain.since(0, { limit: 200 }).entries
+      .some((e) => e.payload && e.payload.type === 'route_rate_limited');
+    assert.ok(sealed, 'route_rate_limited must be audit-sealed');
+  });
+
+  it('e2e: route rule enforced on fn-route surface (operator fn mount)', async () => {
+    const rl = require('../src/gateway/route-limits');
+    rl.set('GET /v2/rate/limits', { maxHits: 1, windowMs: 60000 }, 'op1');
+    const gw = new Gateway({
+      bots: { atlas: { tokenHash: hashToken('e2e-atlas2'), role: 'operator', capabilities: [] } },
+      dispatch: async () => ({ ok: true }),
+    });
+    const call1 = makeReqRes({ method: 'GET', url: '/v2/rate/limits', token: 'e2e-atlas2' });
+    await gw.handle(call1.req, call1.res);
+    await new Promise((r) => setImmediate(r));
+    const call2 = makeReqRes({ method: 'GET', url: '/v2/rate/limits', token: 'e2e-atlas2' });
+    await gw.handle(call2.req, call2.res);
+    await new Promise((r) => setImmediate(r));
+    assert.equal(call1.getStatus(), 200);
+    assert.equal(call2.getStatus(), 429, 'fn-route beyond budget must be 429');
+    assert.equal(JSON.parse(call2.getBody() || '{}').error, 'route_rate_limited');
+  });
 });
+
+// ── e2e harness (mini) ───────────────────────────────────────────────────
+function makeReqRes({ method = 'GET', url = '/', token = null, body = null } = {}) {
+  const req = new EventEmitter();
+  req.method = method;
+  req.url = url;
+  req.headers = {};
+  if (token) req.headers.authorization = 'Bearer ' + token;
+  req.on = EventEmitter.prototype.on;
+  let statusCode = null;
+  let bodyStr = '';
+  const res = {
+    statusCode: null, // fn-mount handlers set res.statusCode directly
+    writeHead(s) { statusCode = s; },
+    setHeader() {}, // fn-mount handlers may set headers
+    end(b) { bodyStr = typeof b === 'string' ? b : (b == null ? '' : String(b)); },
+    once() {}, on() {},
+  };
+  process.nextTick(() => req.emit('end'));
+  return {
+    req, res,
+    getStatus: () => statusCode || res.statusCode || 200,
+    getBody: () => bodyStr,
+  };
+}
