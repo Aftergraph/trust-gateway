@@ -1,3 +1,9 @@
+## 2026-09-05 — C4: session-branching (BØLGE C KOMPLET)
+- feat: POST /v2/chat/llm/branch — forkast fra index/'latest' til navngiven session
+- Operator-only; governance-neutral (samme propose-pipeline)
+- UI: branch-knap; roomSession skiftes pr. branch
+- branch 3/3; panel+a4 17/17
+
 ## 2026-09-05 — C3: human-in-the-loop kort (HIL)
 - feat: GET /v2/rooms/:id/hil — approvals + need-you + takeovers som actionable cards
 - UI: HIL-kort i Mission-tab; TDZ-fix (pendingReply module-scope); md createTextNode-guard
