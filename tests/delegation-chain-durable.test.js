@@ -21,7 +21,7 @@ test('DurableDelegationChain: persists records and reloads after restart', () =>
     { msgId: 'root', kind: 'goal', from: 'alice' },
     { msgId: 'child', kind: 'delegate', from: 'bot-a' },
   ]);
-  assert.equal(second.verify('child'), true);
+  assert.deepEqual(second.verify('child'), { valid: true, error: null });
 });
 
 test('DurableDelegationChain: corrupt file fails closed', () => {

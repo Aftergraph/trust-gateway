@@ -30,6 +30,6 @@ test('durable graph preserves non-index message ids across reload', () => {
   first.record(null, 'rm_custom-root', { kind: 'message', from: 'alice' }, 'room-a');
   first.record('rm_custom-root', 'rm_custom-child', { kind: 'delegate', from: 'forge' }, 'room-a');
   const second = new DurableDelegationChain({ file });
-  assert.equal(second.verify('rm_custom-child'), true);
+  assert.deepEqual(second.verify('rm_custom-child'), { valid: true, error: null });
   assert.equal(second.chain('rm_custom-child')[1].msgId, 'rm_custom-child');
 });

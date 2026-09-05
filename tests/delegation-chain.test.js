@@ -4,11 +4,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { DelegationChain } = require('../src/gateway/delegation-chain');
 
-test('DelegationChain: empty store returns null for any chain query', () => {
+test('DelegationChain: empty store returns valid=false, error=null for any verify query', () => {
   const dc = new DelegationChain();
-  assert.equal(dc.chain('msg_1'), null);
+  assert.deepEqual(dc.verify('msg_1'), { valid: false, error: null });
   assert.equal(dc.tree('room_x'), null);
-  assert.equal(dc.verify('msg_1'), null);
 });
 
 test('DelegationChain: record a root message (no parent)', () => {
@@ -56,30 +55,23 @@ test('DelegationChain: tree groups by roomId', () => {
   assert.equal(tb.msgId, 'r2_root');
 });
 
-test('DelegationChain: verify returns true for unbroken chain', () => {
+test('DelegationChain: verify returns structured result for unbroken chain', () => {
   const dc = new DelegationChain();
   dc.record(null, 'a', { kind: 'goal', from: 'alice' });
   dc.record('a', 'b', { kind: 'delegate', from: 'bot1' });
-  assert.equal(dc.verify('b'), true);
+  assert.deepEqual(dc.verify('b'), { valid: true, error: null });
 });
 
-test('DelegationChain: verify returns false when chain is broken (missing parent)', () => {
-  const dc = new DelegationChain();
-  dc.record(null, 'a', { kind: 'goal', from: 'alice' });
-  // b references a, but a is missing (never recorded)
-  const broken = new DelegationChain();
-  broken.record(null, 'b', { kind: 'delegate', from: 'bot1' });
-  broken.record('a', 'b', { kind: 'delegate', from: 'bot1' }); // this links b to a, but a's parent is missing
-  // Actually let me test the direct case: chain with orphan
+test('DelegationChain: verify detects missing edge', () => {
   const orphan = new DelegationChain();
   orphan.record('nonexistent', 'orphan', { kind: 'delegate', from: 'bot1' });
-  assert.equal(orphan.verify('orphan'), false);
+  assert.deepEqual(orphan.verify('orphan'), { valid: false, error: 'missing_edge' });
 });
 
-test('DelegationChain: chain returns null for unknown msgId', () => {
+test('DelegationChain: verify returns no-error for unknown msgId', () => {
   const dc = new DelegationChain();
   dc.record(null, 'a', { kind: 'goal', from: 'alice' });
-  assert.equal(dc.chain('unknown'), null);
+  assert.deepEqual(dc.verify('unknown'), { valid: false, error: null });
 });
 
 test('DelegationChain: record validates kind is non-empty string', () => {

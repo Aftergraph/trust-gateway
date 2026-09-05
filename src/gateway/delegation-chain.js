@@ -73,19 +73,24 @@ class DelegationChain {
     return { msgId: '(multi-root)', kind: 'room', from: '', children: roots.map((root) => build(root)) };
   }
 
+  /**
+   * Verify a chain. Returns structured result instead of bare boolean.
+   * @param {string} msgId
+   * @returns {{valid: boolean, error?: 'cycle'|'missing_edge'|null}}
+   */
   verify(msgId) {
-    if (!this._edges.has(msgId)) return null;
+    if (!this._edges.has(msgId)) return { valid: false, error: null };
     let current = msgId;
     const seen = new Set();
     while (current) {
-      if (seen.has(current)) return false;
+      if (seen.has(current)) return { valid: false, error: 'cycle' };
       seen.add(current);
       const edge = this._edges.get(current);
-      if (!edge) return false;
-      if (edge.parentMsgId === null) return true;
+      if (!edge) return { valid: false, error: 'missing_edge' };
+      if (edge.parentMsgId === null) return { valid: true, error: null };
       current = edge.parentMsgId;
     }
-    return false;
+    return { valid: false, error: 'missing_edge' };
   }
 }
 
