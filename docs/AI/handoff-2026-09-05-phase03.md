@@ -157,3 +157,21 @@ TBD — read the uncommitted 26-roadmap or next handoff.
 - Regression: 85/86 (1 ærlig skip: works-live E2E kræver Go toolchain)
 - Lært: TG må aldrig opfinde AIE-kontrakten — verificer mod aie/src/aie_runtime/gateway/http.py (POST /revocations {lease_id}, GET /leases → {leases:[]})
 - Næste: H-bølgen er komplet. Næste roadmap-fase: cross-repo governance contracts eller chat-overgrowth-seam-closing
+
+## H9 — AIE mission-state enum alignment (55db53d, 260/260 AIE tests)
+Cross-repo governance contract enforcement:
+- `engine.MISSION_STATES`: canonical 12-state frozenset (DRAFT→REVOKED), must match
+  after-graph-governance 1.0.json enum exactly.
+- `cli.py build_gateway_from_config`: rejects mission-states outside the enum
+  (fail-closed ValueError) — runtime boundary validation at AIE's config load.
+- `conformance.py`: fixtures corrected from `"active"` (invalid) to `"RUNNING"`.
+- 25 test fixtures: all `"active"` → `"RUNNING"` (contract-valid state).
+- 3 new tests: CLI reject/accept + MISSION_STATES == contract enum identity check.
+- AIE suite: 260/260 PASS against Aftergraph repo (PYTHONPATH=src required).
+
+**Cross-repo alignment status:** TG conformance (H7) validates proposal + mission-state
+contract (13/13). AIE (H9) now enforces same enum at config boundary. The remaining
+gap is ISR (intelligence-systems-research) — no local ISR repo found; ISR conformance
+tests deferred until repo availability is confirmed.
+
+## H-wave: H1–H9 COMPLETE
