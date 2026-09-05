@@ -254,6 +254,12 @@ class RoomStore {
       if (!body || typeof body !== 'object' || typeof body.tool !== 'string' || !body.tool) {
         return { ok: false, error: 'proposal_tool_required' };
       }
+    } else if (body && typeof body === 'object' && body.attachment
+      && typeof body.attachment.artifactId === 'string') {
+      // B1: attachment-envelope — struktureret metadata (artifactId/title/name/
+      // size/kind), aldrig filindhold. Whitelist-form; alt andet afvises.
+      const a = body.attachment;
+      if (typeof a.size !== 'number' || a.size < 0) return { ok: false, error: 'body_must_be_short_string' };
     } else {
       if (typeof body !== 'string' || !body.trim() || body.length > MAX_BODY_LEN) {
         return { ok: false, error: 'body_must_be_short_string' };
@@ -291,7 +297,7 @@ class RoomStore {
       // args themselves park (at most) in the approvals store.
       message.body = { tool: body.tool, argsLength: body.args === undefined || body.args === null ? 0 : JSON.stringify(body.args).length };
     } else {
-      message.body = typeof body === 'string' ? body : String(body ?? '');
+      message.body = typeof body === 'string' ? body : (typeof body === 'object' ? body : String(body ?? ''));
     }
     if (kind === 'handoff') { message.target = target; message.chain = chain || [from]; }
     if (kind === 'assistant') {

@@ -499,3 +499,8 @@ h4 { margin: var(--tg-space-2) 0 var(--tg-space-1); color: var(--tg-text-muted, 
 .roommsg-actions { margin-left: 6px; display: inline-flex; gap: 4px; opacity: 0.6; }
 .roommsg-actions button { font-size: 10px; padding: 1px 5px; cursor: pointer; }
 .roommsg-actions button:hover { opacity: 1; }
+
+/* B1: attachment-kort */
+.roommsg-attachment { display: inline-flex; gap: 6px; align-items: center; background: #1c1c26; border: 1px solid #333; border-radius: 6px; padding: 3px 8px; }
+.roommsg-attachment .attachment-name { color: #7c5cff; text-decoration: none; }
+.roommsg-attachment .attachment-size { color: #888; font-size: 11px; }

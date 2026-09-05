@@ -68,6 +68,17 @@
     else if (members.humans.includes(m.from)) row.append(el('span', 'badge human', 'human'));
     row.append(el('span', 'roommsg-kind ' + KIND_CLASS[kind], kind));
     const bodyEl = el('span', 'roommsg-body');
+    const isAttachment = m.body && typeof m.body === 'object' && m.body.attachment;
+    if (isAttachment) {
+      const att = m.body.attachment;
+      const card = el('span', 'roommsg-attachment');
+      card.append(el('span', 'attachment-icon', '📎'));
+      card.append(el('a', 'attachment-name', String(att.name || att.title || 'fil')));
+      // link åbner artifact-detail i artifacts-panelet (href til /v2/artifacts/:id er beskyttet; UI navigerer via hash)
+      card.lastChild.setAttribute('href', '#artifacts');
+      card.append(el('span', 'attachment-size', att.size != null ? Math.ceil(att.size / 1024) + ' KB' : ''));
+      bodyEl.append(card);
+    } else {
     const text = bodyText(m);
     if (kind === 'assistant' && mdRender) {
       try {
@@ -76,6 +87,7 @@
       } catch { bodyEl.textContent = text; }
     } else {
       bodyEl.textContent = text;
+    }
     }
     row.append(bodyEl);
     if (kind === 'assistant' && m.proposal && m.proposal.tool) {
@@ -289,7 +301,30 @@
           }
           const askBtn = el('button', 'btn', 'ask'); // A1: spørg hjernen — governed LLM turn
           askBtn.title = 'spørg hjernen (governed: proposal + approval-kort i tråden)';
-          send.append(mentions, bodyIn, sendBtn, askBtn, sendMsg);
+          const attachBtn = el('button', 'btn', 'attach'); // B1: fil-upload → artifact + attachment-envelope
+          attachBtn.title = 'vedhæft fil (doc/code/image-ref, max 128KB)';
+          const fileIn = el('input');
+          fileIn.type = 'file';
+          fileIn.style.display = 'none';
+          attachBtn.addEventListener('click', (ev2) => { ev2.preventDefault(); fileIn.click(); });
+          fileIn.addEventListener('change', () => {
+            const f = fileIn.files && fileIn.files[0];
+            if (!f) return;
+            if (f.size > 128 * 1024) { sendMsg.textContent = 'for stor (max 128KB)'; fileIn.value = ''; return; }
+            const reader = new FileReader();
+            reader.onload = () => {
+              const content = String(reader.result || '');
+              const kind = /^image\//.test(f.type) ? 'image-ref' : (/\.(js|py|go|sh|json|ts|md)$/i.test(f.name) ? 'code' : 'doc');
+              sendMsg.textContent = '…uploader';
+              api('/v2/rooms/' + encodeURIComponent(roomId) + '/attach', {
+                method: 'POST',
+                body: JSON.stringify({ name: f.name, content, kind }),
+              }).then(() => { sendMsg.textContent = ''; fileIn.value = ''; openRoom(roomId); })
+                .catch((err) => { sendMsg.textContent = err.status === 403 ? 'not member' : 'error ' + (err.status || ''); });
+            };
+            reader.readAsText(f);
+          });
+          send.append(mentions, bodyIn, sendBtn, askBtn, attachBtn, fileIn, sendMsg);
           askBtn.addEventListener('click', (ev2) => {
             ev2.preventDefault();
             const body = bodyIn.value.trim();
