@@ -22,8 +22,92 @@
   const api = window.TG && window.TG.api;
   const el = window.TG && window.TG.el;
 
+  function showDetail(kind, item, host) {
+    // luk eksisterende drawer
+    const old = host.querySelector('.auth-detail-drawer');
+    if (old) { old.textContent = ''; old.remove(); }
+
+    const drawer = el('div', 'auth-detail-drawer');
+    drawer.append(el('h3', 'auth-detail-title', (kind || 'item') + ': ' + (item.id || '—')));
+
+    if (kind === 'leases') {
+      // Revocation-historik
+      const revHist = Array.isArray(item.revocation_history) ? item.revocation_history : [];
+      if (revHist.length) {
+        drawer.append(el('div', 'auth-detail-section', 'Revocation history (' + revHist.length + ')'));
+        const ul = el('ul', 'auth-rev-list');
+        for (const r of revHist) {
+          ul.append(el('li', null,
+            (r.reason || 'no reason') + ' @ ' + (r.revoked_at || '?') + ' by ' + (r.actor || '?')));
+        }
+        drawer.append(ul);
+      } else {
+        drawer.append(el('div', 'muted', 'No revocation history'));
+      }
+      // Delegation tree (parent-child)
+      const parent = item.parent_lease_id || item.delegated_from || null;
+      const children = Array.isArray(item.child_leases) ? item.child_leases : [];
+      drawer.append(el('div', 'auth-detail-section', 'Delegation'));
+      if (parent) {
+        drawer.append(el('div', 'auth-deleg-parent', 'Parent: ' + parent));
+      } else {
+        drawer.append(el('div', 'muted', 'Root lease (no parent)'));
+      }
+      if (children.length) {
+        drawer.append(el('div', null, 'Children (' + children.length + '):'));
+        const cl = el('ul', 'auth-deleg-children');
+        for (const c of children) {
+          cl.append(el('li', null, (c.id || '?') + ' depth:' + (c.depth ?? '?')));
+        }
+        drawer.append(cl);
+      } else {
+        drawer.append(el('div', 'muted', 'No child delegations'));
+      }
+      // Budget
+      drawer.append(el('div', 'auth-detail-section', 'Budget'));
+      drawer.append(el('div', null, 'Remaining: ' + (item.budget_remaining ?? '—') +
+        ' / Total: ' + (item.budget_total ?? '—')));
+    } else if (kind === 'missions') {
+      // State transitions
+      const transitions = Array.isArray(item.transitions) ? item.transitions : [];
+      if (transitions.length) {
+        drawer.append(el('div', 'auth-detail-section', 'State transitions'));
+        const ul = el('ul', 'auth-transition-list');
+        for (const t of transitions) {
+          ul.append(el('li', null,
+            (t.from || '?') + ' → ' + (t.to || '?') + ' @ ' + (t.at || '?')));
+        }
+        drawer.append(ul);
+      } else {
+        drawer.append(el('div', 'muted', 'No transition history'));
+      }
+      // Linked leases
+      const leases = Array.isArray(item.linked_leases) ? item.linked_leases : [];
+      if (leases.length) {
+        drawer.append(el('div', 'auth-detail-section', 'Linked leases (' + leases.length + ')'));
+        const ul = el('ul', 'auth-linked-leases');
+        for (const l of leases) ul.append(el('li', null, l.id || l));
+        drawer.append(ul);
+      }
+    } else {
+      // Generic detail dump
+      drawer.append(el('pre', 'auth-detail-raw', JSON.stringify(item, null, 2)));
+    }
+
+    const closeBtn = el('button', 'btn auth-detail-close', 'luk');
+    closeBtn.addEventListener('click', () => { drawer.textContent = ''; drawer.remove(); });
+    drawer.append(closeBtn);
+    host.append(drawer);
+  }
+
   function itemRow(kind, item) {
     const row = el('div', 'auth-row');
+    row.style.cursor = 'pointer';
+    row.title = 'klik for detaljer';
+    row.addEventListener('click', () => {
+      const list = row.closest('.auth-list');
+      if (list) showDetail(kind, item, list.parentElement);
+    });
     row.append(el('span', 'auth-id mono', (item.id || '—').slice(0, 14)));
     if (kind === 'leases') {
       const revoked = item.revoked === true;
