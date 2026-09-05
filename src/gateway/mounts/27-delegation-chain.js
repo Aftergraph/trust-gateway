@@ -43,19 +43,20 @@ function hookRoomStore(store, chain) {
     const result = await origDeliver(roomId, opts);
     if (result.ok) {
       const room = typeof roomId === 'string' ? store.rooms.get(roomId) : roomId;
-      if (room && room.messages.length > 0) {
-        const msg = room.messages[room.messages.length - 1];
+      const msg = result.message || (room && room.messages[room.messages.length - 1]);
+      const messageId = msg && msg.id;
+      if (room && messageId) {
         if (Array.isArray(opts.chain) && opts.chain.length > 0) {
           for (const hop of opts.chain) {
             chain.record(
               hop.parentMsgId || null,
-              msg.id || String(room.messages.length - 1),
+              messageId,
               { kind: hop.kind || opts.kind || 'message', from: opts.from },
               room.id
             );
           }
         } else {
-          chain.record(null, msg.id, { kind: opts.kind || 'message', from: opts.from }, room.id);
+          chain.record(null, messageId, { kind: opts.kind || 'message', from: opts.from }, room.id);
         }
       }
     }
