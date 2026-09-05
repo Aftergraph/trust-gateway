@@ -12,7 +12,7 @@ const path = require('node:path');
 const { Gateway } = require('../src/gateway/server');
 const { getRoomStore } = require('../src/gateway/groups');
 const { DelegationChain } = require('../src/gateway/delegation-chain');
-const { hookRoomStore } = require('../src/gateway/mounts/27-delegation-chain');
+const { hookRoomStore, getChain } = require('../src/gateway/mounts/27-delegation-chain');
 
 function freshChain() {
   return new DelegationChain();
