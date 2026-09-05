@@ -13,6 +13,13 @@ const CLASSIFICATIONS = [
     match: ['shell.run', 'shell.run:*', 'fs.delete:*', 'fs.delete', 'db.drop:*', 'deploy:*', 'payment:*', 'harness.run:*', 'harness.build:*'],
     cls: 'destructive',
   },
+  // mission-oprettelse (E1): ALTDID needs_approval — en mission er en
+  // autoritetsbærende handling (AIE-lease + WORKS-correlation) og kræver
+  // menneskelig godkendelse uanset capabilities. Aldrig auto-allowed.
+  {
+    match: ['mission.create:*', 'mission.create'],
+    cls: 'mission',
+  },
   // secrets
   { match: ['secret.read:*', 'secret.read', 'credential.use:*'], cls: 'secret' },
 ];
@@ -39,6 +46,11 @@ function decide({ tool, cls = classify(tool), bot }) {
     caps.includes('*') || caps.includes(tool) || caps.some((c) => c.endsWith(':*') && tool.startsWith(c.slice(0, -1)))
   );
 
+  if (cls === 'mission') {
+    // E1: mission-oprettelse kræver ALWAYS menneskelig godkendelse —
+    // capabilities kan ikke auto-godkende autoritetsbærende handlinger.
+    return { decision: 'needs_approval', reason: 'mission creation requires human approval (authority-bearing action)' };
+  }
   if (cls === 'read') {
     return { decision: 'allow', reason: 'read actions are pre-approved' };
   }
