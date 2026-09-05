@@ -446,3 +446,21 @@ header {
 .delegation-info strong { color: var(--tg-text-bright); }
 .delegation-info .muted { color: var(--tg-text-muted); font-size: 11px; }
 .delegation-children { margin-left: 16px; border-left: 1px solid var(--tg-border); }
+
+/* ── Executions panel (WORKS surface) ── */
+.exec-toolbar { display: flex; align-items: center; gap: var(--tg-space-2); margin-bottom: var(--tg-space-2); }
+.exec-list, .exec-detail { display: flex; flex-direction: column; gap: var(--tg-space-1); }
+.exec-row { display: flex; align-items: center; gap: var(--tg-space-2); padding: var(--tg-space-1) 0; border-bottom: 1px solid var(--tg-border-soft, #21262d); }
+.exec-id { font-family: var(--tg-mono, monospace); }
+.exec-objective { flex: 1; }
+.exec-created { font-size: 11px; }
+.exec-state-badge { padding: 2px 6px; border-radius: 4px; font-size: 11px; background: var(--tg-bg-elevated, #161b22); }
+.st-succeeded { color: var(--tg-ok, #3fb950); }
+.st-failed { color: var(--tg-fail, #f85149); }
+.st-running, .st-queued { color: var(--tg-accent, #58a6ff); }
+.st-cancelled { color: var(--tg-text-muted, #8b949e); }
+.st-waiting, .st-suspended { color: var(--tg-warn, #d29922); }
+.exec-detail-head { display: flex; align-items: center; gap: var(--tg-space-2); margin-bottom: var(--tg-space-2); }
+.exec-objective-full { margin-bottom: var(--tg-space-2); }
+.exec-nodes, .exec-attempt, .exec-evidence { font-size: 12px; padding-left: var(--tg-space-3); border-left: 2px solid var(--tg-border-soft, #21262d); margin: 4px 0; }
+h4 { margin: var(--tg-space-2) 0 var(--tg-space-1); color: var(--tg-text-muted, #8b949e); }
