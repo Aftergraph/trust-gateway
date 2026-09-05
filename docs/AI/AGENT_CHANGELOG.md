@@ -1,3 +1,8 @@
+## 2026-09-05 — F1: mission-detail drawer (WORKS + evidence i ét view)
+- feat: detail-knap → drawer med objective/criteria/WORKS-status/evidence
+- Fail-closed: utilgængelig WORKS vises ærligt; XSS-loven textContent
+- mission-detail 1/1 + missions-scope 10/10
+
 ## 2026-09-05 — E4: AIE-lease-visning i missions-panel
 - feat: GET /v2/proposals/:id/leases — leases filtreret på mission_id (HTTP+subprocess)
 - Fail-closed: ingen syntetiske leases; 403 worker; 404 ukendt proposal
