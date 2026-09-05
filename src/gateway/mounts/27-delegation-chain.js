@@ -6,27 +6,33 @@
 //
 //   GET /v2/rooms/:id/chain → { tree: {msgId, kind, from, children} | null }
 //
-// ponytail: singleton DelegationChain. Upgrade to persistent store if
-// multi-node deployment needs a shared chain.
+// Gateway-scoped chains prevent one gateway/tenant graph from leaking into
+// another gateway instance. Persistence remains a separate future slice.
 
 const { DelegationChain } = require('../delegation-chain');
 
-/** @type {DelegationChain|null} */
-let _chain = null;
+/** @type {WeakMap<object, DelegationChain>} */
+const chains = new WeakMap();
 
-function getChain() {
-  if (!_chain) _chain = new DelegationChain();
-  return _chain;
+function getChain(gw) {
+  if (!gw || (typeof gw !== 'object' && typeof gw !== 'function')) {
+    throw new Error('delegation-chain: gateway required');
+  }
+  let chain = chains.get(gw);
+  if (!chain) {
+    chain = new DelegationChain();
+    chains.set(gw, chain);
+  }
+  return chain;
 }
 
 /**
  * Hook a room store's deliver() to record A2A delegation edges.
- * Exported for direct test access.
  * @param {import('../groups').RoomStore} store
- * @param {DelegationChain} [chain] — defaults to the singleton
+ * @param {DelegationChain} chain
  */
 function hookRoomStore(store, chain) {
-  chain = chain || getChain();
+  if (!store || !chain) throw new Error('delegation-chain: store and chain required');
   const origDeliver = store.deliver.bind(store);
   store.deliver = async function (roomId, opts) {
     const result = await origDeliver(roomId, opts);
@@ -44,7 +50,6 @@ function hookRoomStore(store, chain) {
             );
           }
         } else {
-          // Record as root node (no delegation parent)
           chain.record(null, msg.id, { kind: opts.kind || 'message', from: opts.from }, room.id);
         }
       }
@@ -54,14 +59,11 @@ function hookRoomStore(store, chain) {
 }
 
 module.exports = function mount(gw) {
-  const chain = getChain();
-
-  // Hook the room store
+  const chain = getChain(gw);
   const { getRoomStore } = require('../groups');
   const store = getRoomStore(gw);
   hookRoomStore(store, chain);
 
-  // Register the route
   gw.router.get('/v2/rooms/:id/chain', async (req, res) => {
     const roomId = req.params?.id;
     const room = store.get(roomId);
@@ -69,9 +71,8 @@ module.exports = function mount(gw) {
       res.statusCode = 404;
       return res.end(JSON.stringify({ error: 'room_not_found' }));
     }
-    const tree = chain.tree(roomId);
     res.statusCode = 200;
-    res.end(JSON.stringify({ tree }));
+    res.end(JSON.stringify({ tree: chain.tree(roomId) }));
   });
 };
 
