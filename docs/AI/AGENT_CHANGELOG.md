@@ -1,3 +1,8 @@
+## 2026-09-05 — B1: fil-upload i rooms (attach → artifacts)
+- feat: POST /v2/rooms/:id/attach — artifact + attachment-envelope (metadata-only)
+- groups.js: whitelistet attachment-body; UI attach-knap + attachment-kort
+- 3/3 nye tests; scope 41/0/1
+
 ## 2026-09-05 — chat A4: besked-handlinger (BØLGE A KOMPLET)
 - feat: replyTo gennem ask-mount (begge envelopes); reply/copy-knapper i tråden
 - regenerate = reply på assistant-besked → ask igen
