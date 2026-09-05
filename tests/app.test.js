@@ -89,3 +89,10 @@ test('live HTTP: /v2/events is SSE with auth', async () => {
     await new Promise((r) => server.close(r));
   }
 });
+
+test('every panel file is registered in index.html (no orphan panels)', () => {
+  const indexHtml = fs.readFileSync(path.join(APP, 'index.html'), 'utf8');
+  const files = fs.readdirSync(path.join(APP, 'panels')).filter((f) => f.endsWith('.js'));
+  const missing = files.filter((f) => !indexHtml.includes('/panels/' + f));
+  assert.deepEqual(missing, [], 'unregistered panel files: ' + missing.join(', '));
+});
