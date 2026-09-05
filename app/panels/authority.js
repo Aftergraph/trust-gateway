@@ -130,5 +130,8 @@
     loadItems();
   }
 
-  (window.TG_PANELS = window.TG_PANELS || []).push({ id: 'authority', title: 'Authority', render });
+  window.TG_PANELS = window.TG_PANELS || [];
+  if (!window.TG_PANELS.some((p) => p.id === 'authority')) {
+    window.TG_PANELS.push({ id: 'authority', title: 'Authority', render });
+  }
 })();
