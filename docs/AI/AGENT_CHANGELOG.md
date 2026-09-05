@@ -1,3 +1,9 @@
+## 2026-09-05 — chat A4: besked-handlinger (BØLGE A KOMPLET)
+- feat: replyTo gennem ask-mount (begge envelopes); reply/copy-knapper i tråden
+- regenerate = reply på assistant-besked → ask igen
+- chat-scope 66 pass / 0 fail / 1 skip (win32 0600)
+- A1 65d6523 · A2 aabac66 · A3 40a55d6 · A4 denne
+
 ## 2026-09-05 — chat A3: markdown-renderer (0 deps, XSS-sikker)
 - feat: app/lib/md.js — kodeblokke m. copy, inline formatting, lister, tabeller, links
 - assistant-beskeder i rooms renderes som markdown (textContent-only)
