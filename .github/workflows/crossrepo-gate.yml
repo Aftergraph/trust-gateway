@@ -1,0 +1,29 @@
+name: Cross-repo Integration Gate
+
+# Proof-of-concept caller for the shared Aftergraph polyrepo gate.
+# Local unit CI (ci.yml) is untouched; this is an additive integration check
+# that materializes the sibling repos TG's integration tests actually require:
+#   - aie                  (AIE_RUNTIME_PATH, authority/approval/revoke tests)
+#   - after-graph-governance (frozen contracts + mission-state/1.0.json)
+#   - works-execution      (mission/evidence test surface)
+#
+# On push to main the gate tests exact-head main. On PRs it tests the PR head
+# against current sibling contracts. Reference implementation until the gate
+# is stably green; then this check can be made required.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    uses: Aftergraph/.github/.github/workflows/polyrepo-integration-gate.yml@main
+    with:
+      target_repo: trust-gateway
+      target_ref: ${{ github.event_name == 'pull_request' && github.head_ref || 'main' }}
+      siblings: "after-graph-governance aie works-execution"# rerun gate
