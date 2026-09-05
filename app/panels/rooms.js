@@ -395,7 +395,7 @@
           const switchTab = (activeBtn, activeView) => {
             for (const t of tabs.children) t.classList.remove('active');
             activeBtn.classList.add('active');
-            for (const v of [log, chainView]) v.style.display = v === activeView ? '' : 'none';
+            for (const v of [log, chainView, missionView]) v.style.display = v === activeView ? '' : 'none';
           };
           msgTab.addEventListener('click', () => switchTab(msgTab, log));
           chainTab.addEventListener('click', () => {
