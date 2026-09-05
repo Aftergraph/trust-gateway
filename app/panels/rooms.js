@@ -88,6 +88,22 @@
       row.append(card);
     }
     row.append(el('span', 'roommsg-ts', m.ts ? new Date(m.ts).toLocaleTimeString() : ''));
+    // A4: besked-handlinger (reply / copy) — regenerér = klik ask igen med replyTo
+    const actions = el('span', 'roommsg-actions');
+    const replyBtn = el('button', 'roommsg-reply', 'reply');
+    replyBtn.title = 'besvar denne besked med ask';
+    replyBtn.addEventListener('click', () => {
+      bodyIn.value = '@' + (m.from || '') + ' ';
+      bodyIn.dataset.replyTo = m.id || '';
+      bodyIn.focus && bodyIn.focus();
+    });
+    const copyBtn = el('button', 'roommsg-copy', 'copy');
+    copyBtn.addEventListener('click', () => {
+      try { if (navigator && navigator.clipboard) navigator.clipboard.writeText(bodyText(m)); } catch { /* no-op */ }
+      copyBtn.textContent = 'kopieret';
+    });
+    actions.append(replyBtn, copyBtn);
+    row.append(actions);
     return row;
   }
 
@@ -282,10 +298,12 @@
             sendMsg.textContent = '…hjernen tænker';
             // A2: stream deltas live; done-event bærer det governed verdict.
             const token = window.TG.token || (window.TG.auth && window.TG.auth.token) || '';
+            const replyTo = bodyIn.dataset.replyTo || undefined;
+            if (replyTo) delete bodyIn.dataset.replyTo;
             fetch('/v2/chat/llm/stream', {
               method: 'POST',
               headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token },
-              body: JSON.stringify({ session: 'room_' + roomId, message: body }),
+              body: JSON.stringify({ session: 'room_' + roomId, message: body, ...(replyTo ? { replyTo } : {}) }),
             }).then((resp) => {
               if (!resp.ok || !resp.body) { askBtn.disabled = false; sendMsg.textContent = 'error ' + resp.status; return; }
               const reader = resp.body.getReader();

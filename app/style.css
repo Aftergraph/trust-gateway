@@ -494,3 +494,8 @@ h4 { margin: var(--tg-space-2) 0 var(--tg-space-1); color: var(--tg-text-muted, 
 .md-codeblock pre { background: #16161e; color: #d6d6d6; padding: 8px 10px; border-radius: 6px; overflow-x: auto; font-family: monospace; font-size: 12px; margin: 0; }
 .md-codeblock .md-copy { position: absolute; top: 4px; right: 4px; font-size: 10px; padding: 2px 6px; cursor: pointer; }
 .md-codeblock .md-copy:hover { background: #2a2a35; }
+
+/* A4: besked-handlinger */
+.roommsg-actions { margin-left: 6px; display: inline-flex; gap: 4px; opacity: 0.6; }
+.roommsg-actions button { font-size: 10px; padding: 1px 5px; cursor: pointer; }
+.roommsg-actions button:hover { opacity: 1; }

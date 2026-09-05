@@ -45,8 +45,9 @@ module.exports = {
       return send(res, 403, { error: 'not_member' });
     }
 
-    // 1. Post the question as the acting bot's own message envelope.
-    const q = await store.deliver(roomId, { from: bot, kind: 'message', body: message });
+    // 1. Post the question as the acting bot's own message envelope (replyTo hvis givet).
+    const replyTo = typeof body.replyTo === 'string' && body.replyTo ? body.replyTo : null;
+    const q = await store.deliver(roomId, { from: bot, kind: 'message', body: message, replyTo });
     if (!q.ok) {
       if (q.error === 'not_found') return send(res, 404, { error: 'not_found' });
       return send(res, 400, { error: q.error });
@@ -76,6 +77,7 @@ module.exports = {
       from: bot,
       kind: 'assistant',
       body: reply,
+      replyTo,
       extra: { ...(proposal ? { proposal } : {}), ...(fallback ? { fallback: true } : {}) },
     });
     if (!a.ok) return send(res, 400, { error: a.error });
