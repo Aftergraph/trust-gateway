@@ -1,3 +1,8 @@
+## 2026-09-05 — E1: mission.create tool (chat → MissionProposal, altid approval)
+- feat: dedikeret 'mission'-klasse i policy — needs_approval ALTID, capabilities kan ikke auto-godkende
+- End-to-end verificeret: proposal → submit → approve → WORKS-correlation
+- 2/2 + policy/rbac/chat/missions 40/40
+
 ## 2026-09-05 — D1: mobil chat-polish (12/12 SLICES KOMPLET)
 - feat: chat-tråd fuldskærm på mobil, compose pinned m. safe-area, 44px tap-targets
 - viewport interactive-widget; prefers-reduced-motion (WCAG 2.3.3)
