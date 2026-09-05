@@ -42,11 +42,15 @@ class MissionProposalStore {
 
   _save() {
     if (!this.file) return;
+    fs.mkdirSync(path.dirname(this.file), { recursive: true });
     const tmp = this.file + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify({
-      proposals: [...this.proposals.values()],
-    }), { mode: 0o600 });
-    if (process.platform !== 'win32') { try { fs.chmodSync(tmp, 0o600); } catch { } }
+    const fd = fs.openSync(tmp, 'w', 0o600);
+    try {
+      fs.writeFileSync(fd, JSON.stringify({ proposals: [...this.proposals.values()] }));
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
     fs.renameSync(tmp, this.file);
   }
 
