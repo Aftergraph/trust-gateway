@@ -6,10 +6,10 @@ Ship P2 multi-agent delegation-chain slices: store (PR #5) and mount (PR #6). Fo
 
 ## Current State
 
-- TG main: `e505e78` (delegation-chain store + mount + rooms panel + gateway scope + optional restart durability)
+- TG main: `eae4271` (delegation-chain store + mount + rooms panel + gateway scope + optional restart durability + tenant-safe path derivation)
 - AIE main: `02b8389` (TG→AIE revalidation bridge)
 - P0+P1+P2 core complete (workflows, triggers, evals, knowledge, semantic search, developer platform, TG→AIE revalidation, delegation-chain store + mount + panel)
-- Remaining P2: automatic tenant-scoped graph file derivation, deeper tenant claim enforcement, broader multi-tenant depth
+- Remaining P2: request-time tenant resolution for shared gateways, deeper tenant claim enforcement, broader multi-tenant depth
 
 ## Files Changed
 
@@ -58,13 +58,14 @@ None in this slice. Pre-existing failures (approvals-db 5 tests, file-mode 0600,
 
 ## Next Recommended Slice
 
-**Automatic tenant-scoped graph persistence** — `DurableDelegationChain` now supports atomic fail-closed persistence through `Gateway({ delegationChainFile })`. The next slice should derive tenant-safe file paths from the existing tenant-scope contract rather than accepting arbitrary paths in production.
+**Request-time tenant binding** — `delegationChainFile()` now derives a tenant-safe durable path through `TenantStore.dataRoot()` and `Gateway({ delegationChainTenantId })` can use it. The remaining integration is binding the authenticated request tenant to the correct gateway/chain without allowing caller-selected tenant ids.
 
 ## Exact Prompt for Next Agent
 
 ```
-Continue P2 multi-tenant depth. Derive delegationChainFile from the existing
-tenant-scope/dataRoot contract, enforce containment, and test cross-tenant file
-isolation plus corrupt-state fail-closed behavior. Use TDD.
-Branch: feat/delegation-chain-tenant-durable-path
+Continue P2 multi-tenant depth. Bind the authenticated tenant resolver to the
+correct durable DelegationChain backend for shared gateway requests. Reject missing
+or unknown tenant scope fail-closed, and test cross-tenant GET /v2/rooms/:id/chain.
+Use TDD.
+Branch: feat/delegation-chain-request-tenant
 ```
