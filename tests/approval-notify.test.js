@@ -10,6 +10,8 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
+process.env.TG_NOTIFY_CHAT_ID = '12345';
+process.env.TG_TELEGRAM_TOKEN = 'test-token';
 process.env.TG_DB_FILE = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'tg-d2-')), 'gateway.db');
 process.env.TG_ROOMS_FILE = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'tg-d2-rooms-')), 'rooms.json');
 process.env.TG_AIE_FAIL_OPEN = 'true';
