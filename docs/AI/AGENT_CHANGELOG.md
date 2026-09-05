@@ -1,3 +1,8 @@
+## 2026-09-05 — D3: command palette + tema-toggle
+- feat: cmd+K palette (filter/keyboard-navigation) + dark/light m. localStorage
+- Panel-navigation + tema registreret som kommandoer
+- palette 4/4 tests
+
 ## 2026-09-05 — B2: voice i rooms (BØLGE B KOMPLET)
 - feat: push-to-talk mic (Web Speech, da-DK) + TTS-knap på assistant-rækker
 - Governance bevaret: transskriptioner gennem governed ask; audit uden tekst
