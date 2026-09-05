@@ -544,3 +544,13 @@ h4 { margin: var(--tg-space-2) 0 var(--tg-space-1); color: var(--tg-text-muted, 
     scroll-behavior: auto !important;
   }
 }
+
+/* F1: mission-detail drawer */
+.mission-detail-drawer { border: 1px solid #3a3a5a; border-left: 3px solid #7c5cff; border-radius: 6px; padding: 10px 12px; margin: 4px 0 8px; background: #191924; }
+.mission-detail-title { margin: 0 0 6px; font-size: 14px; }
+.mission-detail-state, .mission-detail-id { font-size: 12px; color: #9a9ab0; margin-bottom: 3px; }
+.mission-detail-criteria { margin: 6px 0; padding-left: 18px; font-size: 12px; }
+.mission-detail-exec { margin: 8px 0; font-size: 12px; }
+.mission-detail-evidence { margin-top: 4px; font-size: 11px; }
+.mission-evidence-item { font-family: monospace; font-size: 10px; color: #b8860b; padding: 1px 0; word-break: break-all; }
+.mission-detail-close { float: right; font-size: 11px; cursor: pointer; }

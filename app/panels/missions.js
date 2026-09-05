@@ -67,8 +67,75 @@
       actions.append(approveBtn, rejectBtn);
     }
     if (p.mission_id && typeof leaseBtn !== 'undefined') actions.append(leaseBtn);
+    // F1: detail-knap — aebner mission-detail drawer (WORKS + evidence + leases)
+    const detailBtn = el('button', 'btn mission-detail', 'detail');
+    detailBtn.title = 'vis mission-detaljer';
+    detailBtn.addEventListener('click', () => showMissionDetail(p, host, reload));
+    actions.append(detailBtn);
     row.append(actions);
     return row;
+  }
+
+  // F1: mission-detail drawer — WORKS-execution + evidence + leases i ét view.
+  // Fail-closed: WORKS/evidence utilgaengelig vises som 'ikke tilgaengelig' —
+  // aldrig syntetiske data. XSS-loven: textContent-only.
+  function showMissionDetail(p, host, reload) {
+    // luk eksisterende drawer
+    const old = host.querySelector ? null : null;
+    for (const c of (host.children || [])) {
+      if (String(c.className || '').includes('mission-detail-drawer')) { c.textContent = ''; c._removed = true; }
+    }
+    // fjern markerede drawers
+    if (host.children) host.children = host.children.filter ? host.children.filter((c) => !c._removed) : host.children;
+
+    const drawer = el('div', 'mission-detail-drawer');
+    drawer.append(el('h3', 'mission-detail-title', 'Mission: ' + (p.objective || p.id)));
+    drawer.append(el('div', 'mission-detail-state', 'status: ' + (p.state || 'draft')));
+    drawer.append(el('div', 'mission-detail-id', 'proposal: ' + (p.id || '') + (p.mission_id ? ' | mission: ' + p.mission_id : '')));
+
+    // success criteria
+    if (Array.isArray(p.success_criteria) && p.success_criteria.length) {
+      const ul = el('ul', 'mission-detail-criteria');
+      for (const c of p.success_criteria) ul.append(el('li', null, String(c)));
+      drawer.append(ul);
+    }
+
+    const closeBtn = el('button', 'btn mission-detail-close', 'luk');
+    closeBtn.addEventListener('click', () => {
+      drawer.textContent = '';
+      if (host.children && host.children.filter) host.children = host.children.filter((c) => c !== drawer);
+    });
+    drawer.append(closeBtn);
+
+    // WORKS-execution + evidence (kun hvis correlation findes)
+    if (p.mission_id) {
+      const execBox = el('div', 'mission-detail-exec');
+      execBox.append(el('div', 'muted', 'henter WORKS-execution…'));
+      drawer.append(execBox);
+      api('/v2/executions/' + encodeURIComponent(p.mission_id))
+        .then((out) => {
+          execBox.textContent = '';
+          const w = (out && out.work) || out || {};
+          execBox.append(el('div', 'mission-exec-state', 'WORKS: ' + (w.state || w.status || 'ukendt')));
+          const evs = Array.isArray(w.evidence) ? w.evidence : [];
+          if (evs.length) {
+            const evList = el('div', 'mission-detail-evidence');
+            evList.append(el('b', null, 'evidence:'));
+            for (const ev of evs) {
+              evList.append(el('div', 'mission-evidence-item', ev.id || ev.hash || JSON.stringify(ev).slice(0, 60)));
+            }
+            execBox.append(evList);
+          } else {
+            execBox.append(el('div', 'muted', 'ingen evidence endnu'));
+          }
+        })
+        .catch(() => {
+          execBox.textContent = '';
+          execBox.append(el('div', 'muted', 'WORKS utilgaengelig'));
+        });
+    }
+
+    host.append(drawer);
   }
 
   function render(hostEl) {
