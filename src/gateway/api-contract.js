@@ -42,7 +42,7 @@ function regexToTemplate(re) {
   return '/' + src.replace(/^\/+/, '');
 }
 
-function buildContract(mounts, { version = '0.0.0', generateAt = null } = {}) {
+function buildContract(mounts, { version = '0.0.0', generateAt = null, fnRoutes = null } = {}) {
   const paths = {};
   for (const m of mounts) {
     const methods = (m.method === '*' || m.method === undefined)
@@ -69,6 +69,22 @@ function buildContract(mounts, { version = '0.0.0', generateAt = null } = {}) {
           '4XX': { description: 'fail-closed error surface' },
         },
         ...(m.auth === 'bearer' ? { security: [{ bearerAuth: [] }] } : {}),
+      };
+    }
+  }
+  // Function-style mount routes (gw.router.get/post/...)
+  if (Array.isArray(fnRoutes)) {
+    for (const r of fnRoutes) {
+      const method = String(r.method !== '*' ? r.method : 'get').toLowerCase();
+      if (!paths[r.path]) paths[r.path] = {};
+      if (paths[r.path][method]) continue;
+      paths[r.path][method] = {
+        summary: `fn-route: ${method.toUpperCase()} ${r.path}`,
+        operationId: `fn_${r.path.replace(/[^a-zA-Z0-9]/g, '_')}_${method}`,
+        'x-auth': 'bearer',
+        'x-mount': 'fn-route',
+        responses: { '200': { description: 'success' }, '4XX': { description: 'fail-closed error surface' } },
+        security: [{ bearerAuth: [] }],
       };
     }
   }

@@ -12,7 +12,8 @@ module.exports = {
   auth: 'none', // contract + SDK surface are public developer docs (no secrets in them)
   handle: async (gw, req, res, ctx) => {
     const mounts = (gw.mounts || []).map((m) => ({ name: m.name, method: m.method, path: m.path, auth: m.auth }));
-    const contract = buildContract(mounts, { version: process.env.TG_API_VERSION || '0.4.0' });
+    const fnRoutes = (gw._fnRoutes || []).map((r) => ({ method: r.method, path: typeof r.path === 'string' ? r.path : '(regex)', handler: null }));
+    const contract = buildContract(mounts, { version: process.env.TG_API_VERSION || '0.4.0', fnRoutes });
     if (ctx.url.pathname.endsWith('/sdk')) {
       return send(res, 200, {
         contract_version: contract.info.version,

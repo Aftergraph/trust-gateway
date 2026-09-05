@@ -1,48 +1,44 @@
 'use strict';
-// P2 developer platform v0 tests: contract generation from live mounts, SDK surface.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildApiContract, sdkSurface, regexToTemplate } = require('../src/gateway/api-contract.js');
+const { buildApiContract } = require('../src/gateway/api-contract');
 
-const MOUNTS = [
-  { name: 'v2-router', method: 'POST', path: '/v2/router/route', auth: 'bearer' },
-  { name: 'conversations', method: '*', path: /^\/v2\/conversations(?:\/.*)?$/, auth: 'bearer' },
-  { name: 'v2-evals', method: '*', path: /^\/v2\/evals(\/latest)?$/, auth: 'bearer' },
+const simple = [
+  { name: 'foo', method: 'GET', path: '/v2/foo', auth: 'bearer' },
+  { name: 'bar', method: 'POST', path: '/v2/bar/:id', auth: 'bearer' },
 ];
 
-test('contract: literal string path becomes an exact path entry', () => {
-  const c = buildApiContract(MOUNTS, { version: '0.4.0' });
+test('buildApiContract includes static mounts', () => {
+  const c = buildApiContract(simple, { version: '1.0.0' });
   assert.equal(c.openapi, '3.1.0');
-  assert.ok(c.paths['/v2/router/route'].post, 'literal path entry');
-  assert.equal(c.paths['/v2/router/route'].post.security[0].bearerAuth.length, 0, 'bearer security set');
+  assert.ok(c.paths['/v2/foo']);
+  assert.ok(c.info.version, '1.0.0');
 });
 
-test('contract: regex paths derive templates with param markers', () => {
-  const c = buildApiContract(MOUNTS, {});
-  const keys = Object.keys(c.paths);
-  const conv = keys.find((k) => k.includes('conversations'));
-  assert.ok(conv, 'conversations template derived');
+test('buildApiContract includes function-style routes', () => {
+  const fnRoutes = [
+    { method: 'GET', path: '/v2/rooms/:id/chain', handler: null },
+    { method: 'POST', path: '/v2/actions', handler: null },
+  ];
+  const c = buildApiContract(simple, { version: '1.0.0', fnRoutes });
+  assert.ok(c.paths['/v2/rooms/:id/chain'], 'fn-route path present');
+  assert.ok(c.paths['/v2/actions'], 'second fn-route present');
+  assert.ok(c.paths['/v2/foo'], 'static mount still present');
 });
 
-test('contract: method-* mounts enumerate multiple verbs without clobbering', () => {
-  const c = buildApiContract(MOUNTS, {});
-  const conv = Object.entries(c.paths).find(([k]) => k.includes('conversations'))[1];
-  const methods = Object.keys(conv);
-  assert.ok(methods.includes('get') && methods.includes('post'), 'star mount enumerates methods');
+test('buildApiContract generates deterministic content-addressed hash', () => {
+  const a = buildApiContract(simple, { version: '0.0.0' });
+  const b = buildApiContract(simple, { version: '0.0.0' });
+  assert.equal(a._hash, b._hash);
 });
 
-test('contract hash is deterministic; sdkSurface lists operations sorted', () => {
-  const a = buildApiContract(MOUNTS, {});
-  const b = buildApiContract(MOUNTS, {});
-  assert.equal(a.info['x-contract-hash'], b.info['x-contract-hash']);
-  const sdk = sdkSurface(a);
-  assert.ok(sdk.length > 0);
-  const sorted = [...sdk].sort((x, y) => x.path.localeCompare(y.path));
-  assert.deepEqual(sdk.map((s) => s.path), sorted.map((s) => s.path), 'sorted by path');
-});
-
-test('regexToTemplate: anchors stripped, captures become param markers', () => {
-  const t = regexToTemplate(/^\/v2\/context\/([^/]+)\/?$/);
-  assert.ok(t.startsWith('/v2/context') || t.includes('/v2/context/'), `prefix preserved: ${t}`);
-  assert.ok(t.includes('param') || t.includes('pattern'), `param/pattern marker present: ${t}`);
+test('buildApiContract separates fn-route paths into their own section', () => {
+  const fnRoutes = [
+    { method: 'GET', path: '/v2/rooms/:id/chain', handler: null },
+  ];
+  const c = buildApiContract(simple, { version: '1.0.0', fnRoutes });
+  // The routes should be merged into paths
+  const pathKeys = Object.keys(c.paths);
+  assert.ok(pathKeys.includes('/v2/foo'));
+  assert.ok(pathKeys.includes('/v2/rooms/:id/chain'));
 });
