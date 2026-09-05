@@ -28,6 +28,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 process.env.TG_DB_FILE = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'tg-rooms-ask-')), 'gateway.db');
+process.env.TG_ROOMS_FILE = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'tg-rooms-file-')), 'rooms.json');
 process.env.TG_AIE_FAIL_OPEN = 'true';
 
 const { Gateway } = require('../src/gateway/server');

@@ -511,3 +511,9 @@ h4 { margin: var(--tg-space-2) 0 var(--tg-space-1); color: var(--tg-text-muted, 
 .mission-kind { color: #b8860b; min-width: 90px; }
 .mission-summary { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mission-ts { color: #666; }
+
+/* C2: delegation-badge i handoff-rækker */
+.roommsg-delegation { display: flex; gap: 6px; align-items: center; margin-top: 2px; font-size: 11px; }
+.roommsg-delegation .deleg-label { color: #7c5cff; font-weight: 600; text-transform: uppercase; font-size: 10px; }
+.roommsg-delegation .deleg-arrow { color: #888; }
+.roommsg-delegation .handoff-target { color: #d6d6d6; font-family: monospace; }

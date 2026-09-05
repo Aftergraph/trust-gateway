@@ -90,6 +90,18 @@
     }
     }
     row.append(bodyEl);
+    if (kind === 'handoff') {
+      // C2: delegation-badge — from→target inline (fuldt træ forbliver på Delegation-tabten)
+      const deleg = el('div', 'roommsg-delegation');
+      deleg.append(el('span', 'deleg-label', 'delegation'));
+      deleg.append(el('span', 'deleg-from', m.from || '?'));
+      deleg.append(el('span', 'deleg-arrow', '→'));
+      deleg.append(el('span', 'handoff-target', m.target || '?'));
+      if (Array.isArray(m.chain) && m.chain.length > 1) {
+        deleg.append(el('span', 'deleg-depth', `dybde ${m.chain.length}`));
+      }
+      row.append(deleg);
+    }
     if (kind === 'assistant' && m.proposal && m.proposal.tool) {
       // governed proposal card: vises kun som METADATA (tool + decision) — aldrig args
       const card = el('div', 'roommsg-proposal');
