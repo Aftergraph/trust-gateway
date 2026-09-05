@@ -60,6 +60,43 @@ None in this slice. Pre-existing failures (approvals-db 5 tests, file-mode 0600,
 
 **Mission schema alignment (AIE ↔ ISR)** — the reconciliation matrix's #1 migration item. AIE MissionContract vs ISR lifecycle schema. Build a shared schema contract (JSON Schema) + conformance tests on both sides.
 
+_Progress: contract 1.0.json exists; TG-side conformance tests done (H7, 13/13); AIE-side dataclass conformance tests exist (`tests/test_mission_state_contract.py`). **Open gap:** AIE's own conformance fixture uses `"state": "active"` which is not in the contract enum — runtime state validation at AIE's API boundary is the next concrete alignment item (H9 candidate)._
+
+## H7 — Mission-state conformance (a3a7234, 13/13 tests)
+Two-layer conformance test:
+1) **MISSION LIFECYCLE** (after-graph-governance 1.0.json): 12 states, FSM-consistency,
+   terminal states without outgoing transitions, invariants (evidence-gating,
+   revalidation, HMAC persistence), RUNNING→REVOKED, AUTHORIZED ∉ VERIFIED.
+2) **PROPOSAL LIFECYCLE** (MissionProposalStore): draft→submitted→approved|rejected|expired,
+   all jumps/duplicates fail-closed, approved ≠ AUTHORIZED (two distinct layers),
+   W0.3 mission correlation.
+
+**Critical cross-repo finding:** AIE's own conformance fixture (`conformance.py:50`)
+uses `"state": "active"` which is NOT in the contract's 12-state enum. This is the
+documented mission-schema alignment gap — AIE Mission.state is a free string with
+no runtime validation against the canonical FSM. Blocker for reliable cross-repo
+state guarantees; requires alignment in AIE (add state enum enforcement or at least
+validate against 1.0.json at API boundary).
+
+## H8 — Expired proposal UI state (7db8fea, 3/3 tests)
+- 3 E2E frontend tests: expired shown as state badge, no approve/reject
+  (fail-closed: backend rejects), drawer shows 'status: expired' (backend truth).
+- CSS: mission-state badges with visible color per state (draft/submitted/
+  approved/rejected/expired) — UI matches backend truth.
+- Verified: missions.js already handled expired correctly (only 'submitted'
+  gate for operator actions); tests pin the behavior for regression.
+
+## H-wave: H1–H8 COMPLETE
+
+## Status
+- Regression: 50/50 pass, 0 fail (missions+authority+executions+conformance+expired)
+- TG HEAD: 7db8fea, main, pushed, working tree clean.
+- TG full suite: still times out >420s (run sharded).
+- The single skip remains: works-live.e2e.test.js (Go not installed).
+- AIE conformance fixture mismatch: state "active" not in 1.0.json enum
+  (open cross-repo alignment item).
+- Next: roadmap v2q candidates or the identified cross-repo state validation gap.
+
 ## Exact Prompt for Next Agent
 
 ```
