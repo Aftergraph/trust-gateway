@@ -68,6 +68,7 @@ class Gateway extends EventEmitter {
     botsDir = null,       // wave C: jails root, available to mount-declared executors
     delegationChainFile = null, // optional durable A2A delegation graph path
     delegationChainTenantId = null, // derive durable graph path from tenant scope
+    fnMounts = null,      // array of function-style mount modules to wire (testing)
     telemetryFile,        // G12: telemetry ring file (default data/telemetry.json; null = memory-only)
   } = {}) {
     super();
@@ -94,6 +95,7 @@ class Gateway extends EventEmitter {
     // Function-style mounts (120+): wire via gw.router facade. Each mount is
     // called once with (gw) and registers routes on this._fnRoutes.
     this._fnRoutes = [];
+    this._fnMountQueue = [];
     if (mountFiles) {
       const skippedFn = [];
       for (const f of fs.readdirSync(path.join(__dirname, 'mounts')).sort()) {
@@ -103,27 +105,35 @@ class Gateway extends EventEmitter {
           if (typeof m === 'function') skippedFn.push(f);
         } catch { /* loader already validated the object-style ones */ }
       }
-      if (skippedFn.length > 0) {
-        this.router = this._makeRouter();
-        // Point route registration at the live route list
-        for (const verb of ['get', 'post', 'put', 'delete', 'patch', 'all']) {
-          const method = verb === 'delete' ? 'DELETE' : verb === 'all' ? '*' : verb.toUpperCase();
-          this.router[verb] = (p, handler) => { this._fnRoutes.push({ method, path: p, handler }); };
-        }
+      const skipped = skippedFn.length > 0 || Array.isArray(fnMounts);
+      if (skipped) {
         for (const f of skippedFn) {
           try {
             const m = require(path.join(__dirname, 'mounts', f));
-            m(this);
-          } catch (e) {
-            console.error(`[mounts] function-style mount ${f} failed to wire: ${e.message}`);
-          }
+            this._fnMountQueue.push(m);
+          } catch { /* loader already validated the object-style ones */ }
         }
       }
     }
+    if (Array.isArray(fnMounts)) this._fnMountQueue.push(...fnMounts);
     this.staticDir = staticDir ?? null;
     this.botsDir = botsDir;
     this.delegationChainFile = delegationChainFile;
     this.delegationChainTenantId = delegationChainTenantId;
+    // Always provide a router so fn-mounts can register routes at any time
+    // (mountFiles:false / no fn mounts should not leave router undefined).
+    this.router = this._makeRouter();
+    this._fnMountQueue = this._fnMountQueue || [];
+    for (const verb of ['get', 'post', 'put', 'delete', 'patch', 'all']) {
+      const method = verb === 'delete' ? 'DELETE' : verb === 'all' ? '*' : verb.toUpperCase();
+      this.router[verb] = (p, handler) => { this._fnRoutes.push({ method, path: p, handler }); };
+    }
+    // Wire queued function-style mounts after the router is live so every
+    // registration lands in this._fnRoutes (single router, no duplicates).
+    for (const m of this._fnMountQueue) {
+      try { m(this); } catch (e) { console.error(`[fnMounts] wiring failed: ${e.message}`); }
+    }
+    this._fnMountQueue = [];
     this._executors = []; // v2 wave B: {re, fn(bot,tool,args)} for synthetic tools
     // Token-bucket per-bot rate limiter (slice: perimeter-guards).
     const envLimit = Number(process.env.TG_RATE_LIMIT);
