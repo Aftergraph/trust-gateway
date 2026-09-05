@@ -6,10 +6,10 @@ Ship P2 multi-agent delegation-chain slices: store (PR #5) and mount (PR #6). Fo
 
 ## Current State
 
-- TG main: `5962f8b` (delegation-chain store + mount + rooms panel + gateway scope + durability + tenant-safe paths + message-id correction)
+- TG main: `f8d6470` (delegation-chain store + mount + rooms panel + gateway scope + durability + tenant-safe paths + message-id correction + request-time tenant binding)
 - AIE main: `02b8389` (TG→AIE revalidation bridge)
 - P0+P1+P2 core complete (workflows, triggers, evals, knowledge, semantic search, developer platform, TG→AIE revalidation, delegation-chain store + mount + panel)
-- Remaining P2: request-time tenant resolution for shared gateways, Windows ACL hardening, deeper tenant claim enforcement
+- Remaining P2: Windows ACL hardening, deeper tenant claim enforcement, structured graph verification errors
 
 ## Files Changed
 
@@ -58,15 +58,14 @@ None in this slice. Pre-existing failures (approvals-db 5 tests, file-mode 0600,
 
 ## Next Recommended Slice
 
-**Tenant-bound graph access + Windows ACL hardening** — tenant-safe path derivation and actual message-id binding are now covered. Remaining risks are binding authenticated request tenants in shared gateways and replacing the best-effort POSIX mode check with explicit Windows ACL enforcement/documentation.
+**Windows ACL hardening + graph verification diagnostics** — shared Gateway requests now resolve tenant once and select tenant-specific graph backends; cross-tenant reads are tested closed. Remaining risks are Windows ACL enforcement/documentation and structured cycle-vs-missing-edge diagnostics.
 
 ## Exact Prompt for Next Agent
 
 ```
-Continue P2 trust-boundary hardening. Bind authenticated tenant resolution to the
-correct durable DelegationChain backend for shared gateway requests. Reject missing
-or unknown tenant scope fail-closed and test cross-tenant chain reads. Separately
-choose a verified Windows ACL strategy; do not claim mode 0600 alone on Windows.
-Use TDD.
-Branch: feat/delegation-chain-request-tenant
+Continue P2 trust-boundary hardening. Choose a verified Windows ACL strategy for
+DurableDelegationChain and document the security boundary; do not claim POSIX mode
+0600 alone on Windows. Then add structured verify diagnostics for cycle versus
+missing-edge corruption. Use TDD.
+Branch: feat/delegation-chain-windows-acl
 ```
