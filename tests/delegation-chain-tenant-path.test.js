@@ -63,3 +63,20 @@ test('gateway durable graph files remain isolated by tenant path', () => {
     gwB.server?.close();
   }
 });
+
+
+test('shared gateway resolves tenant-specific chains without cross-tenant reads', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tg-chain-shared-'));
+  process.env.TG_DATA_DIR = path.join(root, 'data');
+  const gateway = new Gateway({ mountFiles: false });
+  try {
+    const a = getChain(gateway, 'tenant-a');
+    const b = getChain(gateway, 'tenant-b');
+    a.record(null, 'a-only', { kind: 'goal', from: 'a' }, 'room-a');
+    assert.ok(a.chain('a-only'));
+    assert.equal(b.chain('a-only'), null);
+    assert.notEqual(a, b);
+  } finally {
+    gateway.server?.close();
+  }
+});
