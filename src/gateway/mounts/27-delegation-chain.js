@@ -20,9 +20,12 @@ function getChain(gw) {
   }
   let chain = chains.get(gw);
   if (!chain) {
-    chain = gw.delegationChainFile
-      ? new DurableDelegationChain({ file: gw.delegationChainFile })
-      : new DelegationChain();
+    let file = gw.delegationChainFile || null;
+    if (!file && gw.delegationChainTenantId) {
+      const { delegationChainFile } = require('../tenant-scope');
+      file = delegationChainFile(null, gw, gw.delegationChainTenantId);
+    }
+    chain = file ? new DurableDelegationChain({ file }) : new DelegationChain();
     chains.set(gw, chain);
   }
   return chain;
