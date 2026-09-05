@@ -110,5 +110,12 @@ TBD — read the uncommitted 26-roadmap or next handoff.
 - H1 proxy-verdicts (8ced48c): /v2/executions/:workId/evidence videresender WORKS evidence_verdicts + bundle_id
 - H2 drawer-verdicts (934877c): mission-detail viser [hash ok]/[TAMPERED]/[unsealed] fra WORKS G5 via H1
 - H3 panel-badges (0d9d509): proposal-row viser tampered/unsealed/ok count uden drawer
-- Regression: 44 tests, 43 pass, 1 skip, 0 fail
-- Næste: H4 Authority panel (AIE leases/revocations/delegation i TG SPA)
+- H4 authority-panel (636d69e): AIE leases/missions/admissions/outcomes/evidence synligt i TG SPA, dedup-guard
+- H5 authority-detail (a169945): click lease/mission → revocation-historik, delegation tree, budget
+- H6 authority-revoke (447776d + bf4a449): POST /v2/authority/leases/:id/revoke med:
+  - Backend: operator-check, reason-validation, AIE HTTP forwarding, read-back, 409 deduplikat
+  - Frontend: revoke-knap i lease-drawer (ACTIVE kun), prompt-reason, fail-closed fejlvisning
+  - Governance: hash-chain audit-seal (write-ahead, type: authority_lease_revoke)
+  - Tests: 9 E2E gateway tests + 7 frontend E2E med mock-DOM
+- Regression: 59/60 (1 ærlig skip: works-live E2E kræver Go toolchain)
+- Næste: H-bølgen er komplet. Næste roadmap-fase: cross-repo governance contracts eller chat-overgrowth-seam-closing
