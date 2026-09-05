@@ -347,3 +347,32 @@ TG_OPERATOR_NOTIFY). TRANSPARENCY: 252 rækker.
   restart-storm 5×, disk-full runbook)
 - SQLite integrity_check: ok — 2212 chain entries, 2.5MB
 - Suite: **1362/1362 grønne** (inkl. nye fn-route dispatch contract tests)
+
+## 13. fn-route shadowing-audit + rate-dashboard (2026-09-06)
+
+### fn-route shadowing-audit (live falsificering, baskets-metoden udbredt)
+Systematisk audit af alle 66 fn-routes: registreret path-template vs intern
+`req.url.match`-regex + param/static-kollisionsanalyse (første-match-vinder i
+registreringsrækkefølge).
+- **FUNDET: `GET /v2/federation/audit` shadowed** — registreret i BÅDE
+  mounts/120 (FS-K1, gate TG_SKILLS_FEDERATION, altid vinder) og mounts/153
+  (FS-Z2, gate TG_FED_AUDIT_DASH, aldrig nået). Live havde TG_FED_AUDIT_DASH=1
+  men IKKE TG_SKILLS_FEDERATION → korrekt handler var utilgængelig, request
+  fik 404 fra den forkerte handler.
+- Fix: 153's sti flyttet til `/v2/federation/audit/events` (unik);
+  TRANSPARENCY række 212 opdateret. PR #28 → merged 036c21f, main-CI success.
+- Ny regressions-test `tests/fn-route-no-shadow.test.js`: ingen to fn-routes
+  deler method+path; hver registreret route dispatcher til sin handler
+  (5 tests, kører med gateway-dispatch-contract).
+
+### Rate-dashboard (backend + konsol, fuldstack)
+- Backend: `rate-ledger.listCurrent(windowMs)` — nuværende-vindue buckets
+  sorteret efter count; ny operator-route `GET /v2/rate/buckets`
+  (auditeret `rate_buckets_read`; count only, ingen bucket-indhold —
+  anti-identitet). Mount 129, FS-M3.
+- Konsol: nyt panel "Rate" (`app/panels/rate.js`) — live buckets + route
+  limits via TG.api, 30s auto-refresh, textContent-only (XSS-politik).
+- Tests: `tests/rate-buckets-dash.test.js` (4: list/rank, 403 non-operator,
+  404 disabled, 400 invalid windowMs) + 2 listCurrent-unit-tests;
+  30/30 grønne sammen med nabo-suiter.
+- TRANSPARENCY: ny række 168 `rate_buckets_read`; `rate_bucket_reset` → 170.
