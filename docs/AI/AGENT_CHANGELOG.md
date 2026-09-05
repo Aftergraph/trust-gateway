@@ -1,3 +1,8 @@
+## 2026-09-05 — B3: knowledge-citations i rooms ask
+- feat: useKnowledge → search top-3 → [KB]-kontekst; citations i response+envelope; cite() registreret
+- FIX: 18-knowledge readJson ReferenceError (POST /v2/knowledge virkede aldrig)
+- b3 2/2; knowledge 6/6; ask 5/5
+
 ## 2026-09-05 — C4: session-branching (BØLGE C KOMPLET)
 - feat: POST /v2/chat/llm/branch — forkast fra index/'latest' til navngiven session
 - Operator-only; governance-neutral (samme propose-pipeline)
