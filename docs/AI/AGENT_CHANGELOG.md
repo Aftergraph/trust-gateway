@@ -1,3 +1,8 @@
+## 2026-09-05 — E3: missions-panel (chat-missioner synlige + godkendbare)
+- feat: /v2/proposals-liste m. status + submit/approve/reject (operator)
+- Wiret i CHAT-nav; mission-correlation vist
+- missions-panel 4/4; chat-scope 17/17
+
 ## 2026-09-05 — E1: mission.create tool (chat → MissionProposal, altid approval)
 - feat: dedikeret 'mission'-klasse i policy — needs_approval ALTID, capabilities kan ikke auto-godkende
 - End-to-end verificeret: proposal → submit → approve → WORKS-correlation
