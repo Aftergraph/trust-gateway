@@ -561,6 +561,14 @@ h4 { margin: var(--tg-space-2) 0 var(--tg-space-1); color: var(--tg-text-muted, 
 .chain-verify.ok { background: #14321f; color: #4ade80; }
 .chain-verify.broken { background: #3a1414; color: #ff6b6b; font-weight: 600; }
 
+/* H8: mission-state badge — synlig state-farve (UI matcher backend truth) */
+.mission-state { padding: 1px 8px; border-radius: 8px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
+.mission-state-draft { background: #222; color: #9a9ab0; }
+.mission-state-submitted { background: #1d2c4a; color: #7ab8ff; }
+.mission-state-approved { background: #14321f; color: #4ade80; }
+.mission-state-rejected { background: #3a1414; color: #ff6b6b; }
+.mission-state-expired { background: #3a2e14; color: #ffb84d; }
+
 /* F3: evidence-result-badges */
 .evidence-summary { font-size: 11px; color: #9a9ab0; margin-bottom: 4px; }
 .evidence-summary.has-fail { color: #ff6b6b; font-weight: 600; }
