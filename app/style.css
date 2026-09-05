@@ -573,3 +573,7 @@ h4 { margin: var(--tg-space-2) 0 var(--tg-space-1); color: var(--tg-text-muted, 
 .ev-badge-skip { background: #222; color: #888; }
 .mission-evidence-item .ev-id { font-family: monospace; color: #b8860b; word-break: break-all; }
 .mission-evidence-item .ev-ts { color: #666; margin-left: auto; }
+
+/* G4: evidence hash-status */
+.mission-evidence-item .ev-hash { font-family: monospace; font-size: 10px; color: #7c5cff; }
+.mission-evidence-item .ev-hash-unsealed { color: #888; }

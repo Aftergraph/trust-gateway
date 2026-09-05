@@ -152,6 +152,13 @@
               row.append(el('span', 'ev-type', ev.type || 'evidence'));
               row.append(el('span', 'ev-badge ev-badge-' + String(ev.result || 'skip'), String(ev.result || 'skip')));
               row.append(el('span', 'ev-id', ev.id || ''));
+              // G4: hash-status — fail-closed: TG påstår aldrig 'ok' på eget
+              // initiativ (verify bor i WORKS webui, G3). Kun tilstede/tom vises:
+              if (ev.hash && String(ev.hash).length >= 12) {
+                row.append(el('span', 'ev-hash', '[hash forseglet ' + String(ev.hash).slice(0, 12) + '…]'));
+              } else {
+                row.append(el('span', 'ev-hash ev-hash-unsealed', '[unsealed]'));
+              }
               if (ev.recorded_at) row.append(el('span', 'ev-ts', new Date(ev.recorded_at).toLocaleTimeString()));
               evList.append(row);
             }
