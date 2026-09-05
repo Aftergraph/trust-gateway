@@ -210,6 +210,20 @@ module.exports = function mount(gw) {
       leaseState = readBack.data.items.find((l) => l.id === leaseId) || null;
     }
 
+    // Governance: revocation er en sealed audit-begivenhed i hash-chain.
+    // Write-ahead: beslutningen seal'es før vi svarer.
+    if (typeof gw._audit === 'function') {
+      try {
+        gw._audit({
+          type: 'authority_lease_revoke',
+          lease_id: leaseId,
+          reason,
+          operator: req.bot ? req.bot.name : 'unknown',
+          lease_readback_revoked: leaseState ? leaseState.revoked === true : null,
+        });
+      } catch { /* audit-fejl må ikke dæmme op for selve revoke */ }
+    }
+
     res.statusCode = 200;
     res.end(JSON.stringify({
       ok: true,

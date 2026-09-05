@@ -259,3 +259,26 @@ test('H6: GET /v2/authority leases proxy virker fortsat (regression)', async () 
     delete process.env.AIE_HTTP_URL;
   }
 });
+
+test('H6: revoke auditers i hash-chain (governance-seal)', async () => {
+  const { mock, port: aiePort } = await startMock((_, res) => res.end(JSON.stringify({ ok: true })));
+  process.env.AIE_HTTP_URL = `http://127.0.0.1:${aiePort}`;
+
+  const gw = makeGateway();
+  const auditEvents = [];
+  gw.on('audit', (e) => auditEvents.push(e));
+  const { server, port } = await boot(gw);
+  try {
+    await req(port, 'POST', '/v2/authority/leases/lease_active_1/revoke', 'tok-op', { reason: 'audit-test' });
+    // Chain entries: { seq, ts, payload: { type, ... }, hash }
+    const revokeAudits = auditEvents.filter((e) => e.payload && e.payload.type === 'authority_lease_revoke');
+    assert.equal(revokeAudits.length, 1, 'revoke auditeret i chain');
+    assert.equal(revokeAudits[0].payload.lease_id, 'lease_active_1');
+    assert.equal(revokeAudits[0].payload.reason, 'audit-test');
+    assert.ok(revokeAudits[0].hash, 'sealed entry hash');
+  } finally {
+    await new Promise((r) => server.close(r));
+    await new Promise((r) => mock.close(r));
+    delete process.env.AIE_HTTP_URL;
+  }
+});
