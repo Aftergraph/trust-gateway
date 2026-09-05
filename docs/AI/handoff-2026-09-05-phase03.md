@@ -99,3 +99,9 @@ sections). Use TDD. Branch: feat/works-executions-panel-ui.
 TBD — read the uncommitted 26-roadmap or next handoff.
 
 ```
+
+
+## Chat-overgrowth — A1 landsat (65d6523)
+- POST /v2/rooms/:id/ask: governed LLM-svar som assistant-envelopes i rooms
+- Næste: A2 token-streaming (/v2/chat/llm/stream), derefter A3 markdown, A4 besked-handlinger
+- Roadmap: docs/AI/chat-overgrowth-roadmap.md (12 slices, 4 bølger)

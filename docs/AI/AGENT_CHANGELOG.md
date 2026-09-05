@@ -1,3 +1,12 @@
+## 2026-09-05 — chat A1: rooms ask (governed LLM i tråden)
+- feat: POST /v2/rooms/:id/ask — question + answer som A2A envelopes
+- assistant-kind (additiv): proposal-metadata (tool+decision, ingen args) + fallback-flag
+- Samme governed brain som /v2/chat/llm; room-namespaced sessions
+- Gateway: additiv 'mounts'-param til object-mounts i tests
+- UI: ask-knap + proposal-kort i tråden (textContent-only)
+- tests/rooms-ask.test.js 5/5; chat-scope 51/0/1 (win32 0600 skip, pre-existing)
+- commit 65d6523 (direkte main, sammenhængende med sessionens PR-mønster)
+
 # AGENT_CHANGELOG
 
 ## 2026-09-05 — delegation-chain store
