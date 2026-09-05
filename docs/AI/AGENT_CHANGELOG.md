@@ -1,3 +1,9 @@
+## 2026-09-05 — E4: AIE-lease-visning i missions-panel
+- feat: GET /v2/proposals/:id/leases — leases filtreret på mission_id (HTTP+subprocess)
+- Fail-closed: ingen syntetiske leases; 403 worker; 404 ukendt proposal
+- UI: leases-knap på approved proposals (operator)
+- mission-leases 3/3; missions-panel 4/4
+
 ## 2026-09-05 — E3: missions-panel (chat-missioner synlige + godkendbare)
 - feat: /v2/proposals-liste m. status + submit/approve/reject (operator)
 - Wiret i CHAT-nav; mission-correlation vist
