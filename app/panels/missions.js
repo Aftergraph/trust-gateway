@@ -137,10 +137,23 @@
           execBox.append(el('div', 'mission-exec-state', 'WORKS: ' + (w.state || w.status || 'ukendt')));
           const evs = Array.isArray(w.evidence) ? w.evidence : [];
           if (evs.length) {
+            // F3: result-badges per item + resumeret statuslinje.
+            // Fail-resultater ALDRIG skjult (samme lov som F2 broken-badge).
+            const pass = evs.filter((e) => e.result === 'pass').length;
+            const fail = evs.filter((e) => e.result === 'fail').length;
+            const warn = evs.filter((e) => e.result === 'warn').length;
+            const summary = el('div', 'evidence-summary',
+              pass + ' pass / ' + fail + ' fail' + (warn ? ' / ' + warn + ' warn' : '') + ' (' + evs.length + ' total)');
+            if (fail > 0) summary.classList && summary.classList.add('has-fail');
+            execBox.append(summary);
             const evList = el('div', 'mission-detail-evidence');
-            evList.append(el('b', null, 'evidence:'));
             for (const ev of evs) {
-              evList.append(el('div', 'mission-evidence-item', ev.id || ev.hash || JSON.stringify(ev).slice(0, 60)));
+              const row = el('div', 'mission-evidence-item ev-result ev-' + String(ev.result || 'skip'));
+              row.append(el('span', 'ev-type', ev.type || 'evidence'));
+              row.append(el('span', 'ev-badge ev-badge-' + String(ev.result || 'skip'), String(ev.result || 'skip')));
+              row.append(el('span', 'ev-id', ev.id || ''));
+              if (ev.recorded_at) row.append(el('span', 'ev-ts', new Date(ev.recorded_at).toLocaleTimeString()));
+              evList.append(row);
             }
             execBox.append(evList);
           } else {

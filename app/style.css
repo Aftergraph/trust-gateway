@@ -560,3 +560,16 @@ h4 { margin: var(--tg-space-2) 0 var(--tg-space-1); color: var(--tg-text-muted, 
 .chain-verify { padding: 2px 8px; border-radius: 8px; font-size: 11px; }
 .chain-verify.ok { background: #14321f; color: #4ade80; }
 .chain-verify.broken { background: #3a1414; color: #ff6b6b; font-weight: 600; }
+
+/* F3: evidence-result-badges */
+.evidence-summary { font-size: 11px; color: #9a9ab0; margin-bottom: 4px; }
+.evidence-summary.has-fail { color: #ff6b6b; font-weight: 600; }
+.mission-evidence-item.ev-result { display: flex; gap: 8px; align-items: center; font-size: 11px; padding: 2px 0; }
+.mission-evidence-item .ev-type { color: #9a9ab0; min-width: 90px; }
+.mission-evidence-item .ev-badge { padding: 1px 8px; border-radius: 8px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
+.ev-badge-pass { background: #14321f; color: #4ade80; }
+.ev-badge-fail { background: #3a1414; color: #ff6b6b; }
+.ev-badge-warn { background: #3a2e14; color: #ffb84d; }
+.ev-badge-skip { background: #222; color: #888; }
+.mission-evidence-item .ev-id { font-family: monospace; color: #b8860b; word-break: break-all; }
+.mission-evidence-item .ev-ts { color: #666; margin-left: auto; }
