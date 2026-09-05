@@ -103,5 +103,5 @@ TBD — read the uncommitted 26-roadmap or next handoff.
 
 ## Chat-overgrowth — A1 landsat (65d6523)
 - POST /v2/rooms/:id/ask: governed LLM-svar som assistant-envelopes i rooms
-- A2 token-streaming LANDET (aabac66). A3 markdown LANDET. BØLGE A KOMPLET (A1-A4). B1 fil-upload LANDET. B1 attach + C1 mission-thread LANDET. Næste: B2 voice, B3 knowledge-citations, C2 delegation-i-chat, C3 need-you/takeover-kort
+- A2 token-streaming LANDET (aabac66). A3 markdown LANDET. BØLGE A KOMPLET (A1-A4). B1 fil-upload LANDET. B1+C1+C2 LANDET. Næste: B2 voice, B3 knowledge-citations, C3 need-you/takeover-kort
 - Roadmap: docs/AI/chat-overgrowth-roadmap.md (12 slices, 4 bølger)

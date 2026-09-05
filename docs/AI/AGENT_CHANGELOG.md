@@ -1,3 +1,8 @@
+## 2026-09-05 — C2: delegation-badge i chat + test-isolation
+- feat: handoff-rækker viser from→target + dybde inline
+- FIX: 4 testfiler delte data/rooms.json (TG_ROOMS_FILE default) → flaky; nu isolerede tmp-filer
+- 4×20/20 grønne i træk
+
 ## 2026-09-05 — C1: live mission-thread (Mission-tab)
 - feat: GET /v2/rooms/:id/missiontimeline — room+workflow+works i én timeline
 - UI: Mission-tab (lazy); summaries metadata-only (secret-hygiene)
