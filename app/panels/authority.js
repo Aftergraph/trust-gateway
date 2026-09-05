@@ -76,7 +76,12 @@
       // H6: revoke-action for ACTIVE leases (operator handling direkte fra drawer).
       // Fail-closed: reason påkrævet; revoke-fejl vises ærligt inline; succes
       // genindlæser lease-listen så operatøren ser effekten med det samme.
-      if (item.revoked !== true && item.id) {
+      // Kun ACTIVE (ikke revoked, ikke expired) leases eksponerer revoke —
+      // UI-state skal matche backend truth (409 lease_expired/already_revoked).
+      const isExpired = item.expires_at
+        && !Number.isNaN(new Date(item.expires_at).getTime())
+        && new Date(item.expires_at).getTime() < Date.now();
+      if (item.revoked !== true && !isExpired && item.id) {
         const revokeBar = el('div', 'auth-revoke-bar');
         const status = el('span', 'muted', '');
         const revokeBtn = el('button', 'btn no auth-revoke-btn', 'revoke lease');

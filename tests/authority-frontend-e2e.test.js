@@ -94,6 +94,42 @@ function loadModule(dom, apiFn, promptFn) {
   return sandbox;
 }
 
+function mockApiWithExpired(urlPath, opts) {
+  if (urlPath === '/v2/authority') {
+    return Promise.resolve({ counts: { leases: 3, missions: 0, admissions: 0, outcomes: 0, evidence: 0 } });
+  }
+  if (urlPath === '/v2/authority/leases') {
+    return Promise.resolve({
+      items: [
+        { id: 'lease_active', revoked: false, depth: 0, budget_remaining: 80, budget_total: 100, expires_at: null },
+        { id: 'lease_expired', revoked: false, depth: 0, budget_remaining: 0, budget_total: 50,
+          expires_at: '2020-01-01T00:00:00Z' },
+      ],
+      count: 2,
+    });
+  }
+  if (opts && opts.method === 'POST' && /\/revoke$/.test(urlPath)) {
+    return Promise.resolve({ ok: true, lease_id: 'lease_active', revoked: true });
+  }
+  return Promise.resolve({ items: [], count: 0 });
+}
+
+function mockApiRevokeError(urlPath, opts) {
+  if (urlPath === '/v2/authority') {
+    return Promise.resolve({ counts: { leases: 1, missions: 0, admissions: 0, outcomes: 0, evidence: 0 } });
+  }
+  if (urlPath === '/v2/authority/leases') {
+    return Promise.resolve({
+      items: [{ id: 'lease_1', revoked: false, depth: 0, budget_remaining: 80, budget_total: 100, expires_at: null }],
+      count: 1,
+    });
+  }
+  if (opts && opts.method === 'POST' && /\/revoke$/.test(urlPath)) {
+    return Promise.resolve({ ok: false, error: 'already_revoked', lease_id: 'lease_1' });
+  }
+  return Promise.resolve({ items: [], count: 0 });
+}
+
 // --- Tests ---
 
 test('H4: modul registrerer sig i TG_PANELS med korrekt id', () => {
@@ -208,6 +244,63 @@ test('H6: revoke-med-tom-reason afslår (prompt cancel)', async () => {
   const cancelMsg = dom.allElements.find((e) =>
     typeof e.textContent === 'string' && e.textContent.includes('revoke cancelled'));
   assert.ok(cancelMsg, 'cancel melding vises');
+});
+
+test('H6: expired lease viser IKKE revoke-knap (UI matcher backend truth)', async () => {
+  apiCalls.length = 0;
+  const dom = createMockDOM();
+  const sb = loadModule(dom, mockApiWithExpired);
+  const host = dom.el('div', 'host');
+  sb.window.TG_PANELS[0].render(host);
+  await new Promise((r) => setTimeout(r, 30));
+
+  // Click på expired lease row (id er i første child span)
+  const rows = dom.allElements.filter((e) => e.className === 'auth-row');
+  const expiredRow = rows.find((r) =>
+    r.children.some((c) => c.className === 'auth-id mono' && c.textContent.includes('lease_expired')));
+  assert.ok(expiredRow, 'expired lease row findes');
+  expiredRow._listeners.click();
+
+  // Revoke-knap MÅ IKKE findes i drawer for expired lease (409 lease_expired backend)
+  const revokeBtn = dom.allElements.find((e) => e.className.includes('auth-revoke-btn'));
+  assert.equal(revokeBtn, undefined, 'ingen revoke-knap for expired lease');
+
+  // ACTIVE lease har stadig revoke-knap
+  const rows2 = dom.allElements.filter((e) => e.className === 'auth-row');
+  const activeRow = rows2.find((r) =>
+    r.children.some((c) => c.className === 'auth-id mono' && c.textContent.includes('lease_active')));
+  if (activeRow) {
+    activeRow._listeners.click();
+    const revokeBtn2 = dom.allElements.find((e) => e.className.includes('auth-revoke-btn'));
+    assert.ok(revokeBtn2, 'ACTIVE lease har revoke-knap');
+  }
+});
+
+test('H6: revoke API-fejl vises ærligt inline (ingen falsk success)', async () => {
+  apiCalls.length = 0;
+  const dom = createMockDOM();
+  const sb = loadModule(dom, mockApiRevokeError);
+  const host = dom.el('div', 'host');
+  sb.window.TG_PANELS[0].render(host);
+  await new Promise((r) => setTimeout(r, 30));
+
+  // Click ACTIVE lease → drawer → revoke
+  const rows = dom.allElements.filter((e) => e.className === 'auth-row');
+  const activeRow = rows.find((r) =>
+    r.children.some((c) => c.className === 'auth-id mono' && c.textContent.includes('lease_1')));
+  assert.ok(activeRow, 'ACTIVE lease row findes');
+  activeRow._listeners.click();
+
+  const revokeBtn = dom.allElements.find((e) => e.className.includes('auth-revoke-btn'));
+  assert.ok(revokeBtn, 'revoke-knap findes');
+  revokeBtn._listeners.click();
+  await new Promise((r) => setTimeout(r, 10));
+
+  // Ærlig fejl vises inline — "revoke fejl: already_revoked"
+  const errMsg = dom.allElements.find((e) =>
+    typeof e.textContent === 'string' && e.textContent.includes('revoke fejl'));
+  assert.ok(errMsg, 'fejl vises ærligt inline');
+  assert.ok(errMsg.textContent.includes('already_revoked'), 'fejl-koden fra backend vises');
 });
 
 test('XSS-loven: ingen innerHTML i authority.js', () => {
