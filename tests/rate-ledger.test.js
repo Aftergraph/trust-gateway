@@ -91,4 +91,33 @@ describe('FS-M3 rate-limit ledger', () => {
     assert.equal(r.allowed, true);
     assert.equal(r.count, 0);
   });
+
+  it('listCurrent returns only current-window buckets, ranked', () => {
+    const l = require('../src/gateway/rate-ledger');
+    const now = Date.now();
+    l.hit('ldA', 60000, 100, now);
+    l.hit('ldA', 60000, 100, now);
+    l.hit('ldB', 60000, 100, now);
+    // Old window bucket must NOT appear in the current-window view.
+    l.hit('ldOld', 60000, 100, now - 120000);
+    const rows = l.listCurrent(60000, now);
+    const keys = rows.map(r => r.key);
+    assert.ok(keys.includes('ldA'), 'current-window bucket listed');
+    assert.ok(keys.includes('ldB'), 'current-window bucket listed');
+    assert.ok(!keys.includes('ldOld'), 'stale-window bucket excluded');
+    const a = rows.find(r => r.key === 'ldA');
+    const b = rows.find(r => r.key === 'ldB');
+    assert.ok(rows.indexOf(a) < rows.indexOf(b), 'highest count ranked first');
+    assert.equal(a.count, 2);
+    assert.equal(a.windowMs, 60000);
+  });
+
+  it('listCurrent is inert when TG_RATE_LEDGER=0', () => {
+    process.env.TG_RATE_LEDGER = '0';
+    delete require.cache[require.resolve('../src/gateway/rate-ledger')];
+    const l = require('../src/gateway/rate-ledger');
+    assert.deepEqual(l.listCurrent(60000), []);
+    process.env.TG_RATE_LEDGER = '1';
+    delete require.cache[require.resolve('../src/gateway/rate-ledger')];
+  });
 });
