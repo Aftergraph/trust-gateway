@@ -79,7 +79,15 @@ module.exports = function mount(gw) {
       res.statusCode = result.status === 404 ? 404 : result.status;
       return res.end(JSON.stringify({ error: result.status === 404 ? 'work_not_found' : (result.reason || 'works_unreachable') }));
     }
+    // H1: videresend WORKS G5 verdicts (evidence_verdicts felt) til SPA/alarm-koden
+    const response = { evidence: result.data.evidence || [] };
+    if (result.data.evidence_verdicts) {
+      response.evidence_verdicts = result.data.evidence_verdicts;
+    }
+    if (result.data.bundle_id) {
+      response.bundle_id = result.data.bundle_id;
+    }
     res.statusCode = 200;
-    res.end(JSON.stringify({ evidence: result.data.evidence || [] }));
+    res.end(JSON.stringify(response));
   });
 };
