@@ -20,6 +20,7 @@ const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
+const os = require('node:os');
 
 const AIE_DIR = process.env.AIE_RUNTIME_PATH || path.join(__dirname, '..', '..', 'aie');
 const PY = process.env.AIE_PYTHON || 'python';
@@ -27,7 +28,9 @@ const ENV = { ...process.env, PYTHONPATH: path.join(AIE_DIR, 'src') };
 
 // ── Contract file (from GOV frozen schemas) ───────────────────────────
 
-const CONTRACT_DIR = path.join(__dirname, '..', '..', 'after-graph-governance', 'docs', 'contracts', 'frozen');
+const CONTRACT_DIR = process.env.GOVERNANCE_DIR
+  ? path.join(process.env.GOVERNANCE_DIR, 'docs', 'contracts', 'frozen')
+  : path.join(__dirname, '..', '..', 'after-graph-governance', 'docs', 'contracts', 'frozen');
 
 test('frozen schemas exist in after-graph-governance (cross-repo mirror)', () => {
   for (const f of ['kernel.budget.schema.json', 'identity.schema.json', 'policy.token.schema.json', 'evidence.schema.schema.json']) {
@@ -82,10 +85,10 @@ state.leases['lease1'] = AuthorityLease(
     budget_remaining=50.0)
 
 from aie_runtime.gateway.durable import SQLiteGatewayStore
-from aie_runtime.gateway.policy import PolicyAdapter
+from aie_runtime.gateway.policy import LocalPolicyAdapter
 db = ${JSON.stringify(path.join(os.tmpdir(), 'aie-gw-test.db'))}
 store = SQLiteGatewayStore(db)
-gateway = AIEGateway(state=state, store=store, policy=PolicyAdapter(allow_all=True))
+gateway = AIEGateway(state=state, store=store, policy=LocalPolicyAdapter(lambda _: True))
 
 server = GatewayHTTPServer(
     ('127.0.0.1', 0), _GatewayHandler,
