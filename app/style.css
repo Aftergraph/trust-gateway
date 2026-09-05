@@ -46,6 +46,32 @@
   --tg-border-destructive:   #6b2f2f;
   --tg-border-write-accent:  #6b5217;
   --tg-row-line:          #161b26;
+  /* ── Mission/Evidence/Rooms UI (H-series, 2026-09-05) ── */
+  --tg-accent:          #7c5cff;
+  --tg-gold:            #b8860b;
+  --tg-text-faint:      #888;
+  --tg-text-dim:        #666;
+  --tg-border-soft:     #222;
+  --tg-border-mid:      #333;
+  --tg-code-bg:         #16161e;
+  --tg-code-text:       #d6d6d6;
+  --tg-hover-strong:    #2a2a35;
+  --tg-chip-bg:         #1c1c26;
+  --tg-selected:        #2a2a3a;
+  --tg-drawer-bg:       #191924;
+  --tg-drawer-border:   #3a3a5a;
+  --tg-detail-muted:    #9a9ab0;
+  --tg-mission-ok-bg:   #14321f;
+  --tg-mission-ok:      #4ade80;
+  --tg-state-fail-bg:   #3a1414;
+  --tg-state-fail:      #ff6b6b;
+  --tg-state-sub-bg:    #1d2c4a;
+  --tg-state-sub:       #7ab8ff;
+  --tg-state-warn-bg:   #3a2e14;
+  --tg-state-warn:      #ffb84d;
+  --tg-on-accent:       #fff;
+  --tg-bg-light:        #f5f5f7;
+  --tg-bg-dark:         #14141c;
 
   /* ── Type scale (§13.3) ── */
   --tg-text-xs:  10px;
@@ -409,7 +435,7 @@ header {
 .tenant-select {
   background: var(--tg-surface, #111);
   color: var(--tg-fg, #eee);
-  border: 1px solid var(--tg-border, #333);
+  border: 1px solid var(--tg-border, var(--tg-border-mid));
   border-radius: 6px;
   padding: 4px 8px;
   font-size: 12px;
@@ -479,21 +505,21 @@ h4 { margin: var(--tg-space-2) 0 var(--tg-space-1); color: var(--tg-text-muted, 
 .auth-revoked { color: var(--tg-fail, #f85149); background: var(--tg-bg-elevated, #161b22); }
 
 /* A1: assistant kind + governed proposal cards (rooms) */
-.kind-assistant { border-left: 3px solid #7c5cff; }
+.kind-assistant { border-left: 3px solid var(--tg-accent); }
 .roommsg-proposal { display: flex; gap: 8px; align-items: center; font-size: 12px; margin-top: 2px; }
-.roommsg-proposal .proposal-label { color: #7c5cff; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+.roommsg-proposal .proposal-label { color: var(--tg-accent); font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
 .roommsg-proposal .proposal-tool { font-family: monospace; color: inherit; }
-.roommsg-proposal .proposal-decision { color: #b8860b; }
-.roommsg-proposal .proposal-fallback { color: #888; font-style: italic; }
+.roommsg-proposal .proposal-decision { color: var(--tg-gold); }
+.roommsg-proposal .proposal-fallback { color: var(--tg-text-faint); font-style: italic; }
 
 /* A2: streaming state */
 .room-send .muted { max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* A3: markdown kodeblokke */
 .md-codeblock { position: relative; margin: 4px 0; }
-.md-codeblock pre { background: #16161e; color: #d6d6d6; padding: 8px 10px; border-radius: 6px; overflow-x: auto; font-family: monospace; font-size: 12px; margin: 0; }
+.md-codeblock pre { background: var(--tg-code-bg); color: var(--tg-code-text); padding: 8px 10px; border-radius: 6px; overflow-x: auto; font-family: monospace; font-size: 12px; margin: 0; }
 .md-codeblock .md-copy { position: absolute; top: 4px; right: 4px; font-size: 10px; padding: 2px 6px; cursor: pointer; }
-.md-codeblock .md-copy:hover { background: #2a2a35; }
+.md-codeblock .md-copy:hover { background: var(--tg-hover-strong); }
 
 /* A4: besked-handlinger */
 .roommsg-actions { margin-left: 6px; display: inline-flex; gap: 4px; opacity: 0.6; }
@@ -501,38 +527,38 @@ h4 { margin: var(--tg-space-2) 0 var(--tg-space-1); color: var(--tg-text-muted, 
 .roommsg-actions button:hover { opacity: 1; }
 
 /* B1: attachment-kort */
-.roommsg-attachment { display: inline-flex; gap: 6px; align-items: center; background: #1c1c26; border: 1px solid #333; border-radius: 6px; padding: 3px 8px; }
-.roommsg-attachment .attachment-name { color: #7c5cff; text-decoration: none; }
-.roommsg-attachment .attachment-size { color: #888; font-size: 11px; }
+.roommsg-attachment { display: inline-flex; gap: 6px; align-items: center; background: var(--tg-chip-bg); border: 1px solid var(--tg-border-mid); border-radius: 6px; padding: 3px 8px; }
+.roommsg-attachment .attachment-name { color: var(--tg-accent); text-decoration: none; }
+.roommsg-attachment .attachment-size { color: var(--tg-text-faint); font-size: 11px; }
 
 /* C1: mission-thread */
-.mission-entry { display: flex; gap: 8px; padding: 4px 0; border-bottom: 1px solid #222; font-size: 12px; }
-.mission-src { color: #7c5cff; min-width: 70px; text-transform: uppercase; font-size: 10px; letter-spacing: 0.4px; }
-.mission-kind { color: #b8860b; min-width: 90px; }
+.mission-entry { display: flex; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--tg-border-soft); font-size: 12px; }
+.mission-src { color: var(--tg-accent); min-width: 70px; text-transform: uppercase; font-size: 10px; letter-spacing: 0.4px; }
+.mission-kind { color: var(--tg-gold); min-width: 90px; }
 .mission-summary { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mission-ts { color: #666; }
+.mission-ts { color: var(--tg-text-dim); }
 
 /* C2: delegation-badge i handoff-rækker */
 .roommsg-delegation { display: flex; gap: 6px; align-items: center; margin-top: 2px; font-size: 11px; }
-.roommsg-delegation .deleg-label { color: #7c5cff; font-weight: 600; text-transform: uppercase; font-size: 10px; }
-.roommsg-delegation .deleg-arrow { color: #888; }
-.roommsg-delegation .handoff-target { color: #d6d6d6; font-family: monospace; }
+.roommsg-delegation .deleg-label { color: var(--tg-accent); font-weight: 600; text-transform: uppercase; font-size: 10px; }
+.roommsg-delegation .deleg-arrow { color: var(--tg-text-faint); }
+.roommsg-delegation .handoff-target { color: var(--tg-code-text); font-family: monospace; }
 
 /* C4: branch-knap */
-.roommsg-actions .roommsg-branch { color: #7c5cff; }
+.roommsg-actions .roommsg-branch { color: var(--tg-accent); }
 
 /* D3: command palette + tema */
 .cmdk-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 9999; display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh; }
-.cmdk-box { width: min(560px, 92vw); background: var(--tg-bg, #14141c); border: 1px solid #333; border-radius: 10px; padding: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
-.cmdk-input { width: 100%; box-sizing: border-box; background: transparent; border: none; border-bottom: 1px solid #333; color: inherit; padding: 8px 4px; font-size: 14px; outline: none; }
+.cmdk-box { width: min(560px, 92vw); background: var(--tg-bg, #14141c); border: 1px solid var(--tg-border-mid); border-radius: 10px; padding: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+.cmdk-input { width: 100%; box-sizing: border-box; background: transparent; border: none; border-bottom: 1px solid var(--tg-border-mid); color: inherit; padding: 8px 4px; font-size: 14px; outline: none; }
 .cmdk-row { padding: 6px 10px; border-radius: 6px; cursor: pointer; }
-.cmdk-row.selected { background: #2a2a3a; }
-.cmdk-empty { padding: 8px; color: #888; font-size: 12px; }
-[data-theme="light"] { --tg-bg: #f5f5f7; color-scheme: light; }
-[data-theme="dark"] { --tg-bg: #14141c; color-scheme: dark; }
+.cmdk-row.selected { background: var(--tg-selected); }
+.cmdk-empty { padding: 8px; color: var(--tg-text-faint); font-size: 12px; }
+[data-theme="light"] { --tg-bg: var(--tg-bg-light); color-scheme: light; }
+[data-theme="dark"] { --tg-bg: var(--tg-bg-dark); color-scheme: dark; }
 
 /* D2: unread-badge */
-.room-head .room-unread { background: #ff6b6b; color: #fff; border-radius: 8px; padding: 0 6px; font-size: 10px; min-width: 14px; text-align: center; }
+.room-head .room-unread { background: var(--tg-state-fail); color: var(--tg-on-accent); border-radius: 8px; padding: 0 6px; font-size: 10px; min-width: 14px; text-align: center; }
 .room-head .room-unread:empty { display: none; }
 
 /* D1/P1: respektér reduceret bevægelse (WCAG 2.3.3) */
@@ -546,42 +572,42 @@ h4 { margin: var(--tg-space-2) 0 var(--tg-space-1); color: var(--tg-text-muted, 
 }
 
 /* F1: mission-detail drawer */
-.mission-detail-drawer { border: 1px solid #3a3a5a; border-left: 3px solid #7c5cff; border-radius: 6px; padding: 10px 12px; margin: 4px 0 8px; background: #191924; }
+.mission-detail-drawer { border: 1px solid var(--tg-drawer-border); border-left: 3px solid var(--tg-accent); border-radius: 6px; padding: 10px 12px; margin: 4px 0 8px; background: var(--tg-drawer-bg); }
 .mission-detail-title { margin: 0 0 6px; font-size: 14px; }
-.mission-detail-state, .mission-detail-id { font-size: 12px; color: #9a9ab0; margin-bottom: 3px; }
+.mission-detail-state, .mission-detail-id { font-size: 12px; color: var(--tg-detail-muted); margin-bottom: 3px; }
 .mission-detail-criteria { margin: 6px 0; padding-left: 18px; font-size: 12px; }
 .mission-detail-exec { margin: 8px 0; font-size: 12px; }
 .mission-detail-evidence { margin-top: 4px; font-size: 11px; }
-.mission-evidence-item { font-family: monospace; font-size: 10px; color: #b8860b; padding: 1px 0; word-break: break-all; }
+.mission-evidence-item { font-family: monospace; font-size: 10px; color: var(--tg-gold); padding: 1px 0; word-break: break-all; }
 .mission-detail-close { float: right; font-size: 11px; cursor: pointer; }
 
 /* F2: integrity-badge */
 .mission-detail-verify { margin: 8px 0; font-size: 12px; }
 .chain-verify { padding: 2px 8px; border-radius: 8px; font-size: 11px; }
-.chain-verify.ok { background: #14321f; color: #4ade80; }
-.chain-verify.broken { background: #3a1414; color: #ff6b6b; font-weight: 600; }
+.chain-verify.ok { background: var(--tg-mission-ok-bg); color: var(--tg-mission-ok); }
+.chain-verify.broken { background: var(--tg-state-fail-bg); color: var(--tg-state-fail); font-weight: 600; }
 
 /* H8: mission-state badge — synlig state-farve (UI matcher backend truth) */
 .mission-state { padding: 1px 8px; border-radius: 8px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
-.mission-state-draft { background: #222; color: #9a9ab0; }
-.mission-state-submitted { background: #1d2c4a; color: #7ab8ff; }
-.mission-state-approved { background: #14321f; color: #4ade80; }
-.mission-state-rejected { background: #3a1414; color: #ff6b6b; }
-.mission-state-expired { background: #3a2e14; color: #ffb84d; }
+.mission-state-draft { background: var(--tg-border-soft); color: var(--tg-detail-muted); }
+.mission-state-submitted { background: var(--tg-state-sub-bg); color: var(--tg-state-sub); }
+.mission-state-approved { background: var(--tg-mission-ok-bg); color: var(--tg-mission-ok); }
+.mission-state-rejected { background: var(--tg-state-fail-bg); color: var(--tg-state-fail); }
+.mission-state-expired { background: var(--tg-state-warn-bg); color: var(--tg-state-warn); }
 
 /* F3: evidence-result-badges */
-.evidence-summary { font-size: 11px; color: #9a9ab0; margin-bottom: 4px; }
-.evidence-summary.has-fail { color: #ff6b6b; font-weight: 600; }
+.evidence-summary { font-size: 11px; color: var(--tg-detail-muted); margin-bottom: 4px; }
+.evidence-summary.has-fail { color: var(--tg-state-fail); font-weight: 600; }
 .mission-evidence-item.ev-result { display: flex; gap: 8px; align-items: center; font-size: 11px; padding: 2px 0; }
-.mission-evidence-item .ev-type { color: #9a9ab0; min-width: 90px; }
+.mission-evidence-item .ev-type { color: var(--tg-detail-muted); min-width: 90px; }
 .mission-evidence-item .ev-badge { padding: 1px 8px; border-radius: 8px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
-.ev-badge-pass { background: #14321f; color: #4ade80; }
-.ev-badge-fail { background: #3a1414; color: #ff6b6b; }
-.ev-badge-warn { background: #3a2e14; color: #ffb84d; }
-.ev-badge-skip { background: #222; color: #888; }
-.mission-evidence-item .ev-id { font-family: monospace; color: #b8860b; word-break: break-all; }
-.mission-evidence-item .ev-ts { color: #666; margin-left: auto; }
+.ev-badge-pass { background: var(--tg-mission-ok-bg); color: var(--tg-mission-ok); }
+.ev-badge-fail { background: var(--tg-state-fail-bg); color: var(--tg-state-fail); }
+.ev-badge-warn { background: var(--tg-state-warn-bg); color: var(--tg-state-warn); }
+.ev-badge-skip { background: var(--tg-border-soft); color: var(--tg-text-faint); }
+.mission-evidence-item .ev-id { font-family: monospace; color: var(--tg-gold); word-break: break-all; }
+.mission-evidence-item .ev-ts { color: var(--tg-text-dim); margin-left: auto; }
 
 /* G4: evidence hash-status */
-.mission-evidence-item .ev-hash { font-family: monospace; font-size: 10px; color: #7c5cff; }
-.mission-evidence-item .ev-hash-unsealed { color: #888; }
+.mission-evidence-item .ev-hash { font-family: monospace; font-size: 10px; color: var(--tg-accent); }
+.mission-evidence-item .ev-hash-unsealed { color: var(--tg-text-faint); }

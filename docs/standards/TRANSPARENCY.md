@@ -865,3 +865,17 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 263 | `model_route` | mounts/59-router.js (HC4/router: {capability, model, provider} — routing decision) |
 | 264 | `needyou_created` | mounts/08-need-you.js (W0.5: {id, tenantId, type, subject} — new NeedsYouItem created) |
 | 265 | `needyou_resolved` | mounts/08-need-you.js (W0.5: {id, resolvedBy} — NeedsYouItem resolved) |
+| 266 | `approval_notify_sent` | approval-notify.js (W6: approval notification dispatched) |
+| 267 | `approval_notify_failed` | approval-notify.js (W6: approval notification delivery failed) |
+| 268 | `secret_vault_status` | mounts/120-secrets-status.js (SecretsVault: enabled/disabled + master-key rotation timestamp) |
+| 269 | `authority_lease_revoke` | mounts/132-authority-proxy.js (authority: lease revoked) |
+| 270 | `room_ask` | mounts/146-rooms-ask.js (rooms: ask submitted) |
+| 271 | `chat_llm_stream` | mounts/147-chat-llm-stream.js (chat: LLM stream) |
+| 272 | `room_attach` | mounts/148-rooms-attach.js (rooms: attachment) |
+| 273 | `mission_timeline` | mounts/149-mission-timeline.js (mission: timeline event) |
+| 274 | `approval` | mounts/150-rooms-hil.js (rooms HIL: approval) |
+| 275 | `needyou` | mounts/150-rooms-hil.js (rooms HIL: needyou) |
+| 276 | `takeover` | mounts/150-rooms-hil.js (rooms HIL: takeover) |
+| 277 | `rooms_hil` | mounts/150-rooms-hil.js (rooms HIL: hil event) |
+| 278 | `chat_branch` | mounts/151-chat-llm-branch.js (chat: branch) |
+| 279 | `proposal_leases` | mounts/153-proposal-leases.js (proposal: leases) |
