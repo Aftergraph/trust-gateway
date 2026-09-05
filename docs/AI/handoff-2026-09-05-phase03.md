@@ -6,10 +6,10 @@ Ship P2 multi-agent delegation-chain slices: store (PR #5) and mount (PR #6). Fo
 
 ## Current State
 
-- TG main: `eae4271` (delegation-chain store + mount + rooms panel + gateway scope + optional restart durability + tenant-safe path derivation)
+- TG main: `5962f8b` (delegation-chain store + mount + rooms panel + gateway scope + durability + tenant-safe paths + message-id correction)
 - AIE main: `02b8389` (TG→AIE revalidation bridge)
 - P0+P1+P2 core complete (workflows, triggers, evals, knowledge, semantic search, developer platform, TG→AIE revalidation, delegation-chain store + mount + panel)
-- Remaining P2: request-time tenant resolution for shared gateways, deeper tenant claim enforcement, broader multi-tenant depth
+- Remaining P2: request-time tenant resolution for shared gateways, Windows ACL hardening, deeper tenant claim enforcement
 
 ## Files Changed
 
@@ -58,14 +58,15 @@ None in this slice. Pre-existing failures (approvals-db 5 tests, file-mode 0600,
 
 ## Next Recommended Slice
 
-**Request-time tenant binding** — `delegationChainFile()` now derives a tenant-safe durable path through `TenantStore.dataRoot()` and `Gateway({ delegationChainTenantId })` can use it. The remaining integration is binding the authenticated request tenant to the correct gateway/chain without allowing caller-selected tenant ids.
+**Tenant-bound graph access + Windows ACL hardening** — tenant-safe path derivation and actual message-id binding are now covered. Remaining risks are binding authenticated request tenants in shared gateways and replacing the best-effort POSIX mode check with explicit Windows ACL enforcement/documentation.
 
 ## Exact Prompt for Next Agent
 
 ```
-Continue P2 multi-tenant depth. Bind the authenticated tenant resolver to the
+Continue P2 trust-boundary hardening. Bind authenticated tenant resolution to the
 correct durable DelegationChain backend for shared gateway requests. Reject missing
-or unknown tenant scope fail-closed, and test cross-tenant GET /v2/rooms/:id/chain.
+or unknown tenant scope fail-closed and test cross-tenant chain reads. Separately
+choose a verified Windows ACL strategy; do not claim mode 0600 alone on Windows.
 Use TDD.
 Branch: feat/delegation-chain-request-tenant
 ```

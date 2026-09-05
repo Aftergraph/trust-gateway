@@ -33,3 +33,9 @@
 - feat: delegationChainFile() derives paths through tenant-scope/dataRoot
 - Gateway delegationChainTenantId wiring; 41 graph/UI tests green
 - PR #12 merged → main eae4271
+
+## 2026-09-05 — delegation message-id correction
+- fix: hook uses deliver result's actual message id; no array-index fallback
+- 43 graph/UI tests green
+- PR #14 merged → main 5962f8b
+- audit follow-up: Windows ACL hardening remains open
