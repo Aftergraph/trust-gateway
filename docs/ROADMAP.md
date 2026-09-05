@@ -402,3 +402,13 @@ lag lå:
 - Regel slettet igen (DELETE /v2/rate/limits/… → removed:true)
 - Nettoeffekt: `/v1/actions`-reglen (60/min, opsat tidligere) ER nu
   reelt håndhævet — tidligere silent no-op
+
+## 15. Sandbox OS-lag live-aktiveret (2026-09-06)
+
+FS-F3 (bwrap/unshare/systemdRun-wrapping, strict additive) havde ligget
+i kode siden spike men var aldrig tændt i produktion. Aktivérbarheds-
+tjek på live-host: `detectSandboxSupport()` → bwrap=true, unshare=true,
+systemdRun=true; `wrapCommand()` → wrapped=true method=unshare.
+`TG_SANDBOX=1` nu sat i data/gateway-systemd.env (gitignored) + restart;
+process-env verificeret live (PID-environ viser TG_SANDBOX=1 +
+TG_RATE_LEDGER=1). Sandbox-suiter 22/22 grønne.
