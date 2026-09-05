@@ -1,3 +1,8 @@
+## 2026-09-05 — F3: evidence-result-badges i mission-detail
+- feat: per-item result-badges (pass/fail/warn/skip) + resumeret 'N pass / M fail'
+- Fail-resultater aldrig skjult (F2-loven)
+- evidence-badges 1/1 + missions 6/6
+
 ## 2026-09-05 — F2: integrity-badge i mission-detail
 - feat: hash-chain verify-badge (OK/broken) i drawer — broken ALDRIG skjult
 - Fail-closed: verify-fejl → broken-visning
