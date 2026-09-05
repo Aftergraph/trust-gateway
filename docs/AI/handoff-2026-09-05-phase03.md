@@ -9,7 +9,7 @@ Ship P2 multi-agent delegation-chain slices: store (PR #5) and mount (PR #6). Fo
 - TG main: `451497d` (delegation-chain store + mount + rooms panel + gateway scope + durability + tenant-safe paths + message-id correction + request-time tenant binding)
 - AIE main: `02b8389` (TG→AIE revalidation bridge)
 - P0+P1+P2 core complete (workflows, triggers, evals, knowledge, semantic search, developer platform, TG→AIE revalidation, delegation-chain store + mount + panel)
-- P2 delegation-chain complete + atomic 0600 openSync+fsync pattern backported to 7 store files (missions, budgets, evals, knowledge, projects, router-telemetry, workflows).
+- P2 delegation-chain complete + atomic 0600 openSync+fsync pattern backported to 7 store files + WORKS proxy mount `/v2/executions` (read-only, fail-closed) surface through TG auth.
 
 ## Files Changed
 
@@ -56,11 +56,19 @@ None in this slice. Pre-existing failures (approvals-db 5 tests, file-mode 0600,
 - O(n) scan per query — ponytail-marked; upgrade to adjacency-list indexes if rooms exceed ~10k edges
 - Singleton chain instance — if multi-node deployment, needs shared store (Redis/SQLite) for consistency
 
-## Next Recommended Slice (TBD — re-scan the roadmap)
+## Next Recommended Slice
 
-**AIE leasing depth or developer platform v1** — shared Gateway requests now resolve tenant once and select tenant-specific graph backends; cross-tenant reads are tested closed. Remaining risks are Windows ACL enforcement/documentation and structured cycle-vs-missing-edge diagnostics.
+**"Executions" panel in `app/panels/`** — consume `GET /v2/executions`, `/v2/executions/:workId`, and `/v2/executions/:workId/evidence` via `TG.api()` to render WORKS work status in the same SPA as the rest of the platform. Then repeat the same pattern for AIE (Authority panel).
 
 ## Exact Prompt for Next Agent
+
+```
+Continue P2 unified-platform. Add an "Executions" panel in app/panels/ that
+consumes GET /v2/executions, /v2/executions/:workId, and /v2/executions/:workId/evidence
+via TG.api(). Match the existing panel pattern (XSS-safe, no innerHTML, collapsible
+sections). Use TDD. Branch: feat/works-executions-panel-ui.
+```
+
 
 ```
 TBD — read the uncommitted 26-roadmap or next handoff.
