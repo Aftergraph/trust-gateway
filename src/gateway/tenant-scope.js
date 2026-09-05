@@ -21,6 +21,16 @@ const path = require('node:path');
 const { getTenantStore, isValidTenantId } = require('./tenants');
 
 const KINDS = Object.freeze(['audit', 'approvals', 'memory', 'artifacts', 'backups']);
+const DURABLE_GRAPH_KIND = 'memory';
+
+/**
+ * Derive the tenant-safe durable graph path from the same containment-checked
+ * root used by every existing tenant store. Callers never concatenate an
+ * attacker-visible tenant id into a filesystem path themselves.
+ */
+function delegationChainFile(store, gw, tenantId) {
+  return path.join(scopeDir(store, gw, tenantId, DURABLE_GRAPH_KIND), 'delegation-chain.json');
+}
 const KIND_SET = new Set(KINDS);
 
 /**
@@ -161,4 +171,4 @@ function _quotaDeny(gw, tenant, res, kind, extra) {
   return send(res, 429, body);
 }
 
-module.exports = { scopeDir, scopedStore, tenantAuditTag, enforceQuotas, KINDS };
+module.exports = { scopeDir, scopedStore, tenantAuditTag, enforceQuotas, delegationChainFile, KINDS };
