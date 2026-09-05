@@ -103,3 +103,47 @@
 @media (prefers-reduced-motion: reduce) {
   .row { animation: none; }
 }
+
+/* ── D1: mobil chat-fuldskærm ──────────────────────────────────────────
+   Når et rum er åbent på narrow screens dækker tråden hele skærmen:
+   room-log fixed, compose pinned i bunden, safe-area respekteret.
+   interactive-widget=resizes-content holder compose over tastaturet. */
+@media (max-width: 800px) {
+  .room-log {
+    position: fixed;
+    inset: 0;
+    top: 44px;                       /* under compact header */
+    z-index: 40;
+    background: var(--tg-bg, #14141c);
+    padding: 8px;
+    padding-bottom: calc(76px + env(safe-area-inset-bottom));
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .room-send {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: env(safe-area-inset-bottom);
+    z-index: 41;
+    background: var(--tg-bg, #14141c);
+    border-top: 1px solid #333;
+    padding: 6px 8px;
+    min-height: 44px;                /* tap-target */
+    box-sizing: border-box;
+  }
+  .room-send input, .room-send button {
+    min-height: 44px;                /* iOS: under 16px+44px undgår zoom-jump */
+    font-size: 16px;
+  }
+  .room-tabs, .room-head, .room-members, .room-mentions {
+    position: relative;
+    z-index: 41;
+    background: var(--tg-bg, #14141c);
+  }
+  /* tap-targets for besked-handlinger */
+  .roommsg-actions button, .md-copy, .roommic {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

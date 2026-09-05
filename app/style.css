@@ -534,3 +534,13 @@ h4 { margin: var(--tg-space-2) 0 var(--tg-space-1); color: var(--tg-text-muted, 
 /* D2: unread-badge */
 .room-head .room-unread { background: #ff6b6b; color: #fff; border-radius: 8px; padding: 0 6px; font-size: 10px; min-width: 14px; text-align: center; }
 .room-head .room-unread:empty { display: none; }
+
+/* D1/P1: respektér reduceret bevægelse (WCAG 2.3.3) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
