@@ -9,7 +9,7 @@ Ship P2 multi-agent delegation-chain slices: store (PR #5) and mount (PR #6). Fo
 - TG main: `451497d` (delegation-chain store + mount + rooms panel + gateway scope + durability + tenant-safe paths + message-id correction + request-time tenant binding)
 - AIE main: `02b8389` (TG→AIE revalidation bridge)
 - P0+P1+P2 core complete (workflows, triggers, evals, knowledge, semantic search, developer platform, TG→AIE revalidation, delegation-chain store + mount + panel)
-- P2 delegation-chain complete + atomic 0600 openSync+fsync pattern backported to 7 store files + WORKS proxy mount `/v2/executions` (read-only, fail-closed) surface through TG auth.
+- P2 delegation-chain + WORKS proxy mount + **Executions panel** (first cross-repo UI: WORKS visible in TG SPA through TG auth).
 
 ## Files Changed
 
@@ -58,9 +58,17 @@ None in this slice. Pre-existing failures (approvals-db 5 tests, file-mode 0600,
 
 ## Next Recommended Slice
 
-**"Executions" panel in `app/panels/`** — consume `GET /v2/executions`, `/v2/executions/:workId`, and `/v2/executions/:workId/evidence` via `TG.api()` to render WORKS work status in the same SPA as the rest of the platform. Then repeat the same pattern for AIE (Authority panel).
+**Authority panel (AIE visibility)** — repeat the Executions pattern for AIE: expose leases, revocations, and delegation records through a TG proxy mount (`/v2/authority`), then render them in a new "Authority" panel in the AGENTS domain. This completes the visual unification: all 6 repos have a visible surface in one SPA.
 
 ## Exact Prompt for Next Agent
+
+```
+Continue P2 unified-platform. Add an "Authority" panel in app/panels/ that
+surfaces AIE authority state (leases, revocations, delegation records) through
+a new TG proxy mount at /v2/authority. Match the Executions panel pattern.
+Use TDD. Branch: feat/authority-panel.
+```
+
 
 ```
 Continue P2 unified-platform. Add an "Executions" panel in app/panels/ that
