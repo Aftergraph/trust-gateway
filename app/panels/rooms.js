@@ -154,7 +154,43 @@
       return null;
     }
 
-    function openRoom(roomId) {
+    // Delegation tree renderer
+  function delegationNode(node, depth = 0) {
+    const li = el('li', 'delegation-node');
+    const wrap = el('div', 'delegation-header');
+    const hasChildren = node.children && node.children.length;
+    const toggle = el('button', 'toggle-btn', hasChildren ? '▼' : '▶');
+    toggle.style.marginLeft = `${depth * 16}px`;
+    const info = el('span', 'delegation-info');
+    info.append(el('strong', null, node.kind || 'node'));
+    info.append(el('span', 'muted', ` (${node.from || '?'})`));
+    wrap.append(toggle, info);
+    li.append(wrap);
+    if (hasChildren) {
+      const ul = el('ul', 'delegation-children');
+      for (const child of node.children) ul.append(delegationNode(child, depth + 1));
+      li.append(ul);
+      ul.style.display = 'none';
+    }
+    toggle.addEventListener('click', () => {
+      const ul = li.querySelector('ul');
+      if (ul) {
+        ul.style.display = ul.style.display === 'none' ? '' : 'none';
+        toggle.textContent = ul.style.display === 'none' ? '▶' : '▼';
+      }
+    });
+    return li;
+  }
+
+  function renderDelegationTree(tree, containerEl) {
+    containerEl.textContent = '';
+    if (!tree) { containerEl.append(el('div', 'empty', 'no delegation chain')); return; }
+    const ul = el('ul', 'delegation-root');
+    ul.append(delegationNode(tree));
+    containerEl.append(ul);
+  }
+
+  function openRoom(roomId) {
       if (loading) return;
       loading = true;
       api('/v2/rooms/' + encodeURIComponent(roomId))
@@ -177,12 +213,23 @@
           const memberLine = currentMembers.bots.map((b) => '@' + b).concat(currentMembers.humans).join(', ');
           detail.append(el('div', 'room-members muted', 'members: ' + (memberLine || '(none)')));
 
+          // Tab navigation
+          const tabs = el('div', 'room-tabs');
+          const msgTab = el('button', 'tab-btn active', 'Messages');
+          const chainTab = el('button', 'tab-btn', 'Delegation');
+          tabs.append(msgTab, chainTab);
+          detail.append(tabs);
+
           const log = el('div', 'room-log');
           const msgs = room.messages || [];
           if (!msgs.length) log.append(el('div', 'empty', 'no messages yet'));
           // render cap: only the LAST RENDER_CAP messages
           for (const m of msgs.slice(-RENDER_CAP)) log.append(messageRow(m, currentMembers));
           detail.append(log);
+          // Delegation chain container
+          const chainView = el('div', 'room-log', 'delegation-chain');
+          chainView.style.display = 'none';
+          detail.append(chainView);
 
           // post form — posts as forge
           const send = el('form', 'room-send');
@@ -218,6 +265,29 @@
               });
           });
           detail.append(send);
+
+          // Tab switching and delegation chain fetch
+          let chainTree = null;
+          const switchTab = (activeBtn, activeView) => {
+            for (const t of tabs.children) t.classList.remove('active');
+            activeBtn.classList.add('active');
+            for (const v of [log, chainView]) v.style.display = v === activeView ? '' : 'none';
+          };
+          msgTab.addEventListener('click', () => switchTab(msgTab, log));
+          chainTab.addEventListener('click', () => {
+            switchTab(chainTab, chainView);
+            if (!chainTree) {
+              api('/v2/rooms/' + encodeURIComponent(roomId) + '/chain')
+                .then((d) => {
+                  chainTree = (d && d.tree) || null;
+                  renderDelegationTree(chainTree, chainView);
+                })
+                .catch(() => {
+                  chainTree = null;
+                  renderDelegationTree(null, chainView);
+                });
+            }
+          });
 
           log.scrollTop = log.scrollHeight;
         })

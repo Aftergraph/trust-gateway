@@ -415,3 +415,34 @@ header {
   font-size: 12px;
   max-width: 160px;
 }
+
+/* ── Delegation tree (rooms panel) ── */
+.room-tabs { display: flex; gap: var(--tg-space-1); margin: var(--tg-space-3) 0; }
+.tab-btn {
+  background: transparent; border: 1px solid var(--tg-border); color: var(--tg-text-muted);
+  border-radius: var(--tg-radius-sm); padding: var(--tg-space-1) var(--tg-space-3); cursor: pointer;
+  font-family: inherit; font-size: 12px;
+}
+.tab-btn:hover { color: var(--tg-text); border-color: var(--tg-border-accent); }
+.tab-btn.active {
+  background: var(--tg-bg-elevated); color: var(--tg-risk-read);
+  border-color: var(--tg-border-accent); border-bottom-color: var(--tg-bg-elevated);
+}
+.delegation-root, .delegation-children {
+  list-style: none; padding: 0; margin: 0;
+}
+.delegation-node { margin: 4px 0; }
+.delegation-header {
+  display: flex; align-items: center; gap: var(--tg-space-2);
+  padding: 6px var(--tg-space-2); background: var(--tg-bg-surface);
+  border: 1px solid var(--tg-border); border-radius: var(--tg-radius-sm);
+}
+.toggle-btn {
+  background: transparent; border: 0; color: var(--tg-text-muted);
+  cursor: pointer; font-size: 12px; width: 16px;
+}
+.toggle-btn:hover { color: var(--tg-text); }
+.delegation-info { display: flex; align-items: baseline; gap: var(--tg-space-2); }
+.delegation-info strong { color: var(--tg-text-bright); }
+.delegation-info .muted { color: var(--tg-text-muted); font-size: 11px; }
+.delegation-children { margin-left: 16px; border-left: 1px solid var(--tg-border); }
