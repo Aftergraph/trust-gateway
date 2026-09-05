@@ -214,7 +214,11 @@
           if (!active) return;
           status.textContent = (d && d.count != null ? d.count : '?') + ' items';
           list.textContent = '';
-          const items = (d && Array.isArray(d.items)) ? d.items : [];
+          // AIE HTTP-mode: { leases: [...], count } — bridge-mode: { items: [...] }
+          // Fail-closed: begge understøttes; kendte arrays ellers tomt.
+          const items = d && (Array.isArray(d[currentKind])
+            ? d[currentKind]
+            : Array.isArray(d.items) ? d.items : []);
           if (!items.length) {
             list.append(el('div', 'muted', 'no ' + currentKind + ' yet'));
             return;

@@ -82,6 +82,12 @@ function createMockAIE(revokeHandler, { persist = true } = {}) {
       if (req2.method === 'GET' && req2.url === '/leases') {
         return res.end(JSON.stringify({ leases: state, count: state.length }));
       }
+      if (req2.method === 'GET' && req2.url === '/missions') {
+        return res.end(JSON.stringify({ missions: [], count: 0 }));
+      }
+      if (req2.method === 'GET' && req2.url === '/admissions') {
+        return res.end(JSON.stringify({ admissions: [], count: 0 }));
+      }
       res.statusCode = 404;
       res.end(JSON.stringify({ error: 'not_found' }));
     });
@@ -295,6 +301,24 @@ test('H6: GET /v2/authority leases proxy virker fortsat (regression)', async () 
     assert.equal(r.status, 200);
     assert.ok(Array.isArray(r.body.leases), 'leases listed (AIE-kontrakt {leases})');
     assert.equal(r.body.count, LEASES.length);
+  } finally {
+    await new Promise((r) => server.close(r));
+    await new Promise((r) => mock.close(r));
+    delete process.env.AIE_HTTP_URL;
+  }
+});
+
+test('H6: GET /v2/authority counts bygges fra AIE-HTTP endpoints (ikke opfundne)', async () => {
+  const { mock, port: aiePort } = await startMock((_, res) => res.end(JSON.stringify({ revoked: 'x' })));
+  process.env.AIE_HTTP_URL = `http://127.0.0.1:${aiePort}`;
+  const gw = makeGateway();
+  const { server, port } = await boot(gw);
+  try {
+    const r = await req(port, 'GET', '/v2/authority', 'tok-op');
+    assert.equal(r.status, 200);
+    assert.ok(r.body.counts, 'counts object');
+    assert.equal(r.body.counts.leases, 3, 'leases count fra AIE');
+    assert.equal(r.body.counts.missions, 0, 'missions count (AIE eksponerer ikke)');
   } finally {
     await new Promise((r) => server.close(r));
     await new Promise((r) => mock.close(r));

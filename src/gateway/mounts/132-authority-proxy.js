@@ -87,6 +87,21 @@ function authorityRead(kind) {
 async function authorityReadAny(kind) {
   const { httpUrl, bridge } = _cfg();
   if (httpUrl && (!kind || HTTP_KINDS.has(kind))) {
+    if (!kind) {
+      // AIE har intet root-endpoint — byg counts fra de tre HTTP endpoints.
+      // Fail-closed: hvis et GET fejler → ærlig fejl, ikke opfundne tal.
+      const counts = {};
+      for (const k of ['leases', 'missions', 'admissions']) {
+        const r = await authorityReadHttp(k);
+        if (!r.ok || !r.data || typeof r.data.count !== 'number') {
+          return { ok: false, status: r.ok ? 502 : r.status, error: r.ok ? 'aie_error' : r.error };
+        }
+        counts[k] = r.data.count;
+      }
+      counts.outcomes = 0;  // ponytail: HTTP-gateway eksponerer ikke outcomes/evidence
+      counts.evidence = 0;  // endnu; bridge-mode dækker dem (længere nede).
+      return { ok: true, data: { counts, kinds: HTTP_KINDS.size ? ['leases', 'missions', 'admissions'] : [] } };
+    }
     return authorityReadHttp(kind);
   }
   if (httpUrl && kind && !HTTP_KINDS.has(kind)) {
