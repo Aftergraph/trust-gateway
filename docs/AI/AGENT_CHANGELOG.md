@@ -1,3 +1,9 @@
+## 2026-09-05 — chat A2: SSE token-streaming (governed done)
+- feat: POST /v2/chat/llm/stream — deltas display-only; done-event bærer governed verdict
+- chatStream-udvidelsespunkt på brain; fallback = én done {fallback:true}
+- UI: ask streamer live; commit aabac66
+- tests/chat-llm-stream.test.js 4/4; chat-scope 55/0/1
+
 ## 2026-09-05 — chat A1: rooms ask (governed LLM i tråden)
 - feat: POST /v2/rooms/:id/ask — question + answer som A2A envelopes
 - assistant-kind (additiv): proposal-metadata (tool+decision, ingen args) + fallback-flag
