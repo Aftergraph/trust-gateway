@@ -6,10 +6,10 @@ Ship P2 multi-agent delegation-chain slices: store (PR #5) and mount (PR #6). Fo
 
 ## Current State
 
-- TG main: `441607f` (feat: delegation-chain store #5) + mount endpoint (#6)
+- TG main: `0307254` (delegation-chain store + mount + rooms panel + gateway-scoped isolation)
 - AIE main: `02b8389` (TG→AIE revalidation bridge)
-- P0+P1+P2 core complete (workflows, triggers, evals, knowledge, semantic search, developer platform, TG→AIE revalidation, delegation-chain store + mount)
-- Remaining P2: rooms panel integration, multi-tenant depth
+- P0+P1+P2 core complete (workflows, triggers, evals, knowledge, semantic search, developer platform, TG→AIE revalidation, delegation-chain store + mount + panel)
+- Remaining P2: graph restart durability, deeper tenant claim enforcement, broader multi-tenant depth
 
 ## Files Changed
 
@@ -58,13 +58,13 @@ None in this slice. Pre-existing failures (approvals-db 5 tests, file-mode 0600,
 
 ## Next Recommended Slice
 
-**Multi-tenant delegation scope** — persist or scope delegation-chain state per gateway/tenant so one tenant's graph cannot appear in another tenant's room view. The current chain store is an in-memory module singleton and is suitable only for a single gateway process.
+**Delegation graph restart durability** — gateway scoping now prevents cross-instance leakage. The remaining risk is that graph state is in-memory and disappears on restart. Add a tenant-scoped durable store only after pinning the persistence contract with TDD.
 
 ## Exact Prompt for Next Agent
 
 ```
-Continue P2 multi-tenant depth. Audit DelegationChain for tenant isolation and
-restart durability. Add tenantId to graph records and enforce room/tenant scope
-on GET /v2/rooms/:id/chain. Use TDD and preserve fail-closed behavior.
-Branch: feat/delegation-chain-tenant-scope
+Continue P2 graph durability. Add a tenant-scoped durable DelegationChain store
+with atomic writes and fail-closed corrupt-state handling. Preserve gateway isolation
+and GET /v2/rooms/:id/chain behavior. Use TDD.
+Branch: feat/delegation-chain-durable-store
 ```

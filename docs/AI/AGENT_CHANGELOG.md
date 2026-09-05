@@ -16,3 +16,9 @@
 - fetches GET /v2/rooms/:id/chain on first tab activation
 - 3 static UI contract tests + existing panel suite green
 - pending PR
+
+## 2026-09-05 — delegation-chain gateway scope
+- fix: WeakMap-scoped chain per Gateway instance; prevents cross-gateway graph leakage
+- 30 relevant tests green
+- PR #8 merged → main 0307254
+- remaining risk: graph state is not restart-durable
