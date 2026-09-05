@@ -22,3 +22,9 @@
 - 30 relevant tests green
 - PR #8 merged → main 0307254
 - remaining risk: graph state is not restart-durable
+
+## 2026-09-05 — delegation-chain durable store
+- feat: DurableDelegationChain with atomic 0600 persistence and fail-closed load
+- optional Gateway delegationChainFile wiring
+- 37 graph/UI tests green
+- PR #10 merged → main e505e78
