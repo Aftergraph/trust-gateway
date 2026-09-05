@@ -112,10 +112,11 @@ TBD — read the uncommitted 26-roadmap or next handoff.
 - H3 panel-badges (0d9d509): proposal-row viser tampered/unsealed/ok count uden drawer
 - H4 authority-panel (636d69e): AIE leases/missions/admissions/outcomes/evidence synligt i TG SPA, dedup-guard
 - H5 authority-detail (a169945): click lease/mission → revocation-historik, delegation tree, budget
-- H6 authority-revoke (447776d + bf4a449): POST /v2/authority/leases/:id/revoke med:
-  - Backend: operator-check, reason-validation, AIE HTTP forwarding, read-back, 409 deduplikat
-  - Frontend: revoke-knap i lease-drawer (ACTIVE kun), prompt-reason, fail-closed fejlvisning
-  - Governance: hash-chain audit-seal (write-ahead, type: authority_lease_revoke)
-  - Tests: 9 E2E gateway tests + 7 frontend E2E med mock-DOM
-- Regression: 59/60 (1 ærlig skip: works-live E2E kræver Go toolchain)
+- H6 authority-revoke (396dab1, 2bc7a0e — korrekt kontrakt efter audit): POST /v2/authority/leases/:id/revoke mod AIE's autoritative API (ab0c2b5):
+  - Backend: operator-check, reason-validation, pre-check (404 lease_not_found / 409 already_revoked / 409 lease_expired), POST /revocations { lease_id }, read-back-bekræftelse (502 revoke_unconfirmed hvis ikke revoked=true), hash-chain audit-seal
+  - Frontend: revoke-knap i lease-drawer (ACTIVE kun), prompt-reason, fail-closed fejlvisning, loadItems() accepterer både {leases:[]} (AIE HTTP) og {items:[]} (bridge)
+  - Proxy counts: bygges fra GET /leases+/missions+/admissions (AIE har intet root-endpoint), fail-closed
+  - Tests: 13 E2E gateway tests + 7 frontend E2E med mock-DOM + 8 missions frontend E2E
+- Regression: 85/86 (1 ærlig skip: works-live E2E kræver Go toolchain)
+- Lært: TG må aldrig opfinde AIE-kontrakten — verificer mod aie/src/aie_runtime/gateway/http.py (POST /revocations {lease_id}, GET /leases → {leases:[]})
 - Næste: H-bølgen er komplet. Næste roadmap-fase: cross-repo governance contracts eller chat-overgrowth-seam-closing
