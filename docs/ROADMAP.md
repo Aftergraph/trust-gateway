@@ -376,3 +376,29 @@ registreringsrækkefølge).
   404 disabled, 400 invalid windowMs) + 2 listCurrent-unit-tests;
   30/30 grønne sammen med nabo-suiter.
 - TRANSPARENCY: ny række 168 `rate_buckets_read`; `rate_bucket_reset` → 170.
+
+## 14. Route-limits enforcement færdiggjort (2026-09-06)
+
+Rate-dashboardet (PR #30) afslørede ved live-verifikation at FS-X3-regler
+var **dekorative**: `/v2/rate/limits`-reglerne blev aldrig håndhævet —
+intet kaldte `check()` i request-flowet (mount 148 er CRUD-only). Tre
+lag lå:
+
+1. **PR #31** — `match()` dobbelt-lookup: bare-path rules (`/v1/actions`,
+   dokumenteret set()-format) var døde (kun method-prefixed key fundet).
+2. **PR #32** — `server.js._enforceRouteLimit()` efter token-budget på
+   alle tre overflader (fn-routes, plugin-mounts inkl. auth:'none' med
+   intern auth via dobbelt-lookup, legacy v1); 429 `route_rate_limited`
+   audit-sealet (TRANSPARENCY række 281); lazy require mod test-cache.
+3. **Ops** — live env manglede `TG_RATE_LEDGER=1` (ledger altid disabled);
+   aktiveret i data/gateway-systemd.env (gitignored) + restart.
+
+### Live-verifikation (main f86604c, :8800)
+- Regel `GET /v2/whoami` maxHits=1 via PUT /v2/rate/limits
+- Kald 1 → 200 · Kald 2 → **429 `route_rate_limited`** med pattern +
+  retryAfterMs (50699) + count
+- rate-buckets viste `GET:/v2/whoami count 2` i nuværende vindue
+- Audit-seal bekræftet i SqlChain: `route_rate_limited {bot, pattern, path}`
+- Regel slettet igen (DELETE /v2/rate/limits/… → removed:true)
+- Nettoeffekt: `/v1/actions`-reglen (60/min, opsat tidligere) ER nu
+  reelt håndhævet — tidligere silent no-op
