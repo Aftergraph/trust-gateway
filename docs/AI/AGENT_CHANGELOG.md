@@ -1,3 +1,8 @@
+## 2026-09-05 — G4: evidence-hash-status i mission-detail (fail-closed)
+- feat: per-item hash-status (forseglet + 12 hex / [unsealed])
+- TG paastaar aldrig ok uden WORKS-verify (fail-closed)
+- G4 1/1 + mission-scope 8/8
+
 ## 2026-09-05 — F3: evidence-result-badges i mission-detail
 - feat: per-item result-badges (pass/fail/warn/skip) + resumeret 'N pass / M fail'
 - Fail-resultater aldrig skjult (F2-loven)
