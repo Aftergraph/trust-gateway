@@ -485,3 +485,6 @@ h4 { margin: var(--tg-space-2) 0 var(--tg-space-1); color: var(--tg-text-muted, 
 .roommsg-proposal .proposal-tool { font-family: monospace; color: inherit; }
 .roommsg-proposal .proposal-decision { color: #b8860b; }
 .roommsg-proposal .proposal-fallback { color: #888; font-style: italic; }
+
+/* A2: streaming state */
+.room-send .muted { max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

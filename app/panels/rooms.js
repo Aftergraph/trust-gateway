@@ -267,22 +267,45 @@
             if (!body) return;
             askBtn.disabled = true;
             sendMsg.textContent = '…hjernen tænker';
-            api('/v2/rooms/' + encodeURIComponent(roomId) + '/ask', {
+            // A2: stream deltas live; done-event bærer det governed verdict.
+            const token = window.TG.token || (window.TG.auth && window.TG.auth.token) || '';
+            fetch('/v2/chat/llm/stream', {
               method: 'POST',
-              body: JSON.stringify({ message: body }),
-            })
-              .then((out) => {
-                askBtn.disabled = false;
-                sendMsg.textContent = out && out.fallback ? 'fallback (hjernen ej konfigureret)' : '';
-                bodyIn.value = '';
-                openRoom(roomId);
-              })
-              .catch((err) => {
-                askBtn.disabled = false;
-                sendMsg.textContent = err.status === 403 ? 'not member'
-                  : err.status === 404 ? 'no room'
-                  : err.status === 429 ? 'rate limited' : 'error ' + (err.status || '');
+              headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token },
+              body: JSON.stringify({ session: 'room_' + roomId, message: body }),
+            }).then((resp) => {
+              if (!resp.ok || !resp.body) { askBtn.disabled = false; sendMsg.textContent = 'error ' + resp.status; return; }
+              const reader = resp.body.getReader();
+              const dec = new TextDecoder();
+              let buf = '';
+              let replyText = '';
+              const pump = () => reader.read().then(({ done, value }) => {
+                if (done) {
+                  askBtn.disabled = false;
+                  bodyIn.value = '';
+                  openRoom(roomId);
+                  return;
+                }
+                buf += dec.decode(value, { stream: true });
+                let idx;
+                while ((idx = buf.indexOf('\n\n')) >= 0) {
+                  const block = buf.slice(0, idx); buf = buf.slice(idx + 2);
+                  let ev = '', data = '';
+                  for (const line of block.split('\n')) {
+                    if (line.startsWith('event:')) ev = line.slice(6).trim();
+                    if (line.startsWith('data:')) data = line.slice(5).trim();
+                  }
+                  if (!data) continue;
+                  try {
+                    const d = JSON.parse(data);
+                    if (ev === 'delta' && d.text) { replyText += d.text; sendMsg.textContent = replyText.slice(-60); }
+                    if (ev === 'done' && d.fallback) sendMsg.textContent = 'fallback';
+                  } catch { /* ignore malformed block */ }
+                }
+                pump();
               });
+              pump();
+            }).catch(() => { askBtn.disabled = false; sendMsg.textContent = 'error'; });
           });
           send.addEventListener('submit', (ev2) => {
             ev2.preventDefault();
