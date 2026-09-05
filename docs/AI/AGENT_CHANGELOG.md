@@ -61,3 +61,9 @@
 - 26/26 tests green
 - PR #21 merged → main bde419d
 - First cross-repo UI integration — WORKS visible in TG console
+
+## 2026-09-05 — authority proxy mount (AIE in TG)
+- feat: /v2/authority + /v2/authority/:kind read-only operator-only proxy
+- aie_authority_bridge.py reads PersistentState in read-only URI mode
+- 7 tests green; 55 graph/UI/works tests green
+- committed → main e7b5209
