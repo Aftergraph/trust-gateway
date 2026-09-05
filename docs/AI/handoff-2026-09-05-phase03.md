@@ -6,10 +6,10 @@ Ship P2 multi-agent delegation-chain slices: store (PR #5) and mount (PR #6). Fo
 
 ## Current State
 
-- TG main: `0307254` (delegation-chain store + mount + rooms panel + gateway-scoped isolation)
+- TG main: `e505e78` (delegation-chain store + mount + rooms panel + gateway scope + optional restart durability)
 - AIE main: `02b8389` (TG→AIE revalidation bridge)
 - P0+P1+P2 core complete (workflows, triggers, evals, knowledge, semantic search, developer platform, TG→AIE revalidation, delegation-chain store + mount + panel)
-- Remaining P2: graph restart durability, deeper tenant claim enforcement, broader multi-tenant depth
+- Remaining P2: automatic tenant-scoped graph file derivation, deeper tenant claim enforcement, broader multi-tenant depth
 
 ## Files Changed
 
@@ -58,13 +58,13 @@ None in this slice. Pre-existing failures (approvals-db 5 tests, file-mode 0600,
 
 ## Next Recommended Slice
 
-**Delegation graph restart durability** — gateway scoping now prevents cross-instance leakage. The remaining risk is that graph state is in-memory and disappears on restart. Add a tenant-scoped durable store only after pinning the persistence contract with TDD.
+**Automatic tenant-scoped graph persistence** — `DurableDelegationChain` now supports atomic fail-closed persistence through `Gateway({ delegationChainFile })`. The next slice should derive tenant-safe file paths from the existing tenant-scope contract rather than accepting arbitrary paths in production.
 
 ## Exact Prompt for Next Agent
 
 ```
-Continue P2 graph durability. Add a tenant-scoped durable DelegationChain store
-with atomic writes and fail-closed corrupt-state handling. Preserve gateway isolation
-and GET /v2/rooms/:id/chain behavior. Use TDD.
-Branch: feat/delegation-chain-durable-store
+Continue P2 multi-tenant depth. Derive delegationChainFile from the existing
+tenant-scope/dataRoot contract, enforce containment, and test cross-tenant file
+isolation plus corrupt-state fail-closed behavior. Use TDD.
+Branch: feat/delegation-chain-tenant-durable-path
 ```
