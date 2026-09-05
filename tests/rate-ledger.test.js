@@ -22,6 +22,8 @@ describe('FS-M3 rate-limit ledger', () => {
     // Windows keeps SQLite handles open briefly after require-cache purges; a
     // single rmSync races the GC and throws EPERM. Retry briefly, then leave
     // the dir for OS temp cleanup — never fail the suite on temp cleanup.
+    // Windows: luk db-forbindelsen først (ellers låses filen).
+    try { require('../src/gateway/db').closeDb(); } catch { /* uåbnet */ }
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
         fs.rmSync(tmpDir, { recursive: true, force: true });

@@ -110,6 +110,16 @@ function resetDb() {
   txDepth = 0;
 }
 
+// Close the live connection (if any) — Windows: an open SQLite file cannot be
+// deleted (EPERM), so teardown hooks must close before rmSync(tmpDir).
+function closeDb() {
+  if (db) {
+    try { db.close(); } catch { /* already closed */ }
+    db = null;
+  }
+  txDepth = 0;
+}
+
 let txDepth = 0;
 
 /**
@@ -150,7 +160,7 @@ function unjson(s) {
   }
 }
 
-module.exports = { get db() { return _db(); }, tx, json, unjson, open, resetDb };
+module.exports = { get db() { return _db(); }, tx, json, unjson, open, resetDb, closeDb };
 
 // Auto-create audit_chain compatibility view on first require.
 // Older modules reference audit_chain; sql-chain uses chain_entries.

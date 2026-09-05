@@ -19,6 +19,8 @@ describe('FS-Z3 skill marketplace search', () => {
 
   after(() => {
     process.env = origEnv;
+    // Windows: luk db-forbindelsen før tmpDir slettes (ellers EPERM).
+    try { require('../src/gateway/db').closeDb(); } catch { /* uåbnet */ }
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 

@@ -19,6 +19,8 @@ describe('FS-K4 quota usage alerts', () => {
 
   after(() => {
     process.env = origEnv;
+    // Windows: luk db-forbindelsen før tmpDir slettes (ellers EPERM).
+    try { require('../src/gateway/db').closeDb(); } catch { /* uåbnet */ }
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 

@@ -39,6 +39,8 @@ describe('FS-X1 notification delivery', () => {
   after(async () => {
     process.env = origEnv;
     if (testServer) await new Promise(r => testServer.close(r));
+    // Windows: luk db-forbindelsen før tmpDir slettes (ellers EPERM).
+    try { require('../src/gateway/db').closeDb(); } catch { /* uåbnet */ }
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
