@@ -1,3 +1,8 @@
+## 2026-09-05 — chat A3: markdown-renderer (0 deps, XSS-sikker)
+- feat: app/lib/md.js — kodeblokke m. copy, inline formatting, lister, tabeller, links
+- assistant-beskeder i rooms renderes som markdown (textContent-only)
+- md 8/8 + panel/rooms 24/24 grønne
+
 ## 2026-09-05 — chat A2: SSE token-streaming (governed done)
 - feat: POST /v2/chat/llm/stream — deltas display-only; done-event bærer governed verdict
 - chatStream-udvidelsespunkt på brain; fallback = én done {fallback:true}
