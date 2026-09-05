@@ -34,7 +34,7 @@
   // by id and are mounted on demand inside their active domain.
   const DOMAINS = [
     { id: 'now',   title: 'NOW',     panels: ['console'] },
-    { id: 'chat',  title: 'CHAT',    panels: ['rooms'] },
+    { id: 'chat',  title: 'CHAT',    panels: ['rooms', 'missions'] },
     { id: 'work',  title: 'WORK',    panels: ['goals', 'builder', 'executions'] },
     { id: 'agents', title: 'AGENTS', panels: ['agents', 'authority'] },
     { id: 'brain', title: 'BRAIN',   panels: ['providers', 'providers-live'] },
