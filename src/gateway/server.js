@@ -336,7 +336,9 @@ class Gateway extends EventEmitter {
       const bot = this._auth(req);
       if (!bot) { this._audit({ type: 'auth_rejected', path: pathname }); return send(res, 401, { error: 'unauthorized' }); }
       req.bot = bot; // fn-mount handlers call isOperator(req) on the raw req
-      return fnMatch.handler(req, res, { url, params: fnMatch.params, bot });
+      const { resolveTenant } = require('./tenant-resolve');
+      const { tenant } = resolveTenant(req, this);
+      return fnMatch.handler(req, res, { url, params: fnMatch.params, bot, tenantId: tenant?.id || null });
     }
 
     // ── v2 plugin mounts (before v1 auth; each mount declares its auth mode) ──
@@ -356,7 +358,9 @@ class Gateway extends EventEmitter {
         const rl = this._enforceRateLimit(bot);
         if (rl.status === 429) { this._audit({ type: 'rate_limited', bot: bot.name, path: pathname }); return send(res, 429, rl.body); }
       }
-      return mount.handle(this, req, res, { url, params, bot });
+      const { resolveTenant } = require('./tenant-resolve');
+      const { tenant } = resolveTenant(req, this);
+      return mount.handle(this, req, res, { url, params, bot, tenantId: tenant?.id || null, tenant });
     }
 
     if (req.method === 'GET' && !this.staticDir && (pathname === '/' || pathname === '/dashboard')) {

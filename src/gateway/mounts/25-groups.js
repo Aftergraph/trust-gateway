@@ -97,6 +97,7 @@ async function postMessage(gw, req, res, ctx, roomId) {
       mentions: body.mentions,
       target: body.target,
       chain: body.chain,
+      tenantId: ctx.tenantId || null,
       replyTo: body.replyTo,
     });
   } catch (e) {
