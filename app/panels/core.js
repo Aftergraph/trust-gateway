@@ -23,9 +23,12 @@
     { id: 'providers', title: 'Providers' },
     { id: 'providers-live', title: 'Live' },
     { id: 'computer', title: 'Computer' },
+    { id: 'rate', title: 'Rate' },
     { id: 'playground', title: 'Playground' },
     { id: 'voice', title: 'Voice' },
     { id: 'integrations', title: 'Integrations' },
+    { id: 'apr-123', title: 'Cards' },
+    { id: 'secrets', title: 'Secrets' },
   ];
 
   // ── Phase 2: the 9-domain rail (§2.1). Each domain lists its panels in
@@ -34,14 +37,14 @@
   // by id and are mounted on demand inside their active domain.
   const DOMAINS = [
     { id: 'now',   title: 'NOW',     panels: ['console'] },
-    { id: 'chat',  title: 'CHAT',    panels: ['rooms', 'missions'] },
+    { id: 'chat',  title: 'CHAT',    panels: ['rooms', 'missions', 'apr-123'] },
     { id: 'work',  title: 'WORK',    panels: ['goals', 'builder', 'executions'] },
     { id: 'agents', title: 'AGENTS', panels: ['agents', 'authority'] },
     { id: 'brain', title: 'BRAIN',   panels: ['providers', 'providers-live'] },
     { id: 'output', title: 'OUTPUT', panels: ['artifacts', 'history', 'playground'] },
-    { id: 'control', title: 'CONTROL', panels: ['computer'] },
+    { id: 'control', title: 'CONTROL', panels: ['computer', 'rate'] },
     { id: 'connect', title: 'CONNECT', panels: ['hub', 'integrations', 'voice'] },
-    { id: 'system', title: 'SYSTEM',  panels: ['system'] },
+    { id: 'system', title: 'SYSTEM',  panels: ['system', 'secrets'] },
   ];
 
   // ── §20.3 redirect map: old tab id → domain. G11 (no broken URLs). ─────
