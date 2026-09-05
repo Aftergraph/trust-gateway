@@ -102,10 +102,11 @@ function match(method, path) {
   // Strip query string
   const cleanPath = path.split('?')[0];
   const key = `${method.toUpperCase()} ${cleanPath}`;
-  const exact = get(key);
+  // Dual lookup: method-prefixed rules ("POST /v2/x") win; bare-path rules
+  // ("/v2/x", as accepted by set()) apply to every method. This matches the
+  // documented set() input contract — a bare-path rule must never be dead.
+  const exact = get(key) || get(cleanPath);
   if (exact && exact.enabled) return exact;
-  // Try parameter substitution: /v2/tenants/acme/flags → /v2/tenants/:id/flags
-  // (only if no exact match)
   return null;
 }
 

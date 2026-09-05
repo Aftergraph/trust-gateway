@@ -78,6 +78,36 @@ describe('FS-X3 route limits', () => {
     assert.ok(r.retryAfterMs > 0);
   });
 
+  it('match finds bare-path rule for any method (set-contract)', () => {
+    const rl = require('../src/gateway/route-limits');
+    rl.set('/v2/bare-path', { maxHits: 3, windowMs: 60000 }, 'op1');
+    const mGet = rl.match('GET', '/v2/bare-path');
+    const mPost = rl.match('POST', '/v2/bare-path?x=1');
+    assert.ok(mGet, 'bare-path rule must match GET');
+    assert.ok(mPost, 'bare-path rule must match POST (query stripped)');
+    assert.equal(mGet.maxHits, 3);
+  });
+
+  it('bare-path rule enforces 429 via check across methods', () => {
+    const rl = require('../src/gateway/route-limits');
+    rl.set('/v2/bare-over', { maxHits: 1, windowMs: 60000 }, 'op1');
+    // A bare-path rule must constrain EVERY method (its own bucket per method);
+    // hitting POST twice beyond maxHits=1 must deny on the second hit.
+    assert.equal(rl.check('POST', '/v2/bare-over', Date.now()).allowed, true);
+    const r = rl.check('POST', '/v2/bare-over', Date.now());
+    assert.equal(r.allowed, false, 'second hit on bare-path rule must be denied');
+    assert.equal(r.pattern, '/v2/bare-over');
+    assert.ok(r.retryAfterMs > 0);
+  });
+
+  it('method-prefixed rule wins over bare-path rule', () => {
+    const rl = require('../src/gateway/route-limits');
+    rl.set('/v2/dual', { maxHits: 50, windowMs: 60000 }, 'op1');
+    rl.set('POST /v2/dual', { maxHits: 5, windowMs: 60000 }, 'op1');
+    assert.equal(rl.match('GET', '/v2/dual').maxHits, 50);
+    assert.equal(rl.match('POST', '/v2/dual').maxHits, 5);
+  });
+
   it('remove deletes rule', () => {
     const rl = require('../src/gateway/route-limits');
     rl.set('GET /v2/removeme', { maxHits: 1, windowMs: 1000 }, 'op1');
