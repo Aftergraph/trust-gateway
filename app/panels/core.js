@@ -36,7 +36,7 @@
     { id: 'now',   title: 'NOW',     panels: ['console'] },
     { id: 'chat',  title: 'CHAT',    panels: ['rooms'] },
     { id: 'work',  title: 'WORK',    panels: ['goals', 'builder', 'executions'] },
-    { id: 'agents', title: 'AGENTS', panels: ['agents'] },
+    { id: 'agents', title: 'AGENTS', panels: ['agents', 'authority'] },
     { id: 'brain', title: 'BRAIN',   panels: ['providers', 'providers-live'] },
     { id: 'output', title: 'OUTPUT', panels: ['artifacts', 'history', 'playground'] },
     { id: 'control', title: 'CONTROL', panels: ['computer'] },
