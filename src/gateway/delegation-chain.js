@@ -135,7 +135,10 @@ class DurableDelegationChain extends DelegationChain {
       fs.closeSync(fd);
     }
     fs.renameSync(tmp, this.file);
-    try { fs.chmodSync(this.file, 0o600); } catch { /* mode is set at open */ }
+        // ponytail: mode 0600 is respected on POSIX; on Windows the file
+        // inherits the parent directory ACL and chmod is a no-op. A verified
+        // Windows ACL strategy (icacls / Set-Acl) is not implemented here.
+        try { fs.chmodSync(this.file, 0o600); } catch { /* platform no-op */ }
   }
 
   record(parentMsgId, childMsgId, meta, roomId = 'default') {
