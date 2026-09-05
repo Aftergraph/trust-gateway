@@ -517,3 +517,6 @@ h4 { margin: var(--tg-space-2) 0 var(--tg-space-1); color: var(--tg-text-muted, 
 .roommsg-delegation .deleg-label { color: #7c5cff; font-weight: 600; text-transform: uppercase; font-size: 10px; }
 .roommsg-delegation .deleg-arrow { color: #888; }
 .roommsg-delegation .handoff-target { color: #d6d6d6; font-family: monospace; }
+
+/* C4: branch-knap */
+.roommsg-actions .roommsg-branch { color: #7c5cff; }

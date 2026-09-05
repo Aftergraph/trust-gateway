@@ -34,6 +34,8 @@
   // A4: delt reply-state mellem messageRow (reply-knap) og compose-formen
   const pendingReply = { id: null, from: '' };
   let composeInput = null;
+  // C4: aktiv LLM-session for det åbne room (branch kan skifte den)
+  let roomSession = null;
 
   let mdRender = null;
   try { mdRender = window.TG_MD ? window.TG_MD.render : require('../../app/lib/md.js').render; } catch { mdRender = null; }
@@ -130,7 +132,21 @@
       try { if (navigator && navigator.clipboard) navigator.clipboard.writeText(bodyText(m)); } catch { /* no-op */ }
       copyBtn.textContent = 'kopieret';
     });
-    actions.append(replyBtn, copyBtn);
+    // C4: branch — forkast LLM-sessionen fra denne besked (kun operator; serveren
+    // gate'r igen). Ny session = room_<id>-<kort-id>; efterfølgende ask bruger den.
+    const branchBtn = el('button', 'roommsg-branch', 'branch');
+    branchBtn.title = 'forkast sessionen herfra (operator)';
+    branchBtn.addEventListener('click', () => {
+      const src = 'room_' + roomId;
+      const branchName = src + '-' + String(m.id || '').replace(/[^a-z0-9]/gi, '').slice(-6);
+      api('/v2/chat/llm/branch', {
+        method: 'POST',
+        body: JSON.stringify({ session: src, at: m.index != null ? m.index : 'latest', name: branchName }),
+      }).then((out) => {
+        roomSession = branchName; // efterfølgende ask/ask-stream bruger branchen
+      }).catch(() => { /* branch fejlede — fail-closed i UI'et */ });
+    });
+    actions.append(replyBtn, copyBtn, branchBtn);
     row.append(actions);
     return row;
   }
@@ -267,6 +283,7 @@
           if (selectedId !== roomId && selectedId !== null) return; // user moved on
           const room = (d && d.room) || {};
           selectedId = roomId;
+          roomSession = 'room_' + roomId;
           currentMembers = membersOf(room);
           seenMessages.clear();
           detail.textContent = '';
@@ -391,7 +408,7 @@
             fetch('/v2/chat/llm/stream', {
               method: 'POST',
               headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token },
-              body: JSON.stringify({ session: 'room_' + roomId, message: body, ...(replyTo ? { replyTo } : {}) }),
+              body: JSON.stringify({ session: roomSession, message: body, ...(replyTo ? { replyTo } : {}) }),
             }).then((resp) => {
               if (!resp.ok || !resp.body) { askBtn.disabled = false; sendMsg.textContent = 'error ' + resp.status; return; }
               const reader = resp.body.getReader();
