@@ -54,11 +54,32 @@ module.exports = {
     }
 
     // 2. Run the governed turn — same brain, same approvals.
+    // B3: useKnowledge → knowledge.search top-3; kontekst prependes prompten som
+    // [KB]-note; citede kilder cite()'es og returneres som citations.
     const brain = getBrain(gw);
     const session = `room_${roomId}`;
+    let promptMessage = message;
+    let citations = [];
+    if (body.useKnowledge === true) {
+      try {
+        if (!gw._knowledgeStore) {
+          const { KnowledgeStore } = require('../knowledge');
+          gw._knowledgeStore = new KnowledgeStore({
+            file: process.env.TG_KNOWLEDGE_FILE || require('node:path').join(process.cwd(), 'data', 'knowledge.json'),
+          });
+        }
+        // search() returnerer flade {…source, score} objekter
+        const kbHits = (gw._knowledgeStore.search(message, { limit: 3 }) || []).filter((h) => h && h.id);
+        const notes = kbHits.map((h) => `[KB ${h.id}] ${h.title}: ${String(h.content || '').slice(0, 400)}`).join('\n');
+        if (notes) {
+          promptMessage = `${message}\n\n[Knowledge context — cite only if used]\n${notes}`;
+          citations = kbHits.map((h) => h.id);
+        }
+      } catch { /* knowledge utilgængelig → ingen citations, fail-open for svaret */ }
+    }
     let reply, proposal = null, fallback = false;
     try {
-      const out = await brain.propose(message, { session, bot });
+      const out = await brain.propose(promptMessage, { session, bot });
       reply = typeof out.reply === 'string' ? out.reply : '';
       proposal = out.proposal || null;
       fallback = out.fallback === true;
@@ -73,16 +94,24 @@ module.exports = {
     }
 
     // 3. Append the assistant envelope (additive kind) with proposal + fallback flag.
+    // B3: registrér citations på kilderne (ref til question-envelope)
+    if (citations.length) {
+      try {
+        for (const id of citations) {
+          gw._knowledgeStore.cite(id, { ref_type: 'room_message', ref_id: q.message.id });
+        }
+      } catch { /* citation-registrering fejler stille — svaret er allerede governed */ }
+    }
     const a = await store.deliver(roomId, {
       from: bot,
       kind: 'assistant',
       body: reply,
       replyTo,
-      extra: { ...(proposal ? { proposal } : {}), ...(fallback ? { fallback: true } : {}) },
+      extra: { ...(proposal ? { proposal } : {}), ...(fallback ? { fallback: true } : {}), ...(citations.length ? { citations } : {}) },
     });
     if (!a.ok) return send(res, 400, { error: a.error });
 
     gw._audit({ type: 'room_ask', roomId, bot, fallback });
-    send(res, 200, { ok: true, reply, ...(proposal ? { proposal } : {}), ...(fallback ? { fallback: true } : {}), messageId: a.message && a.message.id });
+    send(res, 200, { ok: true, reply, ...(proposal ? { proposal } : {}), ...(fallback ? { fallback: true } : {}), ...(citations.length ? { citations } : {}), messageId: a.message && a.message.id });
   },
 };

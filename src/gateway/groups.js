@@ -308,6 +308,7 @@ class RoomStore {
           message.proposal = { tool: extra.proposal.tool, decision: extra.proposal.decision ?? null };
         }
         if (extra.fallback === true) message.fallback = true;
+        if (Array.isArray(extra.citations)) message.citations = extra.citations;
       }
     }
     if (Array.isArray(mentions) && mentions.length) message.mentions = explicitMentions;

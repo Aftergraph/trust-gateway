@@ -12,6 +12,11 @@
 // requires operator.
 
 const { send, readBody } = require('../server');
+async function readJson(req) {
+  const raw = await readBody(req);
+  try { return { body: raw ? JSON.parse(raw) : {} }; }
+  catch { return { error: 'invalid_json' }; }
+}
 const { canApprove } = require('../rbac');
 const { KnowledgeStore } = require('../knowledge.js');
 const path = require('node:path');
