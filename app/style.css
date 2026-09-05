@@ -520,3 +520,13 @@ h4 { margin: var(--tg-space-2) 0 var(--tg-space-1); color: var(--tg-text-muted, 
 
 /* C4: branch-knap */
 .roommsg-actions .roommsg-branch { color: #7c5cff; }
+
+/* D3: command palette + tema */
+.cmdk-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 9999; display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh; }
+.cmdk-box { width: min(560px, 92vw); background: var(--tg-bg, #14141c); border: 1px solid #333; border-radius: 10px; padding: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+.cmdk-input { width: 100%; box-sizing: border-box; background: transparent; border: none; border-bottom: 1px solid #333; color: inherit; padding: 8px 4px; font-size: 14px; outline: none; }
+.cmdk-row { padding: 6px 10px; border-radius: 6px; cursor: pointer; }
+.cmdk-row.selected { background: #2a2a3a; }
+.cmdk-empty { padding: 8px; color: #888; font-size: 12px; }
+[data-theme="light"] { --tg-bg: #f5f5f7; color-scheme: light; }
+[data-theme="dark"] { --tg-bg: #14141c; color-scheme: dark; }
