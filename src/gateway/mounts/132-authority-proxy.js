@@ -131,6 +131,95 @@ module.exports = function mount(gw) {
     res.statusCode = result.ok ? 200 : result.status;
     res.end(JSON.stringify(result.ok ? result.data : { error: result.error }));
   });
+
+  // H6: POST /v2/authority/leases/:id/revoke — operatør revokerer en lease.
+  // Fail-closed: operator-check, reason-påkrævet, AIE-unreachable → ærlig fejl,
+  // read-back efter revoke så UI kan genindlæse fra backend truth.
+  gw.router.post('/v2/authority/leases/:id/revoke', async (req, res) => {
+    if (!operatorOnly(req)) {
+      res.statusCode = 403;
+      return res.end(JSON.stringify({ error: 'operator_required' }));
+    }
+    const leaseMatch = req.url.match(/^\/v2\/authority\/leases\/([^/]+)\/revoke$/);
+    if (!leaseMatch) {
+      res.statusCode = 400;
+      return res.end(JSON.stringify({ error: 'invalid_lease_id' }));
+    }
+    const leaseId = decodeURIComponent(leaseMatch[1]);
+
+    // Læs reason fra body
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    let reason = '';
+    try {
+      const parsed = JSON.parse(body);
+      reason = (parsed.reason || '').trim();
+    } catch { /* empty body or invalid JSON */ }
+    if (!reason) {
+      res.statusCode = 400;
+      return res.end(JSON.stringify({ error: 'reason_required' }));
+    }
+
+    const { httpUrl, httpToken } = _cfg();
+    if (!httpUrl) {
+      // Ingen AIE HTTP — kan ikke revoke (fail-closed, ikke fail-open)
+      res.statusCode = 503;
+      return res.end(JSON.stringify({ error: 'authority_disabled', detail: 'AIE_HTTP_URL not configured' }));
+    }
+
+    // POST til AIE: /leases/:id/revoke
+    const url = `${httpUrl.replace(/\/$/, '')}/leases/${encodeURIComponent(leaseId)}/revoke`;
+    const headers = { 'content-type': 'application/json' };
+    if (httpToken) headers.authorization = `Bearer ${httpToken}`;
+
+    let resp;
+    try {
+      resp = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ reason }),
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch {
+      res.statusCode = 502;
+      return res.end(JSON.stringify({ error: 'aie_unreachable' }));
+    }
+
+    if (resp.status === 401 || resp.status === 403) {
+      res.statusCode = 502;
+      return res.end(JSON.stringify({ error: 'aie_auth_failed' }));
+    }
+    if (resp.status === 409) {
+      // Duplikat revoke — allerede revokeret
+      res.statusCode = 409;
+      return res.end(JSON.stringify({ error: 'already_revoked', lease_id: leaseId }));
+    }
+    if (!resp.ok) {
+      const errBody = await resp.text().catch(() => '');
+      res.statusCode = 502;
+      return res.end(JSON.stringify({ error: 'aie_error', status: resp.status, detail: errBody.slice(0, 200) }));
+    }
+
+    // Success: read-back lease state fra AIE
+    const revokeData = await resp.json().catch(() => ({}));
+
+    // Læs lease igen for at bekræfte tilstanden (read-back, fail-closed)
+    const readBack = await authorityReadHttp('leases');
+    let leaseState = null;
+    if (readBack.ok && readBack.data && Array.isArray(readBack.data.items)) {
+      leaseState = readBack.data.items.find((l) => l.id === leaseId) || null;
+    }
+
+    res.statusCode = 200;
+    res.end(JSON.stringify({
+      ok: true,
+      lease_id: leaseId,
+      revoked: true,
+      reason,
+      lease: leaseState,
+      ...revokeData,
+    }));
+  });
 };
 
 module.exports.KINDS = KINDS;

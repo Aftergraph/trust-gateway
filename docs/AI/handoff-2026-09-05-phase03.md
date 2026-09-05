@@ -105,3 +105,10 @@ TBD — read the uncommitted 26-roadmap or next handoff.
 - POST /v2/rooms/:id/ask: governed LLM-svar som assistant-envelopes i rooms
 - A2 token-streaming LANDET (aabac66). A3 markdown LANDET. BØLGE A KOMPLET (A1-A4). B1 fil-upload LANDET. D1 LANDET (12/12). G5 LANDET — /v1/works/{id}/evidence svarer nu med per-item evidence_verdicts (ok/tampered/unsealed) ved siden af den uændrede bundle-projektion. Integritet end-to-end: birth (G2) → WORKS webui (G3) → TG drawer (G4) → bundle-API verdicts (G5).
 - Roadmap: docs/AI/chat-overgrowth-roadmap.md (12 slices, 4 bølger)
+
+## H-bølge (2026-09-05, efter G5)
+- H1 proxy-verdicts (8ced48c): /v2/executions/:workId/evidence videresender WORKS evidence_verdicts + bundle_id
+- H2 drawer-verdicts (934877c): mission-detail viser [hash ok]/[TAMPERED]/[unsealed] fra WORKS G5 via H1
+- H3 panel-badges (0d9d509): proposal-row viser tampered/unsealed/ok count uden drawer
+- Regression: 44 tests, 43 pass, 1 skip, 0 fail
+- Næste: H4 Authority panel (AIE leases/revocations/delegation i TG SPA)

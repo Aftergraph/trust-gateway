@@ -4,13 +4,16 @@
 // TG's /v2/authority proxy.
 //
 // Endpoints (src/gateway/mounts/132-authority-proxy.js):
-//   GET /v2/authority                  counts for all kinds
-//   GET /v2/authority/:kind            items for kind (max 500)
+//   GET  /v2/authority                       counts for all kinds
+//   GET  /v2/authority/:kind                 items for kind (max 500)
+//   POST /v2/authority/leases/:id/revoke     revoke a lease (H6)
 //
 // UI contract:
 //   • kind tabs: leases / missions / admissions / outcomes / evidence
 //   • leases show revocation flag + delegation depth + budget remaining
 //   • counts summary at top; refresh + 15s auto-poll with cleanup
+//   • H5 detail drawer: click row → revocation-historik, delegation tree, budget
+//   • H6 revoke action: ACTIVE leases expose revoke-button (operator-only, fail-closed)
 //   • fail-closed: 503 authority_disabled / 502 unreachable → inline notice
 //
 // XSS policy: textContent only, no innerHTML (same law as rooms.js).
@@ -22,6 +25,8 @@
   const api = window.TG && window.TG.api;
   const el = window.TG && window.TG.el;
 
+  // H5: detail drawer — click lease/mission → vis revocation-historik,
+  // delegation tree, budget. Missions: state-transitions + linked leases.
   function showDetail(kind, item, host) {
     // luk eksisterende drawer
     const old = host.querySelector('.auth-detail-drawer');
@@ -67,6 +72,48 @@
       drawer.append(el('div', 'auth-detail-section', 'Budget'));
       drawer.append(el('div', null, 'Remaining: ' + (item.budget_remaining ?? '—') +
         ' / Total: ' + (item.budget_total ?? '—')));
+
+      // H6: revoke-action for ACTIVE leases (operator handling direkte fra drawer).
+      // Fail-closed: reason påkrævet; revoke-fejl vises ærligt inline; succes
+      // genindlæser lease-listen så operatøren ser effekten med det samme.
+      if (item.revoked !== true && item.id) {
+        const revokeBar = el('div', 'auth-revoke-bar');
+        const status = el('span', 'muted', '');
+        const revokeBtn = el('button', 'btn no auth-revoke-btn', 'revoke lease');
+        revokeBtn.addEventListener('click', () => {
+          const reason = (prompt('Revoke reason (required):') || '').trim();
+          if (!reason) {
+            status.textContent = 'revoke cancelled: reason required';
+            return;
+          }
+          revokeBtn.disabled = true;
+          status.textContent = 'revoking…';
+          api('/v2/authority/leases/' + encodeURIComponent(item.id) + '/revoke', {
+            method: 'POST',
+            body: JSON.stringify({ reason }),
+          })
+            .then((out) => {
+              if (out && out.ok) {
+                status.textContent = 'revoked — refreshing list';
+                // trigger list refresh via refresh-knap i toolbar
+                const toolbar = host.querySelector('.auth-toolbar .btn.ok');
+                if (toolbar) toolbar.click();
+              } else {
+                const msg = (out && (out.error || out.reason)) || 'revoke failed';
+                status.textContent = 'revoke fejl: ' + msg;
+                revokeBtn.disabled = false;
+              }
+            })
+            .catch((err) => {
+              const msg = err && err.status ? 'HTTP ' + err.status : (err && err.message) || 'kunne ikke revoke';
+              status.textContent = 'revoke fejl: ' + msg;
+              revokeBtn.disabled = false;
+            });
+        });
+        revokeBar.append(revokeBtn, status);
+        drawer.append(revokeBar);
+      }
+
     } else if (kind === 'missions') {
       // State transitions
       const transitions = Array.isArray(item.transitions) ? item.transitions : [];
