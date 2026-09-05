@@ -57,8 +57,13 @@ class KnowledgeStore {
   _save() {
     if (!this.file) return;
     const tmp = this.file + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify({ sources: [...this.sources.values()] }), { mode: 0o600 });
-    if (process.platform !== 'win32') { try { fs.chmodSync(tmp, 0o600); } catch { } }
+    const fd = fs.openSync(tmp, 'w', 0o600);
+    try {
+      fs.writeFileSync(fd, JSON.stringify({ sources: [...this.sources.values()] }));
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
     fs.renameSync(tmp, this.file);
   }
 

@@ -99,8 +99,13 @@ class EvalRunner {
   _save() {
     if (!this.file) return;
     const tmp = this.file + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify({ runs: this.runs }), { mode: 0o600 });
-    if (process.platform !== 'win32') { try { fs.chmodSync(tmp, 0o600); } catch { } }
+    const fd = fs.openSync(tmp, 'w', 0o600);
+    try {
+      fs.writeFileSync(fd, JSON.stringify({ runs: this.runs }));
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
     fs.renameSync(tmp, this.file);
   }
 

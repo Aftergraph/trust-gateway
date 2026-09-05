@@ -39,18 +39,23 @@ class BudgetLedger {
 
   _save() {
     if (!this.file) return;
-    const tmpFile = this.file + '.tmp';
-    fs.writeFileSync(tmpFile, JSON.stringify({
-      budgetUsd: this.budgetUsd,
-      spentUsd: this.spentUsd,
-      reservedUsd: this.reservedUsd,
-      committed: Object.fromEntries(this.committed),
-      reservations: Object.fromEntries(this.reservations),
-      settled: [...this.settled],
-      actionHistory: this.actionHistory,
-    }), { mode: 0o600 });
-    if (process.platform !== 'win32') fs.chmodSync(tmpFile, 0o600);
-    fs.renameSync(tmpFile, this.file);
+    const tmp = this.file + '.tmp';
+    const fd = fs.openSync(tmp, 'w', 0o600);
+    try {
+      fs.writeFileSync(fd, JSON.stringify({
+        budgetUsd: this.budgetUsd,
+        spentUsd: this.spentUsd,
+        reservedUsd: this.reservedUsd,
+        committed: Object.fromEntries(this.committed),
+        reservations: Object.fromEntries(this.reservations),
+        settled: [...this.settled],
+        actionHistory: this.actionHistory,
+      }));
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
+    fs.renameSync(tmp, this.file);
   }
 
   /** Reserve budget for action; returns true if successful. */
