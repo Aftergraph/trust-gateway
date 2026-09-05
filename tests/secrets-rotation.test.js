@@ -38,11 +38,11 @@ function withDbFile(name, fn) {
 // Fresh module graph per case (db.js is a process singleton).
 function freshModules(files) {
   for (const m of Object.keys(require.cache)) {
-    if (m.includes('/src/gateway/')) delete require.cache[m];
+    if (m.includes('/src/gateway/') || m.includes('\\src\\gateway\\')) delete require.cache[m];
   }
   const out = {};
   for (const f of files) {
-    const mod = require(f.startsWith('/') ? f : `../src/gateway/${f}`);
+    const mod = require(path.isAbsolute(f) ? f : `../src/gateway/${f}`);
     Object.assign(out, mod);
     out[path.basename(f).replace(/\.js$/, '')] = mod;
   }
@@ -209,7 +209,7 @@ function makeGw() {
   process.env.TG_SECRETS_VAULT = '1';
   process.env.TG_SECRETS_MASTER_KEY = 'mount-master-key';
   for (const m of Object.keys(require.cache)) {
-    if (m.includes('/src/gateway/')) delete require.cache[m];
+    if (m.includes('/src/gateway/') || m.includes('\\src\\gateway\\')) delete require.cache[m];
   }
   const { Gateway } = require('../src/gateway/server');
   const gw = new Gateway({
@@ -340,7 +340,7 @@ test('mount: guards — vault off → 404, weak_key → 400, same_key → 400', 
     // env off → 404 vault_disabled (feature off = not there)
     delete process.env.TG_SECRETS_VAULT;
     for (const m of Object.keys(require.cache)) {
-      if (m.includes('/src/gateway/')) delete require.cache[m];
+      if (m.includes('/src/gateway/') || m.includes('\\src\\gateway\\')) delete require.cache[m];
     }
     const { Gateway } = require('../src/gateway/server');
     const gw2 = new Gateway({

@@ -45,11 +45,11 @@ function withDbFile(name, fn) {
 // ({ SecretsVault } = freshModules([...])) — single file per call in practice.
 function freshModules(files) {
   for (const m of Object.keys(require.cache)) {
-    if (m.includes('/src/gateway/')) delete require.cache[m];
+    if (m.includes('/src/gateway/') || m.includes('\\src\\gateway\\')) delete require.cache[m];
   }
   const out = {};
   for (const f of files) {
-    const mod = require(f.startsWith('/') ? f : `../src/gateway/${f}`);
+    const mod = require(path.isAbsolute(f) ? f : `../src/gateway/${f}`);
     Object.assign(out, mod);
     out[path.basename(f).replace(/\.js$/, '')] = mod;
   }
@@ -191,7 +191,7 @@ function makeGw(env) {
   process.env.TG_SECRETS_VAULT = '1';
   process.env.TG_SECRETS_MASTER_KEY = 'mount-master';
   for (const m of Object.keys(require.cache)) {
-    if (m.includes('/src/gateway/')) delete require.cache[m];
+    if (m.includes('/src/gateway/') || m.includes('\\src\\gateway\\')) delete require.cache[m];
   }
   console.error('MAKEGW cache cleared, secrets-vault cached?', !!require.cache[require.resolve('../src/gateway/secrets-vault')]);
   const { Gateway } = require('../src/gateway/server');
@@ -311,7 +311,7 @@ test('vault mount: worker 403 + secret_denied audited; anonymous 401; disabled v
     // env off → mount answers 404 vault_disabled (feature off = not there)
     delete process.env.TG_SECRETS_VAULT;
     for (const m of Object.keys(require.cache)) {
-      if (m.includes('/src/gateway/')) delete require.cache[m];
+      if (m.includes('/src/gateway/') || m.includes('\\src\\gateway\\')) delete require.cache[m];
     }
     const { Gateway } = require('../src/gateway/server');
     const gw2 = new Gateway({
