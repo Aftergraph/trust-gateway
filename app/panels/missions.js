@@ -147,22 +147,35 @@
             if (fail > 0) summary.classList && summary.classList.add('has-fail');
             execBox.append(summary);
             const evList = el('div', 'mission-detail-evidence');
-            for (const ev of evs) {
-              const row = el('div', 'mission-evidence-item ev-result ev-' + String(ev.result || 'skip'));
-              row.append(el('span', 'ev-type', ev.type || 'evidence'));
-              row.append(el('span', 'ev-badge ev-badge-' + String(ev.result || 'skip'), String(ev.result || 'skip')));
-              row.append(el('span', 'ev-id', ev.id || ''));
-              // G4: hash-status — fail-closed: TG påstår aldrig 'ok' på eget
-              // initiativ (verify bor i WORKS webui, G3). Kun tilstede/tom vises:
-              if (ev.hash && String(ev.hash).length >= 12) {
-                row.append(el('span', 'ev-hash', '[hash forseglet ' + String(ev.hash).slice(0, 12) + '…]'));
-              } else {
-                row.append(el('span', 'ev-hash ev-hash-unsealed', '[unsealed]'));
+            // H2: hent verdicts parallelt (WORKS G5 evidence_verdicts via H1)
+            const verdictsP = api('/v2/executions/' + encodeURIComponent(p.mission_id) + '/evidence')
+              .then((eOut) => (eOut && eOut.evidence_verdicts) || {})
+              .catch(() => ({}));
+            verdictsP.then((verdicts) => {
+              for (const ev of evs) {
+                const row = el('div', 'mission-evidence-item ev-result ev-' + String(ev.result || 'skip'));
+                row.append(el('span', 'ev-type', ev.type || 'evidence'));
+                row.append(el('span', 'ev-badge ev-badge-' + String(ev.result || 'skip'), String(ev.result || 'skip')));
+                row.append(el('span', 'ev-id', ev.id || ''));
+                // H2: verdict-badge fra WORKS G5 via H1 proxy (evidence_verdicts)
+                // Fail-closed: manglende verdict = [unsealed], aldrig falsk "ok"
+                const vId = ev.id || '';
+                const verdict = (verdicts && verdicts[vId]) || '';
+                if (verdict === 'tampered') {
+                  row.append(el('span', 'ev-verdict ev-verdict-tampered', '[TAMPERED]'));
+                } else if (verdict === 'ok') {
+                  row.append(el('span', 'ev-verdict ev-verdict-ok', '[hash ok]'));
+                } else if (ev.hash && String(ev.hash).length >= 12) {
+                  // G4: hash-status som fallback når verdict ikke er 'ok'/'tampered'
+                  row.append(el('span', 'ev-hash', '[hash forseglet ' + String(ev.hash).slice(0, 12) + '…]'));
+                } else {
+                  row.append(el('span', 'ev-hash ev-hash-unsealed', '[unsealed]'));
+                }
+                if (ev.recorded_at) row.append(el('span', 'ev-ts', new Date(ev.recorded_at).toLocaleTimeString()));
+                evList.append(row);
               }
-              if (ev.recorded_at) row.append(el('span', 'ev-ts', new Date(ev.recorded_at).toLocaleTimeString()));
-              evList.append(row);
-            }
-            execBox.append(evList);
+              execBox.append(evList);
+            });
           } else {
             execBox.append(el('div', 'muted', 'ingen evidence endnu'));
           }
