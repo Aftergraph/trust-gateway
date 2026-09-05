@@ -39,3 +39,9 @@
 - 43 graph/UI tests green
 - PR #14 merged → main 5962f8b
 - audit follow-up: Windows ACL hardening remains open
+
+## 2026-09-05 — request-time tenant-bound delegation graphs
+- feat: resolve tenant in routing and select tenant-specific graph backend
+- cross-tenant chain reads/writes covered; 46 graph/UI tests green
+- PR #16 merged → main f8d6470
+- remaining audit: Windows ACL hardening
