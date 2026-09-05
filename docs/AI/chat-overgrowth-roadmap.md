@@ -66,3 +66,9 @@ PR → squash-merge, handoff opdateres.
   engine 277L, persistent_state 284L.
 - WORKS: 14 Go services (api, evidence, provenance, runner, webhook...),
   workgraph-pakker, enrollment-JWS.
+
+## FULDSTACK-BØLGE E+F+G (2026-09-05, efter roadmap-komplet)
+- E1 mission.create (c12f53f) · E2 TH-12 verificeret · E3 missions-panel (ee4bc71) · E4 lease-visning (5c84a45)
+- F1 mission-detail drawer (7e8240d) · F2 integrity-badge (59a488e) · F3 evidence-badges (a5b1683)
+- G1 WORKS Evidence.Hash (7c77b2f, CI grøn) · G2 Seal ved alle creation-paths (2d94fad, CI grøn)
+- Næste: G3 WORKS-side UI hash-badge · unsealed/tampered visning i TG drawer
