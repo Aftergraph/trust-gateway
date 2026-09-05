@@ -28,3 +28,8 @@
 - optional Gateway delegationChainFile wiring
 - 37 graph/UI tests green
 - PR #10 merged → main e505e78
+
+## 2026-09-05 — tenant-safe delegation graph path
+- feat: delegationChainFile() derives paths through tenant-scope/dataRoot
+- Gateway delegationChainTenantId wiring; 41 graph/UI tests green
+- PR #12 merged → main eae4271
