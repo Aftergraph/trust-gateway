@@ -1,3 +1,8 @@
+## 2026-09-05 — D1: mobil chat-polish (12/12 SLICES KOMPLET)
+- feat: chat-tråd fuldskærm på mobil, compose pinned m. safe-area, 44px tap-targets
+- viewport interactive-widget; prefers-reduced-motion (WCAG 2.3.3)
+- mobile-polish 3/3 — chat-overgrowth-roadmap 12/12 LANDET
+
 ## 2026-09-05 — D2: approval-notify + unread-badges
 - feat: Telegram-notify ved pending approvals (opt-in, fail-open, ingen secrets)
 - UI: unread-badges pr. room (live, nulstilles ved open)

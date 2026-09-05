@@ -41,7 +41,7 @@ Alt bygger på primitives der ALLEREDE findes (232 routes, llm-brain 332L, llm-l
 - BØLGE A: 4/4 ✅ (A1 65d6523 · A2 aabac66 · A3 40a55d6 · A4 86351ae)
 - BØLGE B: 3/3 ✅ (B1 36a97e0 · B2 fdcc3fd · B3 c6a409a)
 - BØLGE C: 4/4 ✅ (C1 1bdfb2c · C2 29a7e90 · C3 afa2075 · C4 45a3e3c)
-- BØLGE D: 0/3 (mobil / push / tema) — tilbage
+- BØLGE D: 3/3 ✅ (D1 b4-commit · D2 b4bfae4 · D3 1149961)
 - Chat-scope: 84 tests grønne (batch1 17 + batch2 67/0/1)
 - Bonus-fixes: 18-knowledge readJson-bug (POST virkede aldrig), test-isolation
   (TG_ROOMS_FILE), TDZ i messageRow, md createTextNode-guard, C1 UI-tab-restore
