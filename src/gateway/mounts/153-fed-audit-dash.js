@@ -5,7 +5,7 @@ const { isOperator } = require('../tenants');
 const { audit } = require('../events');
 
 module.exports = function mountFedAuditDash(gw) {
-  gw.router.get('/v2/federation/audit', async (req, res) => {
+  gw.router.get('/v2/federation/audit/events', async (req, res) => {
     const op = isOperator(req);
     if (!op) {
       audit('fed_audit_denied', { bot: req.bot?.name || 'anonymous', reason: 'not_operator' });

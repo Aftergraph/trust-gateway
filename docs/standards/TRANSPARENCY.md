@@ -777,7 +777,7 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 209 | `tenant_metrics_denied` | mounts/152-tenant-metrics.js (FS-Z1: {bot, reason} — non-operator attempted tenant metrics access) |
 | 210 | `metrics_summary_read` | mounts/152-tenant-metrics.js (FS-Z1: {by, tenantCount} — operator read all-tenant summary; count only) |
 | 211 | `metrics_summary_denied` | mounts/152-tenant-metrics.js (FS-Z1: {bot, reason} — non-operator attempted metrics summary access) |
-| 212 | `fed_audit_queried` | mounts/153-fed-audit-dash.js (FS-Z2: {by, total, returned} — operator queried federation audit events; counts only) |
+| 212 | `fed_audit_queried` | mounts/153-fed-audit-dash.js (FS-Z2: {by, total, returned} — operator queried federation audit events via /v2/federation/audit/events; counts only) |
 | 213 | `fed_audit_denied` | mounts/153-fed-audit-dash.js (FS-Z2: {bot, reason} — non-operator attempted federation audit access) |
 | 214 | `fed_audit_summary_read` | mounts/153-fed-audit-dash.js (FS-Z2: {by, totalEvents} — operator read federation audit summary; count only) |
 | 215 | `fed_audit_summary_denied` | mounts/153-fed-audit-dash.js (FS-Z2: {bot, reason} — non-operator attempted federation audit summary access) |
