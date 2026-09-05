@@ -54,3 +54,10 @@
 - server.js: unified router with fnMounts opt-in wiring
 - 4 works-proxy tests green; 102 graph/UI/stores tests green
 - PR #19 merged → main 69f8f30
+
+## 2026-09-05 — Executions panel (WORKS in TG SPA)
+- feat: read-only WORKS panel consuming /v2/executions proxy
+- core.js WORK domain + index.html + style.css exec-* tokens
+- 26/26 tests green
+- PR #21 merged → main bde419d
+- First cross-repo UI integration — WORKS visible in TG console
