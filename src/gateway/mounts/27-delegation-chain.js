@@ -9,7 +9,7 @@
 // Gateway-scoped chains prevent one gateway/tenant graph from leaking into
 // another gateway instance. Persistence remains a separate future slice.
 
-const { DelegationChain } = require('../delegation-chain');
+const { DelegationChain, DurableDelegationChain } = require('../delegation-chain');
 
 /** @type {WeakMap<object, DelegationChain>} */
 const chains = new WeakMap();
@@ -20,7 +20,9 @@ function getChain(gw) {
   }
   let chain = chains.get(gw);
   if (!chain) {
-    chain = new DelegationChain();
+    chain = gw.delegationChainFile
+      ? new DurableDelegationChain({ file: gw.delegationChainFile })
+      : new DelegationChain();
     chains.set(gw, chain);
   }
   return chain;
