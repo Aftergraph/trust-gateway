@@ -25,7 +25,23 @@
     row.append(el('span', 'mission-id', p.id || ''));
     row.append(el('span', 'mission-obj', p.objective || ''));
     row.append(el('span', 'mission-state ' + stateClass(p.state), p.state || 'draft'));
-    if (p.mission_id) row.append(el('span', 'mission-corr', p.mission_id));
+    if (p.mission_id) {
+      row.append(el('span', 'mission-corr', p.mission_id));
+      // E4: lease-visning — klik henter AIE-leases for missionen (operator)
+      const leaseBtn = el('button', 'btn mission-leases', 'leases');
+      leaseBtn.title = 'vis AIE-leases for missionen';
+      leaseBtn.addEventListener('click', () => {
+        api('/v2/proposals/' + encodeURIComponent(p.id) + '/leases')
+          .then((out) => {
+            const leases = (out && out.leases) || [];
+            const info = out && out.unavailable
+              ? 'AIE utilgængelig'
+              : (leases.length ? leases.map((l) => l.id || l.lease_id || '?').join(', ') : 'ingen leases');
+            row.append(el('span', 'mission-leases', info));
+          })
+          .catch(() => { /* fail-closed i UI */ });
+      });
+    }
     const actions = el('span', 'mission-actions');
     if (p.state === 'draft') {
       const submitBtn = el('button', 'btn mission-submit', 'submit');
@@ -50,6 +66,7 @@
       });
       actions.append(approveBtn, rejectBtn);
     }
+    if (p.mission_id && typeof leaseBtn !== 'undefined') actions.append(leaseBtn);
     row.append(actions);
     return row;
   }
