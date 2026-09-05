@@ -1,3 +1,8 @@
+## 2026-09-05 — C3: human-in-the-loop kort (HIL)
+- feat: GET /v2/rooms/:id/hil — approvals + need-you + takeovers som actionable cards
+- UI: HIL-kort i Mission-tab; TDZ-fix (pendingReply module-scope); md createTextNode-guard
+- hil 3/3, panel 11/11, a4 3/3 — chat-scope grøn
+
 ## 2026-09-05 — C2: delegation-badge i chat + test-isolation
 - feat: handoff-rækker viser from→target + dybde inline
 - FIX: 4 testfiler delte data/rooms.json (TG_ROOMS_FILE default) → flaky; nu isolerede tmp-filer
