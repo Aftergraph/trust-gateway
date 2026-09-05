@@ -1,3 +1,8 @@
+## 2026-09-05 — D2: approval-notify + unread-badges
+- feat: Telegram-notify ved pending approvals (opt-in, fail-open, ingen secrets)
+- UI: unread-badges pr. room (live, nulstilles ved open)
+- notify 2/2; panel 11/11
+
 ## 2026-09-05 — D3: command palette + tema-toggle
 - feat: cmd+K palette (filter/keyboard-navigation) + dark/light m. localStorage
 - Panel-navigation + tema registreret som kommandoer
