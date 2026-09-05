@@ -67,3 +67,10 @@
 - aie_authority_bridge.py reads PersistentState in read-only URI mode
 - 7 tests green; 55 graph/UI/works tests green
 - committed → main e7b5209
+
+## 2026-09-05 — Authority panel (AIE in TG SPA)
+- feat: read-only authority panel consuming /v2/authority proxy
+- 5 kind tabs; lease revocation/depth/budget badges; counts summary
+- 26/26 tests green
+- PR #23 merged → main 02ba7dd
+- Second cross-repo UI integration — AIE authority visible in TG console
