@@ -1,19 +1,21 @@
 'use strict';
 // P2 mount: /v2/authority — AIE authority state surfaced through TG auth.
 //
-//   GET /v2/authority                   counts for all kinds
-//   GET /v2/authority/:kind             items for kind (leases/missions/admissions/outcomes/evidence)
+//   GET  /v2/authority                   counts for all kinds
+//   GET  /v2/authority/:kind             items for kind (leases/missions/admissions/outcomes/evidence)
+//   POST /v2/authority/leases/:id/revoke revoke one lease (H6, operator-only)
 //
 // Transport priority:
-//   1. AIE_HTTP_URL set → fetch the AIE gateway HTTP read endpoints
-//      (GET /leases, /missions, /admissions — AIE ab0c2b5). No subprocess,
-//      no AIE_RUNTIME_PATH/AIE_PYTHON dependency. AIE_HTTP_TOKEN is the
-//      bearer token the AIE gateway expects.
+//   1. AIE_HTTP_URL set → fetch the AIE gateway HTTP endpoints (ab0c2b5):
+//      GET  /leases, /missions, /admissions
+//      POST /revocations  (body {lease_id}) — the authoritative AIE revoke.
+//      No subprocess, no AIE_RUNTIME_PATH/AIE_PYTHON dependency. AIE_HTTP_TOKEN
+//      is the bearer token the AIE gateway expects.
 //   2. Otherwise → aie_authority_bridge.py subprocess (legacy, read-only,
 //      fail-closed). Requires AIE_RUNTIME_PATH.
 //
 // Fail-closed in both modes: unreachable/config-missing → 502/503 with an
-// error code — never synthetic data.
+// error code — never synthetic data. Revoke is HTTP-only: no bridge → 503.
 
 const { spawnSync } = require('child_process');
 const fs = require('fs');
@@ -98,6 +100,24 @@ async function authorityReadAny(kind) {
   return authorityRead(kind);
 }
 
+// H6: find one lease in the authoritative AIE list. AIE GET /leases returns
+// { leases: [...], count } — never invent a shape (user invariant: TG must
+// not invent success locally).
+async function authorityLease(leaseId) {
+  const read = await authorityReadHttp('leases');
+  if (!read.ok) return { ok: false, status: read.status, error: read.error };
+  const list = read.data && Array.isArray(read.data.leases) ? read.data.leases : [];
+  const lease = list.find((l) => String(l.id) === String(leaseId)) || null;
+  return { ok: true, lease };
+}
+
+function leaseExpired(lease) {
+  if (!lease || !lease.expires_at) return false;
+  const exp = new Date(lease.expires_at);
+  if (Number.isNaN(exp.getTime())) return false;
+  return exp.getTime() < Date.now();
+}
+
 module.exports = function mount(gw) {
   const operatorOnly = (req) => {
     const bot = req.bot;
@@ -133,8 +153,12 @@ module.exports = function mount(gw) {
   });
 
   // H6: POST /v2/authority/leases/:id/revoke — operatør revokerer en lease.
-  // Fail-closed: operator-check, reason-påkrævet, AIE-unreachable → ærlig fejl,
-  // read-back efter revoke så UI kan genindlæse fra backend truth.
+  // Full-stack mod AIE's autoritative kontrakt (ab0c2b5):
+  //   pre-check  GET /leases  → lease findes? ikke allerede revoked? ikke expired?
+  //   revoke     POST /revocations { lease_id }  (AIE er idempotent, INSERT OR IGNORE)
+  //   read-back  GET /leases  → bekræft revoked===true (ellers 502, aldrig falsk success)
+  //   audit-seal gw._audit()  → revocation er en sealed hash-chain begivenhed
+  // Fail-closed: operator-check, reason-påkrævet, AIE-unreachable → ærlig fejl.
   gw.router.post('/v2/authority/leases/:id/revoke', async (req, res) => {
     if (!operatorOnly(req)) {
       res.statusCode = 403;
@@ -167,8 +191,27 @@ module.exports = function mount(gw) {
       return res.end(JSON.stringify({ error: 'authority_disabled', detail: 'AIE_HTTP_URL not configured' }));
     }
 
-    // POST til AIE: /leases/:id/revoke
-    const url = `${httpUrl.replace(/\/$/, '')}/leases/${encodeURIComponent(leaseId)}/revoke`;
+    // Pre-check: lease skal findes, være active og ikke expired (fail-closed)
+    const pre = await authorityLease(leaseId);
+    if (!pre.ok) {
+      res.statusCode = pre.status;
+      return res.end(JSON.stringify({ error: pre.error }));
+    }
+    if (!pre.lease) {
+      res.statusCode = 404;
+      return res.end(JSON.stringify({ error: 'lease_not_found', lease_id: leaseId }));
+    }
+    if (pre.lease.revoked === true) {
+      res.statusCode = 409;
+      return res.end(JSON.stringify({ error: 'already_revoked', lease_id: leaseId }));
+    }
+    if (leaseExpired(pre.lease)) {
+      res.statusCode = 409;
+      return res.end(JSON.stringify({ error: 'lease_expired', lease_id: leaseId }));
+    }
+
+    // Revoke mod AIE's autoritative endpoint: POST /revocations { lease_id }
+    const url = `${httpUrl.replace(/\/$/, '')}/revocations`;
     const headers = { 'content-type': 'application/json' };
     if (httpToken) headers.authorization = `Bearer ${httpToken}`;
 
@@ -177,7 +220,7 @@ module.exports = function mount(gw) {
       resp = await fetch(url, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ reason }),
+        body: JSON.stringify({ lease_id: leaseId }),
         signal: AbortSignal.timeout(10_000),
       });
     } catch {
@@ -189,25 +232,23 @@ module.exports = function mount(gw) {
       res.statusCode = 502;
       return res.end(JSON.stringify({ error: 'aie_auth_failed' }));
     }
-    if (resp.status === 409) {
-      // Duplikat revoke — allerede revokeret
-      res.statusCode = 409;
-      return res.end(JSON.stringify({ error: 'already_revoked', lease_id: leaseId }));
-    }
     if (!resp.ok) {
       const errBody = await resp.text().catch(() => '');
       res.statusCode = 502;
       return res.end(JSON.stringify({ error: 'aie_error', status: resp.status, detail: errBody.slice(0, 200) }));
     }
-
-    // Success: read-back lease state fra AIE
     const revokeData = await resp.json().catch(() => ({}));
 
-    // Læs lease igen for at bekræfte tilstanden (read-back, fail-closed)
-    const readBack = await authorityReadHttp('leases');
-    let leaseState = null;
-    if (readBack.ok && readBack.data && Array.isArray(readBack.data.items)) {
-      leaseState = readBack.data.items.find((l) => l.id === leaseId) || null;
+    // Read-back: bekræft fra AIE at lease faktisk er revoked. Uden bekræftelse
+    // → 502, aldrig lokal opfundet succes (user invariant).
+    const back = await authorityLease(leaseId);
+    if (!back.ok || !back.lease || back.lease.revoked !== true) {
+      res.statusCode = 502;
+      return res.end(JSON.stringify({
+        error: 'revoke_unconfirmed',
+        lease_id: leaseId,
+        detail: 'AIE besvarede revoke men read-back bekræfter ikke revoked=true',
+      }));
     }
 
     // Governance: revocation er en sealed audit-begivenhed i hash-chain.
@@ -219,19 +260,19 @@ module.exports = function mount(gw) {
           lease_id: leaseId,
           reason,
           operator: req.bot ? req.bot.name : 'unknown',
-          lease_readback_revoked: leaseState ? leaseState.revoked === true : null,
+          lease_readback_revoked: true,
         });
       } catch { /* audit-fejl må ikke dæmme op for selve revoke */ }
     }
 
     res.statusCode = 200;
     res.end(JSON.stringify({
+      ...revokeData,
       ok: true,
       lease_id: leaseId,
       revoked: true,
       reason,
-      lease: leaseState,
-      ...revokeData,
+      lease: back.lease,
     }));
   });
 };
