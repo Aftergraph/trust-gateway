@@ -73,6 +73,35 @@
     detailBtn.addEventListener('click', () => showMissionDetail(p, host, reload));
     actions.append(detailBtn);
     row.append(actions);
+    // H3: integrity-overview badges i proposal-row (uden at åbne drawer)
+    // Henter verdicts parallelt; viser tampered-count (rød, >0) og unsealed-count (grå)
+    if (p.mission_id) {
+      const badges = el('span', 'mission-integrity-badges');
+      badges.append(el('span', 'muted', '…'));
+      row.append(badges);
+      api('/v2/executions/' + encodeURIComponent(p.mission_id) + '/evidence')
+        .then((eOut) => {
+          badges.textContent = '';
+          const verdicts = (eOut && eOut.evidence_verdicts) || {};
+          const evs = (eOut && eOut.evidence) || [];
+          const tamperedCount = Object.values(verdicts).filter((v) => v === 'tampered').length;
+          const unsealedCount = Object.values(verdicts).filter((v) => v === 'unsealed').length;
+          const okCount = Object.values(verdicts).filter((v) => v === 'ok').length;
+          if (tamperedCount > 0) {
+            badges.append(el('span', 'badge badge-tampered', tamperedCount + ' TAMPERED'));
+          }
+          if (unsealedCount > 0) {
+            badges.append(el('span', 'badge badge-unsealed', unsealedCount + ' unsealed'));
+          }
+          if (tamperedCount === 0 && unsealedCount === 0 && okCount > 0) {
+            badges.append(el('span', 'badge badge-ok', okCount + ' ok'));
+          }
+        })
+        .catch(() => {
+          badges.textContent = '';
+          // fail-closed: ingen syntetiske badges ved fejl
+        });
+    }
     return row;
   }
 
