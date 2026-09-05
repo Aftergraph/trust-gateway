@@ -1,3 +1,8 @@
+## 2026-09-05 — C1: live mission-thread (Mission-tab)
+- feat: GET /v2/rooms/:id/missiontimeline — room+workflow+works i én timeline
+- UI: Mission-tab (lazy); summaries metadata-only (secret-hygiene)
+- 2/2 nye tests; scope 43/0/1
+
 ## 2026-09-05 — B1: fil-upload i rooms (attach → artifacts)
 - feat: POST /v2/rooms/:id/attach — artifact + attachment-envelope (metadata-only)
 - groups.js: whitelistet attachment-body; UI attach-knap + attachment-kort
