@@ -1,3 +1,8 @@
+## 2026-09-05 — B2: voice i rooms (BØLGE B KOMPLET)
+- feat: push-to-talk mic (Web Speech, da-DK) + TTS-knap på assistant-rækker
+- Governance bevaret: transskriptioner gennem governed ask; audit uden tekst
+- rooms-voice 3/3; scope 17/17
+
 ## 2026-09-05 — B3: knowledge-citations i rooms ask
 - feat: useKnowledge → search top-3 → [KB]-kontekst; citations i response+envelope; cite() registreret
 - FIX: 18-knowledge readJson ReferenceError (POST /v2/knowledge virkede aldrig)
