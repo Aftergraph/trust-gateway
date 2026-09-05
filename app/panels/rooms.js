@@ -34,6 +34,8 @@
   // A4: delt reply-state mellem messageRow (reply-knap) og compose-formen
   const pendingReply = { id: null, from: '' };
   let composeInput = null;
+  // D2: unread-tæller pr. room (module-scope — rækker og audit-handler deler den)
+  const unread = new Map();
   // C4: aktiv LLM-session for det åbne room (branch kan skifte den)
   let roomSession = null;
 
@@ -201,6 +203,11 @@
       const card = el('div', 'room-card');
       const head = el('div', 'room-head');
       head.append(el('b', null, room.name || room.id));
+      // D2: unread-badge (opdateres live via onAudit; nulstilles ved openRoom)
+      const unreadBadge = el('span', 'room-unread', '');
+      if (typeof unreadBadge.setAttribute === 'function') unreadBadge.setAttribute('data-unread-room', room.id);
+      if (unread.get(room.id)) unreadBadge.textContent = String(unread.get(room.id));
+      head.append(unreadBadge);
       head.append(el('span', 'muted', String(room.messageCount == null ? (room.messages || []).length : room.messageCount) + ' msgs'));
       head.append(el('span', 'muted', 'turn cap ' + (room.turnLimit == null ? '∞' : room.turnLimit)));
       const open = el('button', 'btn ok', 'open');
@@ -302,6 +309,7 @@
           const room = (d && d.room) || {};
           selectedId = roomId;
           roomSession = 'room_' + roomId;
+          unread.delete(roomId);
           currentMembers = membersOf(room);
           seenMessages.clear();
           detail.textContent = '';
@@ -537,11 +545,21 @@
     // room_message audit payload: {type, roomId, messageId, from, to, kind,
     // bodyLength} — the task contract also allows a body field on the wire;
     // when present we append directly, otherwise we reconcile via the API.
+    // D2: unread-tæller pr. room (audit-events for ikke-åbne rooms)
+    const unreadLocal = unread;
     window.TG.onAudit((e) => {
       const p = e && e.payload;
       if (!p || typeof p.type !== 'string') return;
       if (p.type === 'room_created' || p.type === 'room_deleted') { refreshList(); return; }
-      if (p.type !== 'room_message' || p.roomId !== selectedId) return;
+      if (p.type === 'room_message') {
+        if (p.roomId !== selectedId) {
+          unreadLocal.set(p.roomId, (unreadLocal.get(p.roomId) || 0) + 1);
+          const badge = (typeof document.querySelector === 'function')
+            ? document.querySelector('[data-unread-room="' + p.roomId + '"]') : null;
+          if (badge && badge.textContent !== undefined) badge.textContent = String(unreadLocal.get(p.roomId));
+          return;
+        }
+      }
       const logEl = findLog();
       if (!logEl) return;
       if (p.messageId && seenMessages.has(p.messageId)) return; // dedupe fanout hops

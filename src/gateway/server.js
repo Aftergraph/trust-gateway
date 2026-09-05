@@ -135,6 +135,14 @@ class Gateway extends EventEmitter {
       try { m(this); } catch (e) { console.error(`[fnMounts] wiring failed: ${e.message}`); }
     }
     this._fnMountQueue = [];
+    // D2: Telegram-notify ved pending approvals — opt-in via TG_NOTIFY_CHAT_ID;
+    // fail-open (fejl swallowes+auditeres), approval-flowet brydes aldrig.
+    if (process.env.TG_NOTIFY_CHAT_ID) {
+      try {
+        const handler = require('./approval-notify.js').wire(this);
+        this.on('audit', handler);
+      } catch (e) { console.error(`[approval-notify] wiring failed: ${e.message}`); }
+    }
     this._executors = []; // v2 wave B: {re, fn(bot,tool,args)} for synthetic tools
     // Token-bucket per-bot rate limiter (slice: perimeter-guards).
     const envLimit = Number(process.env.TG_RATE_LIMIT);
