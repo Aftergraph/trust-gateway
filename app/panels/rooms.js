@@ -32,6 +32,9 @@
   const POST_AS = 'forge';   // the console posts room messages as this bot
   const RENDER_CAP = 100;    // max messages rendered per thread
 
+  let mdRender = null;
+  try { mdRender = window.TG_MD ? window.TG_MD.render : require('../../app/lib/md.js').render; } catch { mdRender = null; }
+
   const KIND_CLASS = {
     message: 'kind-message',
     handoff: 'kind-handoff',
@@ -64,7 +67,17 @@
     if (members.bots.includes(m.from)) row.append(el('span', 'badge bot', 'bot'));
     else if (members.humans.includes(m.from)) row.append(el('span', 'badge human', 'human'));
     row.append(el('span', 'roommsg-kind ' + KIND_CLASS[kind], kind));
-    row.append(el('span', 'roommsg-body', bodyText(m)));
+    const bodyEl = el('span', 'roommsg-body');
+    const text = bodyText(m);
+    if (kind === 'assistant' && mdRender) {
+      try {
+        const rendered = mdRender(text);
+        for (const c of (rendered.children || [])) bodyEl.append(c);
+      } catch { bodyEl.textContent = text; }
+    } else {
+      bodyEl.textContent = text;
+    }
+    row.append(bodyEl);
     if (kind === 'assistant' && m.proposal && m.proposal.tool) {
       // governed proposal card: vises kun som METADATA (tool + decision) — aldrig args
       const card = el('div', 'roommsg-proposal');

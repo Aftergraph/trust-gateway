@@ -488,3 +488,9 @@ h4 { margin: var(--tg-space-2) 0 var(--tg-space-1); color: var(--tg-text-muted, 
 
 /* A2: streaming state */
 .room-send .muted { max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* A3: markdown kodeblokke */
+.md-codeblock { position: relative; margin: 4px 0; }
+.md-codeblock pre { background: #16161e; color: #d6d6d6; padding: 8px 10px; border-radius: 6px; overflow-x: auto; font-family: monospace; font-size: 12px; margin: 0; }
+.md-codeblock .md-copy { position: absolute; top: 4px; right: 4px; font-size: 10px; padding: 2px 6px; cursor: pointer; }
+.md-codeblock .md-copy:hover { background: #2a2a35; }
