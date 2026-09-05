@@ -97,7 +97,7 @@ test('corrupt rooms file → refuse to load (fail closed)', () => {
   assert.throws(() => new RoomStore({ file: f2 }), /rooms array/);
 });
 
-test('atomic write: 0600 mode, no .tmp left behind', async () => {
+test('atomic write: 0600 mode, no .tmp left behind', { skip: process.platform === 'win32' ? 'NTFS cannot express POSIX 0o600 (documented Windows ACL boundary)' : false }, async () => {
   const f = tmpfile('rooms.json');
   const s = new RoomStore({ file: f });
   const r = s.create({ name: 'modes', bots: ['forge'] });

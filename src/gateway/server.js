@@ -69,6 +69,7 @@ class Gateway extends EventEmitter {
     delegationChainFile = null, // optional durable A2A delegation graph path
     delegationChainTenantId = null, // derive durable graph path from tenant scope
     fnMounts = null,      // array of function-style mount modules to wire (testing)
+    mounts = null,        // array of object-style mount modules to register (testing)
     telemetryFile,        // G12: telemetry ring file (default data/telemetry.json; null = memory-only)
   } = {}) {
     super();
@@ -91,7 +92,7 @@ class Gateway extends EventEmitter {
     this.telemetry = new TelemetryRing({ file: telemetryFile !== undefined ? telemetryFile : DEFAULT_TELEMETRY_FILE, now });
     this.budgets = budgets ?? null; // v2 Slice 2: opt-in; null => feature off => zero behavior change
     this.now = now;
-    this.mounts = mountFiles ? loadMounts() : [];
+    this.mounts = mountFiles ? loadMounts() : (Array.isArray(mounts) ? mounts.slice() : []);
     // Function-style mounts (120+): wire via gw.router facade. Each mount is
     // called once with (gw) and registers routes on this._fnRoutes.
     this._fnRoutes = [];

@@ -34,7 +34,7 @@ const MAX_HANDOFF_DEPTH = 8;
 const MAX_BODY_LEN = 4000;
 const MAX_MEMBERS_PER_SIDE = 64;
 
-const KINDS = new Set(['message', 'proposal', 'handoff']);
+const KINDS = new Set(['message', 'proposal', 'handoff', 'assistant']);
 
 function err(code) {
   const e = new Error(`room: ${code}`);
@@ -209,7 +209,7 @@ class RoomStore {
 
   // ── delivery: the governed fan-out core ────────────────────────────────
 
-  async deliver(roomId, { from, kind = 'message', body = '', mentions = null, target = null, chain = null, replyTo = null } = {}) {
+  async deliver(roomId, { from, kind = 'message', body = '', mentions = null, target = null, chain = null, replyTo = null, extra = null } = {}) {
     const room = typeof roomId === 'string' ? this.rooms.get(roomId) : roomId;
     if (!room) return { ok: false, error: 'not_found' };
     if (typeof from !== 'string' || !from.trim()) return { ok: false, error: 'from_required' };
@@ -294,6 +294,16 @@ class RoomStore {
       message.body = typeof body === 'string' ? body : String(body ?? '');
     }
     if (kind === 'handoff') { message.target = target; message.chain = chain || [from]; }
+    if (kind === 'assistant') {
+      // A1: governed brain turn — proposal metadata only (tool + decision, no args),
+      // fallback flag for deterministic-mode replies. Same secret hygiene as 'proposal'.
+      if (extra && typeof extra === 'object') {
+        if (extra.proposal && typeof extra.proposal === 'object') {
+          message.proposal = { tool: extra.proposal.tool, decision: extra.proposal.decision ?? null };
+        }
+        if (extra.fallback === true) message.fallback = true;
+      }
+    }
     if (Array.isArray(mentions) && mentions.length) message.mentions = explicitMentions;
     if (typeof replyTo === 'string' && replyTo) message.replyTo = replyTo;
 

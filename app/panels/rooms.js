@@ -36,6 +36,7 @@
     message: 'kind-message',
     handoff: 'kind-handoff',
     proposal: 'kind-proposal',
+    assistant: 'kind-assistant',
   };
 
   function membersOf(room) {
@@ -64,6 +65,15 @@
     else if (members.humans.includes(m.from)) row.append(el('span', 'badge human', 'human'));
     row.append(el('span', 'roommsg-kind ' + KIND_CLASS[kind], kind));
     row.append(el('span', 'roommsg-body', bodyText(m)));
+    if (kind === 'assistant' && m.proposal && m.proposal.tool) {
+      // governed proposal card: vises kun som METADATA (tool + decision) — aldrig args
+      const card = el('div', 'roommsg-proposal');
+      card.append(el('span', 'proposal-label', 'proposal'));
+      card.append(el('span', 'proposal-tool', String(m.proposal.tool)));
+      if (m.proposal.decision) card.append(el('span', 'proposal-decision', String(m.proposal.decision)));
+      if (m.fallback) card.append(el('span', 'proposal-fallback', 'fallback'));
+      row.append(card);
+    }
     row.append(el('span', 'roommsg-ts', m.ts ? new Date(m.ts).toLocaleTimeString() : ''));
     return row;
   }
@@ -248,7 +258,32 @@
             });
             mentions.append(mb);
           }
-          send.append(mentions, bodyIn, sendBtn, sendMsg);
+          const askBtn = el('button', 'btn', 'ask'); // A1: spørg hjernen — governed LLM turn
+          askBtn.title = 'spørg hjernen (governed: proposal + approval-kort i tråden)';
+          send.append(mentions, bodyIn, sendBtn, askBtn, sendMsg);
+          askBtn.addEventListener('click', (ev2) => {
+            ev2.preventDefault();
+            const body = bodyIn.value.trim();
+            if (!body) return;
+            askBtn.disabled = true;
+            sendMsg.textContent = '…hjernen tænker';
+            api('/v2/rooms/' + encodeURIComponent(roomId) + '/ask', {
+              method: 'POST',
+              body: JSON.stringify({ message: body }),
+            })
+              .then((out) => {
+                askBtn.disabled = false;
+                sendMsg.textContent = out && out.fallback ? 'fallback (hjernen ej konfigureret)' : '';
+                bodyIn.value = '';
+                openRoom(roomId);
+              })
+              .catch((err) => {
+                askBtn.disabled = false;
+                sendMsg.textContent = err.status === 403 ? 'not member'
+                  : err.status === 404 ? 'no room'
+                  : err.status === 429 ? 'rate limited' : 'error ' + (err.status || '');
+              });
+          });
           send.addEventListener('submit', (ev2) => {
             ev2.preventDefault();
             const body = bodyIn.value.trim();
