@@ -49,3 +49,8 @@
 - feat: buildContract accepts fnRoutes array alongside static mounts
 - GET /v2/rooms/:id/chain etc now visible in OpenAPI contract
 - P2 delegation-chain now complete; 46 tests green
+## 2026-09-05 — WORKS proxy mount
+- feat: /v2/executions read-only proxy through TG auth
+- server.js: unified router with fnMounts opt-in wiring
+- 4 works-proxy tests green; 102 graph/UI/stores tests green
+- PR #19 merged → main 69f8f30
