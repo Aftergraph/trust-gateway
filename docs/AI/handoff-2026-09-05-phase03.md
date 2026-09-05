@@ -103,5 +103,5 @@ TBD — read the uncommitted 26-roadmap or next handoff.
 
 ## Chat-overgrowth — A1 landsat (65d6523)
 - POST /v2/rooms/:id/ask: governed LLM-svar som assistant-envelopes i rooms
-- A2 token-streaming LANDET (aabac66). A3 markdown LANDET. BØLGE A KOMPLET (A1-A4). B1 fil-upload LANDET. D1 LANDET (12/12). E+F komplet + G1 (WORKS Evidence.Hash SHA-256, CI grøn) — mission-kæde med per-item verificerbare evidence-hashes.
+- A2 token-streaming LANDET (aabac66). A3 markdown LANDET. BØLGE A KOMPLET (A1-A4). B1 fil-upload LANDET. D1 LANDET (12/12). G2 LANDET (CI grøn) — hver WORKS-evidence fødes med integrity-hash (Seal ved alle 3 creation-paths). Mission-kæde: chat → godkendelse → WORKS → hash-fors eglet evidence → TG-verificering.
 - Roadmap: docs/AI/chat-overgrowth-roadmap.md (12 slices, 4 bølger)
