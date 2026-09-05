@@ -66,6 +66,7 @@ class Gateway extends EventEmitter {
     staticDir = null,     // v2: serve SPA from this dir at /
     marketingDir = null,  // v2: serve public site from this dir at /home
     botsDir = null,       // wave C: jails root, available to mount-declared executors
+    delegationChainFile = null, // optional durable A2A delegation graph path
     telemetryFile,        // G12: telemetry ring file (default data/telemetry.json; null = memory-only)
   } = {}) {
     super();
@@ -120,6 +121,7 @@ class Gateway extends EventEmitter {
     }
     this.staticDir = staticDir ?? null;
     this.botsDir = botsDir;
+    this.delegationChainFile = delegationChainFile;
     this._executors = []; // v2 wave B: {re, fn(bot,tool,args)} for synthetic tools
     // Token-bucket per-bot rate limiter (slice: perimeter-guards).
     const envLimit = Number(process.env.TG_RATE_LIMIT);
