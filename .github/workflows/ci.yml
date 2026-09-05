@@ -10,7 +10,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Workspace contract: tests boot the AIE gateway subprocess and read
+      # governance contracts, so those siblings must be materialized.
+      - uses: actions/checkout@v4
+        with:
+          repository: Aftergraph/aie
+          path: ../aie
+      - uses: actions/checkout@v4
+        with:
+          repository: Aftergraph/after-graph-governance
+          path: ../governance
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - name: Install python deps for AIE-boot tests
+        run: pip install --quiet pyjwt
       - run: npm test
+        env:
+          AIE_RUNTIME_PATH: ${{ github.workspace }}/../aie
+          GOVERNANCE_DIR: ${{ github.workspace }}/../governance
