@@ -554,3 +554,9 @@ h4 { margin: var(--tg-space-2) 0 var(--tg-space-1); color: var(--tg-text-muted, 
 .mission-detail-evidence { margin-top: 4px; font-size: 11px; }
 .mission-evidence-item { font-family: monospace; font-size: 10px; color: #b8860b; padding: 1px 0; word-break: break-all; }
 .mission-detail-close { float: right; font-size: 11px; cursor: pointer; }
+
+/* F2: integrity-badge */
+.mission-detail-verify { margin: 8px 0; font-size: 12px; }
+.chain-verify { padding: 2px 8px; border-radius: 8px; font-size: 11px; }
+.chain-verify.ok { background: #14321f; color: #4ade80; }
+.chain-verify.broken { background: #3a1414; color: #ff6b6b; font-weight: 600; }

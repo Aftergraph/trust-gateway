@@ -100,6 +100,24 @@
       drawer.append(ul);
     }
 
+    // F2: integrity-badge — hash-chain verify, synlig altid (ok ELLER broken)
+    const verifyBox = el('div', 'mission-detail-verify');
+    verifyBox.append(el('span', 'muted', 'verificerer audit-kæde…'));
+    drawer.append(verifyBox);
+    api('/v1/audit/verify')
+      .then((v) => {
+        verifyBox.textContent = '';
+        const ok = v && (v.ok === true || v.valid === true);
+        const len = v && (v.length != null ? v.length : (v.entries && v.entries.length));
+        const badge = el('span', ok ? 'chain-verify ok' : 'chain-verify broken',
+          ok ? ('audit-kæde OK' + (len != null ? ' (' + len + ' entries)' : '')) : 'CHAIN BROKEN');
+        verifyBox.append(badge);
+      })
+      .catch(() => {
+        verifyBox.textContent = '';
+        verifyBox.append(el('span', 'chain-verify broken', 'CHAIN BROKEN'));
+      });
+
     const closeBtn = el('button', 'btn mission-detail-close', 'luk');
     closeBtn.addEventListener('click', () => {
       drawer.textContent = '';
