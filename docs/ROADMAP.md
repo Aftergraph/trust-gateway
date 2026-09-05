@@ -227,15 +227,18 @@ Vurderet mod: kommerciel værdi × teknisk risiko × slice-størrelse.
 - **Ops**: systemd-unit installeret på VDS via deploy/install.sh
   (2026-09-03).
 
-## 8. Næste kandidater (v2m)
+## 8. Næste kandidater (v2m) — ALLE LEVERET (verificeret 2026-09-05)
 
-- (a) Skills shared på tværs af tenants — kræver en federation-design-
-  beslutning (hvem ejer en delt skill? hvordan spores den i chainen?)
-- (b) Observability-dashboard: G12-telemetry-ring + chain-længde +
-  apikey-rate-tællere i ét operator-panel
-- (c) Multi-signal alarmering: watchdog → webhook (Tailscale/Telegram)
-- (d) Self-host dokumentation til eksterne kunder (install.sh + RUNBOOK
-  som kundevendt docs)
+- (a) Skills shared på tværs af tenants: LANDET som FS-I1 (79adeff) — cross-
+  tenant REAL runs med dual-approval (begge tenanter godkender, chain-stemplet
+  begge steder). Verificeret 2026-09-05 på main @62f455f: skills-fed-real.test.js
+  8/8 grøn (dual approval, side-scoping, 404-gating, re-execute block),
+  skills-fed-ledger + skills-federation 16/16 grøn.
+- (b) Observability-dashboard: LANDET som FS-I2 (d52403f) + FS-I3 quota —
+  AlertSink-telemetry + chain-længde + rate-tællere.
+- (c) Multi-signal alarmering: LANDET som FS-I2/I4 — watchdog → webhook.
+- (d) Self-host dokumentation: LANDET — Dockerfile (95b5f8d) + deploy/
+  restore-drill.sh + RUNBOOK som kundevendt docs.
 
 ## 9. Wave v2p leveret
 
