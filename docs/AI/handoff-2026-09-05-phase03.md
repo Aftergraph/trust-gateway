@@ -170,8 +170,15 @@ Cross-repo governance contract enforcement:
 - AIE suite: 260/260 PASS against Aftergraph repo (PYTHONPATH=src required).
 
 **Cross-repo alignment status:** TG conformance (H7) validates proposal + mission-state
-contract (13/13). AIE (H9) now enforces same enum at config boundary. The remaining
-gap is ISR (intelligence-systems-research) — no local ISR repo found; ISR conformance
-tests deferred until repo availability is confirmed.
+contract (13/13). AIE (H9) now enforces same enum at config boundary. ISR conformance:
+**CLOSED 2026-09-05** — `Aftergraph/intelligence-systems-research` exists at
+C:/Users/empir/intelligence-systems-research; `tests/test_mission_state_contract.py`
+(6 tests, commit 4cff7a8) validates the ISR MissionLifecycle FSM and the AIE Mission
+dataclass directly against after-graph-governance `mission-state/1.0.json` —
+verified **6/6 PASS** via `PYTHONPATH=src python -m pytest tests/test_mission_state_contract.py -q`.
+
+NOTE: the ISR test's CONTRACT_PATH is relative (`../after-graph-governance/...` under
+`Path.cwd()`) — the contract fixture must be checked out next to the ISR clone for the
+suite to run; run it from a workspace containing both repos (C:/Users/empir).
 
 ## H-wave: H1–H9 COMPLETE
