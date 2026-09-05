@@ -31,12 +31,19 @@ function codeBlock(lang, code) {
 
 // Inline-parsing: `code`, **bold**, *italic*, [tekst](url) — i prioriteret
 // rækkefølge, rekursivt fladtrykt til elementer.
+function textNode(text) {
+  if (document.createTextNode) return document.createTextNode(text);
+  const n = document.createElement('#text');
+  n.textContent = text;
+  return n;
+}
+
 function inlineText(parent, text) {
   const re = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*]+\*)|(\[[^\]]+\]\([^)]+\))/;
   const m = text.match(re);
-  if (!m) { parent.append(document.createTextNode(text)); return; }
+  if (!m) { parent.append(textNode(text)); return; }
   const before = text.slice(0, m.index);
-  if (before) parent.append(document.createTextNode(before));
+  if (before) parent.append(textNode(before));
   const tok = m[0];
   const rest = text.slice(m.index + tok.length);
   let el;
@@ -58,7 +65,7 @@ function inlineText(parent, text) {
     } else {
       // usikkert skema (javascript: osv.) → drop linket, behold teksten
       el = document.createDocumentFragment ? null : document.createElement('span');
-      if (!el) { parent.append(document.createTextNode(mm ? mm[1] : tok)); el = null; }
+      if (!el) { parent.append(textNode(mm ? mm[1] : tok)); el = null; }
       else { el.textContent = mm ? mm[1] : tok; }
     }
   }

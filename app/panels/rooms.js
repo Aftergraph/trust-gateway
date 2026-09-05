@@ -31,6 +31,9 @@
   const el = window.TG.el;
   const POST_AS = 'forge';   // the console posts room messages as this bot
   const RENDER_CAP = 100;    // max messages rendered per thread
+  // A4: delt reply-state mellem messageRow (reply-knap) og compose-formen
+  const pendingReply = { id: null, from: '' };
+  let composeInput = null;
 
   let mdRender = null;
   try { mdRender = window.TG_MD ? window.TG_MD.render : require('../../app/lib/md.js').render; } catch { mdRender = null; }
@@ -112,14 +115,15 @@
       row.append(card);
     }
     row.append(el('span', 'roommsg-ts', m.ts ? new Date(m.ts).toLocaleTimeString() : ''));
-    // A4: besked-handlinger (reply / copy) — regenerér = klik ask igen med replyTo
+    // A4: besked-handlinger (reply / copy) — reply sætter pendingReply (læst af
+    // compose-formen; bodyIn er i TDZ herinde, derfor ikke refereret direkte).
     const actions = el('span', 'roommsg-actions');
     const replyBtn = el('button', 'roommsg-reply', 'reply');
-    replyBtn.title = 'besvar denne besked med ask';
+    replyBtn.title = 'besvar denne besked med ask — reply på assistant-besked = ask igen (regenerate)';
     replyBtn.addEventListener('click', () => {
-      bodyIn.value = '@' + (m.from || '') + ' ';
-      bodyIn.dataset.replyTo = m.id || '';
-      bodyIn.focus && bodyIn.focus();
+      pendingReply.id = m.id || null;
+      pendingReply.from = m.from || '';
+      if (composeInput) { composeInput.value = '@' + pendingReply.from + ' '; composeInput.dataset.replyTo = pendingReply.id || ''; composeInput.focus && composeInput.focus(); }
     });
     const copyBtn = el('button', 'roommsg-copy', 'copy');
     copyBtn.addEventListener('click', () => {
@@ -254,6 +258,7 @@
   }
 
   function openRoom(roomId) {
+
       if (loading) return;
       loading = true;
       api('/v2/rooms/' + encodeURIComponent(roomId))
@@ -280,7 +285,8 @@
           const tabs = el('div', 'room-tabs');
           const msgTab = el('button', 'tab-btn active', 'Messages');
           const chainTab = el('button', 'tab-btn', 'Delegation');
-          tabs.append(msgTab, chainTab);
+          const missionTab = el('button', 'tab-btn', 'Mission');
+          tabs.append(msgTab, chainTab, missionTab);
           detail.append(tabs);
 
           const log = el('div', 'room-log');
@@ -293,10 +299,45 @@
           const chainView = el('div', 'room-log', 'delegation-chain');
           chainView.style.display = 'none';
           detail.append(chainView);
+          // C1: live mission-thread container + C3 HIL-kort
+          const missionView = el('div', 'room-log', 'mission-timeline');
+          missionView.style.display = 'none';
+          detail.append(missionView);
+          let missionLoaded = false;
+          missionTab.addEventListener('click', () => {
+            if (missionLoaded) return;
+            missionLoaded = true;
+            api('/v2/rooms/' + encodeURIComponent(roomId) + '/missiontimeline', { method: 'GET' })
+              .then((out) => {
+                api('/v2/rooms/' + encodeURIComponent(roomId) + '/hil', { method: 'GET' })
+                  .then((hil) => {
+                    for (const card of (hil && hil.cards) || []) {
+                      const c = el('div', 'hil-card hil-' + card.type);
+                      c.append(el('span', 'hil-type', card.type));
+                      c.append(el('span', 'hil-summary', card.summary || ''));
+                      if (card.actionable) c.append(el('span', 'hil-actionable', 'action needed'));
+                      missionView.append(c);
+                    }
+                  })
+                  .catch(() => { /* HIL utilgængelig */ });
+                const entries = (out && out.entries) || [];
+                if (!entries.length) { missionView.append(el('div', 'empty', 'no mission activity yet')); return; }
+                for (const e of entries.slice(0, 100)) {
+                  const row = el('div', 'mission-entry mission-' + (e.source || 'room'));
+                  row.append(el('span', 'mission-src', e.source || ''));
+                  row.append(el('span', 'mission-kind', e.kind || ''));
+                  row.append(el('span', 'mission-summary', e.summary || ''));
+                  row.append(el('span', 'mission-ts', e.ts ? new Date(e.ts).toLocaleTimeString() : ''));
+                  missionView.append(row);
+                }
+              })
+              .catch(() => { missionView.append(el('div', 'empty', 'timeline unavailable')); });
+          });
 
           // post form — posts as forge
           const send = el('form', 'room-send');
           const bodyIn = el('input', 'room-body-in');
+          composeInput = bodyIn;
           bodyIn.placeholder = 'message as ' + POST_AS;
           const sendBtn = el('button', 'btn ok', 'send');
           const sendMsg = el('span', 'muted', '');
