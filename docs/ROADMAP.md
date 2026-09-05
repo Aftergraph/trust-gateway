@@ -255,21 +255,14 @@ TRANSPARENCY rækker 118–139 tilføjet. Syv slices landet:
   uden genstart.
 - **FS-I7** (49a778a): chain archival med age-baseret compaction.
 
-## 10. Næste kandidater (v2q)
+## 10. Næste kandidater (v2q) — ALLE LEVERET
 
-- (a) Federation real-run audit-dashboard — operator-visning af
-  cross-tenant executions (bygger på FS-I1's chain-stemplede runs)
-- (b) Secrets rotation operator-endpoint — rotér
-  TG_SECRETS_MASTER_KEY og re-encrypt alle vault-entries (bygger på
-  FS-I5)
-- (c) Archive restore-drill — gendan arkiverede chain-entries til live
-  DB (modstykke til FS-I7 + FS-E2's restore-drill)
-- (d) Tenant-scoped telemetry isolation — per-tenant event-streams
-  (bygger på FS-I2)
-- (e) Observability historiske snapshots — persistér snapshots hver
-  time, queryable (udvider FS-I2's coupling)
-- (f) Quota usage alerts — auto-alarm når en tenant rammer 80% af
-  disk/API-cappen (bygger på FS-I3)
+- (a) Federation real-run audit-dashboard — FS-K1/FS-Z2 (`fed-audit-dash`)
+- (b) Secrets rotation operator-endpoint + vault-status panel — FS-I5 + v2q-(b)
+- (c) Archive restore-drill — FS-J3 (`chain-archive-restore`)
+- (d) Tenant-scoped telemetry isolation — FS-I2 (`telemetry-tenant`)
+- (e) Observability historiske snapshots — FS-K3 (`obsv-history`)
+- (f) Quota usage alerts — FS-K4 (`quota-alerts`)
 
 *Owner: Jonas · Genereret af convergence-agent efter wave v2h + PM-audit;
 opdateret efter v2l; opdateret efter v2p; opdateret efter v2w.*
