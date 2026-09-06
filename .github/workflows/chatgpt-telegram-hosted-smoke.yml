@@ -1,0 +1,51 @@
+name: ChatGPT Telegram hosted smoke
+
+on:
+  push:
+    branches:
+      - ops/chatgpt-telegram-hosted-smoke-20260906
+
+permissions:
+  contents: read
+
+jobs:
+  telegram-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      TG_TELEGRAM_TOKEN: ${{ secrets.TG_TELEGRAM_TOKEN }}
+      TG_NOTIFY_CHAT_ID: ${{ secrets.TG_NOTIFY_CHAT_ID }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+    steps:
+      - name: Send and edit one Telegram status message
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          TOKEN="${TG_TELEGRAM_TOKEN:-${TELEGRAM_BOT_TOKEN:-}}"
+          CHAT_ID="${TG_NOTIFY_CHAT_ID:-${TELEGRAM_CHAT_ID:-}}"
+          if [[ -z "$TOKEN" ]]; then
+            echo "MISSING_TELEGRAM_TOKEN_SECRET"
+            exit 78
+          fi
+          if [[ -z "$CHAT_ID" ]]; then
+            echo "MISSING_TELEGRAM_CHAT_SECRET"
+            exit 79
+          fi
+
+          initial='<b>AVC · chatgpt-egress-bridge</b>\n\n🔵 <b>INFO · 1/2</b>\n\nChatGPT → GitHub Actions → Telegram Bot API live test.'
+          final='<b>AVC · chatgpt-egress-bridge</b>\n\n🟢 <b>COMPLETE · 2/2</b>\n\nLive E2E verificeret: samme Telegram message_id blev redigeret in-place.'
+
+          send_json=$(jq -nc --arg chat_id "$CHAT_ID" --arg text "$initial" '{chat_id:$chat_id,text:$text,parse_mode:"HTML",disable_notification:true,link_preview_options:{is_disabled:true}}')
+          send_resp=$(curl --fail-with-body --silent --show-error -H 'Content-Type: application/json' -d "$send_json" "https://api.telegram.org/bot${TOKEN}/sendMessage")
+          [[ "$(jq -r '.ok // false' <<<"$send_resp")" == "true" ]] || { jq -c '{ok,error_code,description}' <<<"$send_resp"; exit 1; }
+          message_id=$(jq -r '.result.message_id' <<<"$send_resp")
+          echo "SEND_OK message_id=$message_id"
+
+          edit_json=$(jq -nc --arg chat_id "$CHAT_ID" --argjson message_id "$message_id" --arg text "$final" '{chat_id:$chat_id,message_id:$message_id,text:$text,parse_mode:"HTML",link_preview_options:{is_disabled:true}}')
+          edit_resp=$(curl --fail-with-body --silent --show-error -H 'Content-Type: application/json' -d "$edit_json" "https://api.telegram.org/bot${TOKEN}/editMessageText")
+          [[ "$(jq -r '.ok // false' <<<"$edit_resp")" == "true" ]] || { jq -c '{ok,error_code,description}' <<<"$edit_resp"; exit 1; }
+          edit_message_id=$(jq -r '.result.message_id' <<<"$edit_resp")
+          [[ "$edit_message_id" == "$message_id" ]] || { echo "MESSAGE_ID_CHANGED"; exit 1; }
+          echo "LIVE_E2E_OK message_id=$message_id same_message_id=true"
