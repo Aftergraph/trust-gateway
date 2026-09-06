@@ -69,7 +69,7 @@
     for (const e of events.slice(0, 12)) {
       const row = el('div', 'row');
       const d = (e.payload && e.payload.pattern) || (e.data && e.data.pattern) || e.type || '?';
-      const cnt = el('span', 'tag rate-near', fmtCount((e.payload || e.data || {}).count));
+      const cnt = el('span', 'tag rate-near', ((e.payload || e.data || {}).count ?? '—').toString());
       const max = el('span', 'tag limit', String((e.payload || e.data || {}).maxHits || '?') + '/s max');
       const at = el('span', 'age', e.ts ? new Date(e.ts).toLocaleTimeString() : '');
       row.append(el('span', 'hash', d), cnt, max, at);
