@@ -9,6 +9,7 @@ const { Gateway } = require('../src/gateway/server');
 const { issueTicket } = require('./sse-util');
 
 const APP = path.join(__dirname, '..', 'app');
+const ROOT = path.join(__dirname, '..');
 
 test('SPA files exist', () => {
   for (const f of ['index.html', 'app.js', 'style.css']) {
@@ -29,6 +30,21 @@ test('app.js uses EventSource-klienten (TG_EVENTS) + v2 endpoints', () => {
   // (events.js, ticket-exchange — ingen token i URL).
   assert.match(js, /TG_EVENTS/);
   assert.match(js, /\/v2\/chat/);
+});
+
+test('static asset allowlist dækker alle script-src i index.html (anti-drift)', () => {
+  const html = fs.readFileSync(path.join(APP, 'index.html'), 'utf8');
+  const server = fs.readFileSync(path.join(ROOT, 'src', 'gateway', 'server.js'), 'utf8');
+  const refs = [...html.matchAll(/<script src="\/([^"]+)"/g)].map((m) => m[1]);
+  assert.ok(refs.length >= 10, 'index.html har mange script-src');
+  for (const r of refs) {
+    const serverHas = r.startsWith('lib/')
+      ? server.includes('lib\\/[')
+      : r.startsWith('panels/')
+        ? server.includes('panels\\/[')
+        : server.includes(r.replace(/\.js$/, '\\.js')) || server.includes(r);
+    assert.ok(serverHas, `server-allowlist mangler: ${r}`);
+  }
 });
 
 test('XSS guard: no innerHTML assignment in app.js', () => {
