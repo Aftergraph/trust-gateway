@@ -197,6 +197,8 @@ header {
 .tag.exec { background: var(--tg-state-ok-bg); color: var(--tg-state-ok); }
 .tag.approval { background: var(--tg-risk-write-bg); color: var(--tg-risk-write); }
 .tag.deny { background: var(--tg-risk-destructive-bg); color: var(--tg-risk-destructive); }
+.tag.rate-near { background: var(--tg-risk-write-bg); color: var(--tg-risk-write); font-weight: 700; animation: tg-pulse 1.6s ease-in-out infinite; }
+@keyframes tg-pulse { 50% { opacity: 0.55; } }
 .tag.chat { background: var(--tg-risk-secret-bg); color: var(--tg-risk-secret); }
 .tag.other { background: var(--tg-border); color: var(--tg-text-muted); }
 .dec { font-size: var(--tg-text-xs); color: var(--tg-text-muted); }

@@ -30,9 +30,10 @@
     for (const b of buckets) {
       const row = el('div', 'row');
       const key = el('span', 'hash', b.key || '?');
-      const cnt = el('span', 'tag rate', fmtCount(b));
+      const cnt = el('span', 'tag rate' + (b.nearLimit ? ' rate-near' : ''), fmtCount(b));
       const w = el('span', 'age', (b.windowMs || 0) / 1000 + 's window');
       const at = el('span', 'age', b.updatedAt ? new Date(b.updatedAt).toLocaleTimeString() : '');
+      if (b.nearLimit) at.textContent = ' ⚠ near-limit (' + (b.maxHits || '?') + '/s max)';
       row.append(key, cnt, w, at);
       frag.appendChild(row);
     }

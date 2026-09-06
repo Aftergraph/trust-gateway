@@ -128,6 +128,24 @@ describe('FS-X3 route limits', () => {
     delete require.cache[require.resolve('../src/gateway/route-limits')];
   });
 
+  it('e2e: near-limit alert audited EXACTLY once at the 80% crossing', async () => {
+    const rl = require('../src/gateway/route-limits');
+    rl.set('GET /v2/rate/limits-near', { maxHits: 10, windowMs: 60000 }, 'op1');
+    const gw = new Gateway({
+      bots: { atlas: { tokenHash: hashToken('e2e-atlas3'), role: 'operator', capabilities: [] } },
+      dispatch: async () => ({ ok: true }),
+    });
+    for (let i = 1; i <= 10; i++) {
+      const { req, res } = makeReqRes({ method: 'GET', url: '/v2/rate/limits-near', token: 'e2e-atlas3' });
+      await gw.handle(req, res);
+      await new Promise((r) => setImmediate(r));
+    }
+    const near = gw.chain.since(0, { limit: 200 }).entries.filter((e) => e.payload && e.payload.type === 'rate_bucket_near_limit');
+    assert.equal(near.length, 1, 'exactly one near-limit seal per window');
+    assert.equal(near[0].payload.count, 8, 'sealed at the 80% crossing (8/10)');
+    assert.equal(near[0].payload.maxHits, 10);
+  });
+
   it('e2e: route rule enforced on legacy surface — 429 + audit-sealed', async () => {
     const rl = require('../src/gateway/route-limits');
     rl.set('GET /v1/audit', { maxHits: 2, windowMs: 60000 }, 'op1');

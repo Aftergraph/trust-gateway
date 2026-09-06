@@ -263,7 +263,15 @@ class Gateway extends EventEmitter {
     try { routeLimits = require('./route-limits'); } catch { return null; }
     if (!routeLimits.enabled()) return null;
     const r = routeLimits.check(method, pathname, this.now());
-    if (r.skipped || r.allowed) return null;
+    if (r.skipped) return null;
+    if (r.allowed) {
+      // Near-limit alert: audited exactly once per bucket window — the first
+      // hit that crosses the 80% threshold (count === floor(0.8*maxHits)).
+      const near = Math.floor((r.maxHits || 0) * 0.8);
+      if (near > 0 && r.count === near)
+        this._audit({ type: 'rate_bucket_near_limit', bot: bot.name, pattern: r.pattern, path: pathname, count: r.count, maxHits: r.maxHits, windowMs: r.windowMs });
+      return null;
+    }
     this._audit({ type: 'route_rate_limited', bot: bot.name, pattern: r.pattern, path: pathname });
     return { error: 'route_rate_limited', pattern: r.pattern, retryAfterMs: r.retryAfterMs, count: r.count, maxHits: r.maxHits };
   }
