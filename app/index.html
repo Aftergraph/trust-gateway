@@ -75,7 +75,6 @@
 <script src="/lib/cmdk-commands.js"></script>
 <script src="/keys.js"></script>
 <script src="/events.js"></script>
-<script src="/alert-badge.js"></script>
 <script src="/app.js"></script>
 <script src="/auth.js"></script>
 <script src="/tenant-picker.js"></script>
@@ -101,5 +100,7 @@
     <script src="/panels/agents-system.js"></script>
     <script src="/panels/secrets.js"></script>
     <script src="/panels/rate.js"></script>
+    <!-- §20: alert-badge kører EFTER app.js — dens boot-fetch behøver TG + token -->
+    <script src="/alert-badge.js"></script>
 </body>
 </html>
