@@ -23,7 +23,6 @@
     { id: 'providers', title: 'Providers' },
     { id: 'providers-live', title: 'Live' },
     { id: 'computer', title: 'Computer' },
-    { id: 'rate', title: 'Rate' },
     { id: 'playground', title: 'Playground' },
     { id: 'voice', title: 'Voice' },
     { id: 'integrations', title: 'Integrations' },
@@ -31,7 +30,7 @@
 
   // Titles for panels outside the Phase-1 tab list (kept out of TABS_LEGACY
   // so the kill-switch order stays verbatim — panel-core test enforces 13).
-  const PANEL_TITLES_EXTRA = { 'apr-123': 'Cards', secrets: 'Secrets' };
+  const PANEL_TITLES_EXTRA = { rate: 'Rate', 'apr-123': 'Cards', secrets: 'Secrets' };
 
   // ── Phase 2: the 9-domain rail (§2.1). Each domain lists its panels in
   // display order; the first is the domain's landing surface. Panel
