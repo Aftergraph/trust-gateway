@@ -156,3 +156,10 @@ test('auth overlay uses the LIVE gateway contract: /v2/auth/register (not signup
   assert.ok(/action === 'register'/.test(gw) && /action === 'login'/.test(gw), 'mount implements register+login');
   assert.ok(/email: username/.test(js), 'client sends email field (mount contract is {email,password})');
 });
+
+test('authMe has a last-writer-wins guard: boot probe cannot clobber fresh login', () => {
+  const js = read('app/auth.js');
+  assert.ok(/_authSeq/.test(js), 'sequence guard exists');
+  assert.match(js, /seq !== _authSeq/, 'stale responses ignored');
+  assert.ok((js.match(/seq !== _authSeq/g) || []).length >= 2, 'guard on both then and catch paths');
+});

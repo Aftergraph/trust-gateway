@@ -37,8 +37,11 @@
     return fetch(path, init);
   }
 
-  function authMe() {
+  var _authSeq = 0; // last-writer-wins guard: a slow boot probe must never
+  function authMe() { // overwrite the result of a newer authMe (post-login state)
+    var seq = ++_authSeq;
     return userApi('/v2/auth/me', { method: 'GET' }).then(function (res) {
+      if (seq !== _authSeq) return null; // stale response — ignore entirely
       if (res.status === 200) {
         hasCookieSession = true;
         return res.json().catch(function () { return {}; });
@@ -51,6 +54,7 @@
       hasCookieSession = false;
       return null;
     }).catch(function () {
+      if (seq !== _authSeq) return null;
       // network failure / endpoint not deployed: stay silent, affordance only
       hasCookieSession = false;
       return null;
