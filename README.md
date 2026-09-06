@@ -1,4 +1,7 @@
 <!-- aftergraph-brand-os:v1.0.0 -->
+
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Aftergraph/trust-gateway/badge)](https://scorecard.dev/viewer/?uri=github.com/Aftergraph/trust-gateway)
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset=".github/assets/github/hero.webp">
