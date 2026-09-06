@@ -163,3 +163,10 @@ test('authMe has a last-writer-wins guard: boot probe cannot clobber fresh login
   assert.match(js, /seq !== _authSeq/, 'stale responses ignored');
   assert.ok((js.match(/seq !== _authSeq/g) || []).length >= 2, 'guard on both then and catch paths');
 });
+
+test('_serveStaticFrom sends cache-control: no-cache (rollout must reach clients)', () => {
+  const srv = read('src/gateway/server.js');
+  const m = srv.match(/res\.writeHead\(200, \{ 'content-type': MIME\[path\.extname\(file\)\][^\n]*/);
+  assert.ok(m, 'writeHead line found');
+  assert.match(m[0], /cache-control': 'no-cache'/, 'app assets are revalidated on every load');
+});
