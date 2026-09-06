@@ -3,7 +3,7 @@
 'use strict';
 
 /* Bump this constant to invalidate every cache on deploy. */
-const VERSION = 'trust-gateway-v2-pwa-bc4bbd2';
+const VERSION = 'trust-gateway-v2-pwa-3019c36';
 const SHELL_CACHE = 'tg-shell-' + VERSION;
 
 /* The app shell: everything needed to render the console with no network. */
