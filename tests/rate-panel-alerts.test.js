@@ -89,9 +89,16 @@ test('S19: SSE abonnerer via ?token= (EventSource kan ikke sætte headers) og ly
   assert.ok(src.includes('refreshAlerts();'), 'seal-frame triggerer fuld refresh');
 });
 
-test('S19: XSS-politik overholdt — ingen innerHTML i rate-panelet', () => {
+test('S19: XSS-politik overholdt — ingen element-html-APIs i rate-panelet', () => {
   assert.ok(!PANEL.includes('innerHTML'), 'textContent-only rendering');
   assert.ok(!PANEL.includes('insertAdjacentHTML'));
+});
+
+test('S19: alert-rækker viser seal-count (48/60) — ikke placeholder', () => {
+  // regression: fmtCount() forventede et {count}-objekt; alert-rækken gav den
+  // et tal → '—'. Nu: count ?? '—' (nul-safe, men tallet renderes).
+  assert.ok(PANEL.includes("count ?? '—'"), 'count falder sikkert tilbage, men vises');
+  assert.ok(!PANEL.includes("fmtCount((e.payload || e.data || {}).count)"), 'gammel fmtCount-misbrug væk');
 });
 
 test('S19: re-render lukker eksisterende EventSource (ingen leak på tab-skift)', () => {
