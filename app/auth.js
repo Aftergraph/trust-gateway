@@ -119,7 +119,7 @@
 
     var form = el('form', 'auth-form');
     var displayField = field('Display name', 'authDisplay', 'text');
-    var userField = field('Username', 'authUser', 'text');
+    var userField = field('Email', 'authUser', 'text');
     var passField = field('Password', 'authPass', 'password');
     var submit = el('button', 'btn auth-submit', 'Sign in');
     var msg = el('div', 'auth-msg', '');
@@ -143,11 +143,11 @@
       var username = document.getElementById('authUser').value.trim();
       var password = document.getElementById('authPass').value;
       var display = document.getElementById('authDisplay').value.trim();
-      if (!username || !password) { msg.textContent = 'username and password required'; return; }
-      var path = mode === 'signup' ? '/v2/auth/signup' : '/v2/auth/login';
+      if (!username || !password) { msg.textContent = 'email and password required'; return; }
+      var path = mode === 'signup' ? '/v2/auth/register' : '/v2/auth/login';
       var body = mode === 'signup'
-        ? { username: username, password: password, display_name: display || username }
-        : { username: username, password: password };
+        ? { email: username, password: password, display_name: display || username }
+        : { email: username, password: password };
       submit.disabled = true;
       userApi(path, { method: 'POST', body: JSON.stringify(body) }).then(function (res) {
         submit.disabled = false;
