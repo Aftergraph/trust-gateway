@@ -1,6 +1,6 @@
 # Trust Gateway — deployable container
 # Zero-dependency Node.js runtime; node:22-alpine base.
-FROM node:22-alpine
+FROM node:26-alpine
 
 WORKDIR /app
 
