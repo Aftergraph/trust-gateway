@@ -16,6 +16,7 @@ const path = require('node:path');
 const http = require('node:http');
 
 const { Gateway } = require('../src/gateway/server');
+const { issueTicket } = require('./sse-util');
 const { getHub } = require('../src/gateway/events');
 const { ApprovalStore } = require('../src/gateway/approvals');
 const { RoomStore, getRoomStore, DEFAULT_TURN_LIMIT, DEFAULT_MSG_CAP, MAX_HANDOFF_DEPTH } = require('../src/gateway/groups');
@@ -500,7 +501,8 @@ test('mount: SSE — hub.broadcast("room", …) streams create + message frames'
   let resolveStream;
   const streamDone = new Promise((r) => { resolveStream = r; });
   try {
-    const req = http.get(`${url}/v2/events?token=tok-atlas`, (res) => {
+    const tk = await issueTicket(url, 'tok-atlas');
+    const req = http.get(`${url}/v2/events?ticket=${tk}`, (res) => {
       let buf = '';
       res.on('data', (chunk) => {
         buf += chunk.toString();

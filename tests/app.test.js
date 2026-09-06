@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
 const { Gateway } = require('../src/gateway/server');
+const { issueTicket } = require('./sse-util');
 
 const APP = path.join(__dirname, '..', 'app');
 
@@ -22,10 +23,11 @@ test('index.html references app.js and style.css', () => {
   assert.match(html, /Trust Gateway/);
 });
 
-test('app.js uses EventSource + v2 endpoints', () => {
+test('app.js uses EventSource-klienten (TG_EVENTS) + v2 endpoints', () => {
   const js = fs.readFileSync(path.join(APP, 'app.js'), 'utf8');
-  assert.match(js, /EventSource/);
-  assert.match(js, /\/v2\/events/);
+  // §20: app.js opretter ikke længere egen EventSource — den deler TG_EVENTS
+  // (events.js, ticket-exchange — ingen token i URL).
+  assert.match(js, /TG_EVENTS/);
   assert.match(js, /\/v2\/chat/);
 });
 
@@ -68,23 +70,38 @@ test('live HTTP: gateway serves the SPA', async () => {
   await new Promise((r) => server.close(r));
 });
 
-test('live HTTP: /v2/events is SSE with auth', async () => {
+test('live HTTP: /v2/events requires an SSE ticket (?token= fail-closed)', async () => {
   const gw = new Gateway({ bots: { a: { token: 'tok-a' } }, staticDir: APP });
   const server = http.createServer((req, res) => gw.handle(req, res));
   const port = await new Promise((r) => server.listen(0, '127.0.0.1', () => r(server.address().port)));
+  const base = 'http://127.0.0.1:' + port;
   try {
-    const good = '/v2/events?token=' + ['tok', 'a'].join('-');
-    const badq = '/v2/events?token=' + ['nope', 'x'].join('-');
-    const res = await new Promise((resolve, reject) =>
-      http.get({ host: '127.0.0.1', port, path: good }, resolve).on('error', reject));
-    assert.equal(res.statusCode, 200);
-    assert.match(res.headers['content-type'], /text\/event-stream/);
-    res.destroy();
-    // bad token rejected
-    const bad = await new Promise((resolve, reject) =>
-      http.get({ host: '127.0.0.1', port, path: badq }, resolve).on('error', reject));
-    assert.equal(bad.statusCode, 401);
-    bad.resume();
+    // 1. §20: det gamle ?token= er fail-closed væk
+    const legacy = await new Promise((resolve, reject) =>
+      http.get({ host: '127.0.0.1', port, path: '/v2/events?token=' + ['tok', 'a'].join('-') }, resolve).on('error', reject));
+    assert.equal(legacy.statusCode, 401);
+    legacy.resume();
+    // 2. ticket-mint kræver bearer
+    const noAuth = await fetch(base + '/v2/events/ticket', { method: 'POST' });
+    assert.equal(noAuth.status, 401);
+    // 3. mint → stream OK
+    const ticket = await issueTicket(base, 'tok-a');
+    assert.match(ticket, /^[0-9a-f]{64}$/);
+    const stream = await new Promise((resolve, reject) =>
+      http.get({ host: '127.0.0.1', port, path: '/v2/events?ticket=' + ticket }, resolve).on('error', reject));
+    assert.equal(stream.statusCode, 200);
+    assert.match(stream.headers['content-type'], /text\/event-stream/);
+    stream.destroy();
+    // 4. single-use: replay af samme ticket → 401
+    const replay = await new Promise((resolve, reject) =>
+      http.get({ host: '127.0.0.1', port, path: '/v2/events?ticket=' + ticket }, resolve).on('error', reject));
+    assert.equal(replay.statusCode, 401);
+    replay.resume();
+    // 5. gibberish ticket → 401
+    const junk = await new Promise((resolve, reject) =>
+      http.get({ host: '127.0.0.1', port, path: '/v2/events?ticket=deadbeef' }, resolve).on('error', reject));
+    assert.equal(junk.statusCode, 401);
+    junk.resume();
   } finally {
     await new Promise((r) => server.close(r));
   }

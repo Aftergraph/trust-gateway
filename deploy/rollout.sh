@@ -12,6 +12,17 @@ BASE="http://127.0.0.1:${PORT}"
 
 cd "$REPO"
 
+# ── pre-push remote guard (§20) — PR-fejlen opstod da origin pegede på
+# JonasAbde-forken. Kanonisk upstream låses her; fork-remote → abort. ──
+CANONICAL_REMOTE="https://github.com/Aftergraph/trust-gateway.git"
+REMOTE_URL="$(git remote get-url origin 2>/dev/null || true)"
+if [ "$REMOTE_URL" != "$CANONICAL_REMOTE" ]; then
+  echo "rollout: origin er ikke kanonisk upstream ($REMOTE_URL)" >&2
+  echo "rollout: forventet $CANONICAL_REMOTE — ret først: git remote set-url origin $CANONICAL_REMOTE" >&2
+  exit 1
+fi
+git config branch.main.pushRemote origin >/dev/null 2>&1 || true
+
 # ── pull (ff-only — a diverged VDS checkout must be resolved by hand) ──
 PREV="$(git rev-parse HEAD)"
 if ! git pull --ff-only; then

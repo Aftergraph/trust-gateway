@@ -6,6 +6,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const { EventEmitter } = require('node:events');
+const { getSseTicketStore } = require('./events-ticket');
 const { HashChain } = require('./hash-chain');
 const { classify, decide } = require('./policy');
 const { computeImpact } = require('./impact');
@@ -398,17 +399,31 @@ class Gateway extends EventEmitter {
       const params = match(mount, req.method, pathname);
       if (!params) continue;
       let bot = null;
+      const ctx = { url, params }; // kontekst til mount.handle — ticket-claim sættes herunder
       if (mount.auth === 'bearer') {
         bot = this._auth(req);
         if (!bot) { this._audit({ type: 'auth_rejected', path: pathname }); return send(res, 401, { error: 'unauthorized' }); }
         const rl = this._enforceRateLimit(bot);
         if (rl.status === 429) { this._audit({ type: 'rate_limited', bot: bot.name, path: pathname }); return send(res, 429, rl.body); }
       } else if (mount.auth === 'query') {
-        const token = url.searchParams.get('token') || '';
-        bot = this._auth({ headers: { authorization: token ? `Bearer ${token}` : '' } });
-        if (!bot) { this._audit({ type: 'auth_rejected', path: pathname }); return send(res, 401, { error: 'unauthorized' }); }
-        const rl = this._enforceRateLimit(bot);
-        if (rl.status === 429) { this._audit({ type: 'rate_limited', bot: bot.name, path: pathname }); return send(res, 429, rl.body); }
+        if (mount.queryAuth === 'ticket') {
+          // §20: token-in-URL er afløst af short-lived single-use tickets for
+          // SSE (EventSource kan ikke sætte Authorization-headers). ?token=
+          // er fail-closed fjernet — kun ?ticket=<30s-nonce> accepteres.
+          const ticket = url.searchParams.get('ticket') || '';
+          const redeemed = ticket ? getSseTicketStore(this).redeem(ticket) : null;
+          if (!redeemed) { this._audit({ type: 'auth_rejected', path: pathname }); return send(res, 401, { error: 'unauthorized' }); }
+          bot = redeemed.bot;
+          if (redeemed.claim) ctx.ticketClaim = redeemed.claim;
+          const rl = this._enforceRateLimit(bot);
+          if (rl.status === 429) { this._audit({ type: 'rate_limited', bot: bot.name, path: pathname }); return send(res, 429, rl.body); }
+        } else {
+          const token = url.searchParams.get('token') || '';
+          bot = this._auth({ headers: { authorization: token ? `Bearer ${token}` : '' } });
+          if (!bot) { this._audit({ type: 'auth_rejected', path: pathname }); return send(res, 401, { error: 'unauthorized' }); }
+          const rl = this._enforceRateLimit(bot);
+          if (rl.status === 429) { this._audit({ type: 'rate_limited', bot: bot.name, path: pathname }); return send(res, 429, rl.body); }
+        }
       }
       // FS-X3 route rules — every mount surface (incl. auth:'none' mounts
       // that re-auth internally, e.g. 09-approvals). Cheap double lookup when
@@ -420,7 +435,10 @@ class Gateway extends EventEmitter {
       }
       const { resolveTenant } = require('./tenant-resolve');
       const { tenant } = resolveTenant(req, this);
-      return mount.handle(this, req, res, { url, params, bot, tenantId: tenant?.id || null, tenant });
+      ctx.bot = bot;
+      ctx.tenantId = tenant?.id || null;
+      ctx.tenant = tenant;
+      return mount.handle(this, req, res, ctx);
     }
 
     if (req.method === 'GET' && !this.staticDir && (pathname === '/' || pathname === '/dashboard')) {

@@ -36,6 +36,18 @@ function makeSandbox() {
     },
     TG_PANELS: [],
   };
+  // §20: rate-panelet abonnerer via den fælles TG_EVENTS-klient (ticket-
+  // exchange). Sandboxen fake'er klientens overflade; selve klientens
+  // kontrakter testes separat i events-client.test.js.
+  const ev = {
+    openCalls: 0,
+    closeUnsubs: [],
+    onAudit: () => { ev.openCalls += 1; return () => { ev.closeUnsubs.push('audit'); }; },
+    onAuthExpired: () => () => {},
+    open: () => ev.openCalls += 1,
+    isOpen: () => false,
+  };
+  win.TG_EVENTS = ev;
   const sandbox = {
     window: win,
     document: { createElement: (t) => domNode(t), createDocumentFragment: () => domNode('#frag') },
@@ -44,6 +56,7 @@ function makeSandbox() {
     setTimeout,
     clearInterval,
     setInterval: () => 1,
+    AbortController: function () { this.signal = {}; this.abort = () => {}; },
   };
   sandbox.window.addEventListener = () => {};
   vm.createContext(sandbox);
@@ -80,13 +93,14 @@ test('S19: alerts-liste henter 24h near-limit-seals fra federation-audit', async
   assert.ok(Math.abs(86400000 - age) < 60000, 'since = 24h-vindue (age ' + age + 'ms)');
 });
 
-test('S19: SSE abonnerer via ?token= (EventSource kan ikke sætte headers) og lytter på audit-frames', () => {
+test('S20: SSE abonnerer via TG_EVENTS (ticket — ingen token i URL) + trailing debounce', () => {
   const src = PANEL;
-  assert.ok(src.includes("new EventSource('/v2/events?token=' + encodeURIComponent(tok))"),
-    'SSE token query-param wiring');
-  assert.ok(src.includes("window.TG.token"), 'token hentes fra TG.token()');
+  assert.ok(src.includes('window.TG_EVENTS.open()'), 'fælles SSE-klient åbnes');
+  assert.ok(src.includes('window.TG_EVENTS.onAudit('), 'audit-frames abonneres via klienten');
+  assert.ok(!src.includes('new EventSource('), 'rate-panelet opretter ikke egen EventSource (token-URL umuligt)');
   assert.ok(src.includes("p.type === 'rate_bucket_near_limit'"), 'frame-filter matcher seal-typen');
-  assert.ok(src.includes('refreshAlerts();'), 'seal-frame triggerer fuld refresh');
+  assert.ok(src.includes('clearTimeout(debounceTimer)') && src.includes('setTimeout('),
+    'trailing debounce samler burst-frames');
 });
 
 test('S19: XSS-politik overholdt — ingen element-html-APIs i rate-panelet', () => {
@@ -97,18 +111,26 @@ test('S19: XSS-politik overholdt — ingen element-html-APIs i rate-panelet', ()
 test('S19: alert-rækker viser seal-count (48/60) — ikke placeholder', () => {
   // regression: fmtCount() forventede et {count}-objekt; alert-rækken gav den
   // et tal → '—'. Nu: count ?? '—' (nul-safe, men tallet renderes).
-  assert.ok(PANEL.includes("count ?? '—'"), 'count falder sikkert tilbage, men vises');
+  assert.ok(PANEL.includes("c === null || c === undefined ? '—' : String(c)"), 'count falder sikkert tilbage, men vises');
   assert.ok(!PANEL.includes("fmtCount((e.payload || e.data || {}).count)"), 'gammel fmtCount-misbrug væk');
 });
 
-test('S19: re-render lukker eksisterende EventSource (ingen leak på tab-skift)', () => {
-  const { win, sandbox } = makeSandbox();
-  let closed = 0;
-  // counting fake FØR første render, så render(c2)'s es.close() rammer tælleren
-  sandbox.EventSource = function () { this.close = () => { closed += 1; }; this.addEventListener = () => {}; };
+test('S20: normalisering sker i fetch-laget (type-guard) — ikke i view-hjælper', () => {
+  // §20: lærdom fra #50 — payload-formatet divergerede mellem runtime og
+  // render. Events normaliseres nu ÉT sted i refreshAlerts (number | {count}
+  // → count), så view'et aldrig ser rå seal-shapes.
+  assert.ok(PANEL.includes('function normalizeCount('), 'type-guard findes');
+  assert.ok(PANEL.includes("typeof raw === 'number'"), 'number-casen først');
+  assert.ok(PANEL.includes("typeof raw.count === 'number'"), 'object-shape {count} dækket');
+  assert.ok(PANEL.includes('map(normalizeAlertEvent)'), 'mapping i fetch-laget (refreshAlerts), ikke i render');
+});
+
+test('S20: re-render afmelder stream + aborter udestående fetches (ingen leak)', () => {
+  const { win } = makeSandbox();
   const c1 = domNode('main');
   const c2 = domNode('main');
   win.TG_PANELS[0].render(c1);
+  // re-render: forrige onAudit-unsubscribe + abortCtrl.abort()
   win.TG_PANELS[0].render(c2);
-  assert.ok(closed >= 1, 'EventSource.close() called on re-render');
+  assert.ok(win.TG_EVENTS.closeUnsubs.length >= 1, 'unsubscribe called on re-render');
 });

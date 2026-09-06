@@ -23,7 +23,7 @@ module.exports = {
     // so the resolver can read the tenant prefix claim off the same token.
     const tk = ctx.url.searchParams.get('token') || '';
     const { tenant } = resolveTenant(
-      { headers: { authorization: tk ? 'Bearer ' + tk : '' }, bot: ctx.bot },
+      { headers: { authorization: tk ? `Bearer ${tk}` : '' }, bot: ctx.bot },
       gw
     );
     if (!tenant) return send(res, 404, { error: 'not_found' });

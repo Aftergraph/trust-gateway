@@ -32,13 +32,17 @@ module.exports = {
   method: 'GET',
   path: '/v2/events',
   auth: 'query',
+  // §20: kun /v2/events kræver SSE-ticket-exchange (token lækker i URL).
+  // Andre query-auth-mounts (fx 10-search) beholder ?token=.
+  queryAuth: 'ticket',
   handle: async (gw, req, res, ctx) => {
-    // Reconstruct the bearer header the query-auth runner already validated
-    // so the resolver can read the tenant prefix claim off the same token
-    // (same pattern as 10-search). req.bot exposes the authenticated bot for
-    // the resolver's operator check (X-Tenant is honoured for operators only).
-    const tk = ctx.url.searchParams.get('token') || '';
-    req.headers.authorization = `Bearer ${tk}`;
+    // §20: auth er sket via ?ticket= (30s single-use nonce, server.js
+    // query-auth). Ticketet bærer et tenant-CLAIM (aldrig token-materiale);
+    // rekonstruér authorization-headeren fra claimet, så resolveren kan læse
+    // tnt_-prefixet (samme mønster som 10-search). Main-klienter har intet
+    // claim → authorization efterlades tom → resolveren falder til main.
+    const claim = ctx.ticketClaim || '';
+    if (claim) req.headers.authorization = `Bearer ${claim}`;
     req.bot = ctx.bot;
     const { tenant } = resolveTenant(req, gw);
     if (!tenant) return send(res, 404, { error: 'not_found' });

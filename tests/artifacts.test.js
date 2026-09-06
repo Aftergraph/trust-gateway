@@ -13,6 +13,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { Gateway } = require('../src/gateway/server');
+const { issueTicket } = require('./sse-util');
 const { ArtifactStore, KINDS } = require('../src/gateway/artifacts');
 
 // ── helpers ──────────────────────────────────────────────────────
@@ -261,7 +262,7 @@ test('SSE: hub /v2/events receives event:artifact broadcasts on create and updat
   ctx.attach(gw);
   const base = await listen(ctx.server);
   try {
-    const stream = sseCollect(base, '/v2/events?token=tok-atlas', 700);
+    const stream = sseCollect(base, '/v2/events?ticket=' + await issueTicket(base, 'tok-atlas'), 700);
     await sleep(100);
     const made = await httpCall(base, 'POST', '/v2/artifacts', { body: { kind: 'report', title: 'r', content: 'x' } });
     await httpCall(base, 'PUT', `/v2/artifacts/${made.body.artifact.id}`, { body: { content: 'y' } });

@@ -30,6 +30,7 @@ const { TenantStore } = require('../src/gateway/tenants');
 const { scopeDir } = require('../src/gateway/tenant-scope');
 const { spawnTenantGateway } = require('../src/gateway/tenant-gateway');
 const { Gateway } = require('../src/gateway/server');
+const { issueTicket } = require('./sse-util');
 
 const AUTH = 'Bear' + 'er ';
 async function api(base, method, p, { body, token, headers = {} } = {}) {
@@ -54,6 +55,8 @@ function makeGateway(bots, extraMounts = []) {
     dispatch: async () => ({ ok: true, ran: 'stub-dispatch' }),
   });
   gw.mounts.push(require('../src/gateway/mounts/09-approvals'));
+  // §20: ticket-mountet skal med for at mønte SSE-tickets i tests
+  gw.mounts.push(require('../src/gateway/mounts/11-events-ticket'));
   for (const m of extraMounts) gw.mounts.push(m);
   return gw;
 }
@@ -242,9 +245,11 @@ test('fs-e1d: /v2/events streams only own tagged entries to non-main tenants', a
   const http = require('node:http');
 
   // collect frames from an SSE stream for `ms` milliseconds
-  const collect = (token, ms) => new Promise((resolve) => {
+  const collect = async (token, ms) => {
+    const tkt = await issueTicket(base, token);
+    return new Promise((resolve) => {
     const out = [];
-    const r = http.get(`${base}/v2/events?token=${encodeURIComponent(token)}`, (res) => {
+    const r = http.get(`${base}/v2/events?ticket=${encodeURIComponent(tkt)}`, (res) => {
       let buf = '';
       res.on('data', (d) => {
         buf += d.toString();
@@ -257,7 +262,8 @@ test('fs-e1d: /v2/events streams only own tagged entries to non-main tenants', a
       setTimeout(() => { r.destroy(); resolve(out); }, ms);
     });
     r.on('error', () => resolve(out));
-  });
+    });
+  };
 
   try {
     const streamAP = collect(A, 1400);
