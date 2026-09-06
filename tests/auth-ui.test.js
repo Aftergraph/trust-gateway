@@ -120,7 +120,7 @@ test('live HTTP: gateway serves /auth.js and the index references it', async () 
     http.get({ host: '127.0.0.1', port, path: p, headers: { authorization: 'Bearer tok-a' } }, (res) => {
       let b = '';
       res.on('data', (c) => (b += c));
-      res.on('end', () => resolve({ status: res.statusCode, ct: res.headers['content-type'] || '', body: b }));
+      res.on('end', () => resolve({ status: res.statusCode, ct: res.headers['content-type'] || '', cc: res.headers['cache-control'] || '', body: b }));
     }).on('error', reject);
   });
   const getNoAuth = (p) => new Promise((resolve, reject) => {
@@ -133,6 +133,7 @@ test('live HTTP: gateway serves /auth.js and the index references it', async () 
     const js = await get('/auth.js');
     assert.equal(js.status, 200, '/auth.js served');
     assert.match(js.ct, /javascript/, '/auth.js is javascript');
+    assert.match(js.cc, /no-cache/, '/auth.js served via the shared static path (cache-control: no-cache)');
     const root = await get('/');
     assert.equal(root.status, 200);
     const appPos = root.body.indexOf('/app.js');

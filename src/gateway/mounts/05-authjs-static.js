@@ -9,7 +9,6 @@
 // No cache headers beyond the gateway defaults; content is a build-free
 // source file.
 
-const fs = require('node:fs');
 const path = require('node:path');
 
 module.exports = {
@@ -25,9 +24,10 @@ module.exports = {
       return require('../server').send(res, 400, { error: 'bad_path' });
     }
     try {
-      const data = fs.readFileSync(file);
-      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' });
-      res.end(data);
+      // Delegate to the canonical static server: identical MIME, path guard
+      // AND cache-control: no-cache — parity with the whitelisted SPA assets.
+      // (A bespoke writeHead here previously bypassed #41's no-cache fix.)
+      return gw._serveStatic(res, 'auth.js');
     } catch {
       require('../server').send(res, 404, { error: 'not_found' });
     }
