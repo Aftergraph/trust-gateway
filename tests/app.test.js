@@ -24,12 +24,15 @@ test('index.html references app.js and style.css', () => {
   assert.match(html, /Trust Gateway/);
 });
 
-test('app.js uses EventSource-klienten (TG_EVENTS) + v2 endpoints', () => {
+test('app.js bruger TG_EVENTS; ingen orphannede es-referencer', () => {
   const js = fs.readFileSync(path.join(APP, 'app.js'), 'utf8');
-  // §20: app.js opretter ikke længere egen EventSource — den deler TG_EVENTS
-  // (events.js, ticket-exchange — ingen token i URL).
   assert.match(js, /TG_EVENTS/);
   assert.match(js, /\/v2\/chat/);
+  // §20-live-fund: connect() kaldte es.close() efter at `es` var fjernet →
+  // ReferenceError ved boot → konsollen død. `es` må kun bruges hvis erklæret.
+  if (/\bes\.close\(/.test(js)) {
+    assert.match(js, /\b(?:let|var|const) es\b/, 'es.close() uden es-deklaration');
+  }
 });
 
 test('static asset allowlist dækker alle script-src i index.html (anti-drift)', () => {
