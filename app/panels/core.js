@@ -28,20 +28,24 @@
     { id: 'integrations', title: 'Integrations' },
   ];
 
+  // Titles for panels outside the Phase-1 tab list (kept out of TABS_LEGACY
+  // so the kill-switch order stays verbatim — panel-core test enforces 13).
+  const PANEL_TITLES_EXTRA = { rate: 'Rate', 'apr-123': 'Cards', secrets: 'Secrets' };
+
   // ── Phase 2: the 9-domain rail (§2.1). Each domain lists its panels in
-  // display order; the first panel is the domain's landing surface. Panel
+  // display order; the first is the domain's landing surface. Panel
   // ids are the SAME as the Phase-1 tab ids — panels register in TG_PANELS
   // by id and are mounted on demand inside their active domain.
   const DOMAINS = [
     { id: 'now',   title: 'NOW',     panels: ['console'] },
-    { id: 'chat',  title: 'CHAT',    panels: ['rooms', 'missions'] },
+    { id: 'chat',  title: 'CHAT',    panels: ['rooms', 'missions', 'apr-123'] },
     { id: 'work',  title: 'WORK',    panels: ['goals', 'builder', 'executions'] },
     { id: 'agents', title: 'AGENTS', panels: ['agents', 'authority'] },
     { id: 'brain', title: 'BRAIN',   panels: ['providers', 'providers-live'] },
     { id: 'output', title: 'OUTPUT', panels: ['artifacts', 'history', 'playground'] },
-    { id: 'control', title: 'CONTROL', panels: ['computer'] },
+    { id: 'control', title: 'CONTROL', panels: ['computer', 'rate'] },
     { id: 'connect', title: 'CONNECT', panels: ['hub', 'integrations', 'voice'] },
-    { id: 'system', title: 'SYSTEM',  panels: ['system'] },
+    { id: 'system', title: 'SYSTEM',  panels: ['system', 'secrets'] },
   ];
 
   // ── §20.3 redirect map: old tab id → domain. G11 (no broken URLs). ─────
@@ -171,7 +175,7 @@
 
   function panelTitle(id) {
     const t = TABS_LEGACY.find((x) => x.id === id);
-    return t ? t.title : id;
+    return t ? t.title : (PANEL_TITLES_EXTRA[id] || id);
   }
 
   // Remember the last-opened panel per domain so re-entering a domain
