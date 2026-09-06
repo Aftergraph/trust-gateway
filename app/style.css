@@ -289,6 +289,18 @@ header {
 .now-queue .now-queue-count { color: var(--tg-text-bright); }
 .now-queue .now-queue-open { font-size: var(--tg-text-xs); padding: 2px var(--tg-space-2); }
 
+/* §20: global near-limit alert badge (NOW-stripet) — gul prik, klik → Rate */
+.alert-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 1px 8px; border-radius: var(--tg-radius-pill);
+  background: var(--tg-risk-write-bg, #3a2f00);
+  color: var(--tg-risk-write, #ffc833);
+  border: 1px solid var(--tg-risk-write, #ffc833);
+  font-size: var(--tg-text-xs); cursor: pointer; user-select: none;
+}
+.alert-badge b { color: var(--tg-text-bright); }
+.alert-badge.hidden { display: none; }
+
 /* Phase 1 (§18): palette (⌘K) */
 .palette-modal { align-items: flex-start; padding-top: 12vh; }
 .palette-box {

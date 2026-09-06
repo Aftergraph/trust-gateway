@@ -6,6 +6,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const http = require('node:http');
 const { Gateway } = require('../src/gateway/server');
+const { issueTicket } = require('./sse-util');
 const { EventHub, getHub, HEARTBEAT_MS } = require('../src/gateway/events');
 
 function buildServer() {
@@ -68,7 +69,8 @@ test('GET /v2/events with valid token streams audit entries', async () => {
   const frames = [];
   let resolveStream;
   const streamDone = new Promise((r) => { resolveStream = r; });
-  const req = http.get(`${url}/v2/events?token=tok-atlas`, (res) => {
+  const tk = await issueTicket(url, 'tok-atlas');
+  const req = http.get(`${url}/v2/events?ticket=${tk}`, (res) => {
     assert.equal(res.statusCode, 200);
     assert.ok(res.headers['content-type'].includes('text/event-stream'));
     let buf = '';

@@ -7,7 +7,6 @@
   const tokenEl = $('tokenInput');
   let token = localStorage.getItem('tg_token') || new URLSearchParams(location.search).get('token') || '';
   tokenEl.value = token ? '••••••••' : '';
-  let es = null;
   let chatOk = null; // feature-detect /v2/chat once
   let whoami = null;  // identity name from GET /v2/whoami (phase 3)
   let myCaps = [];    // capabilities of whoami (phase 3 composition input)
@@ -255,10 +254,19 @@
       primeStream(); refreshPending(); refreshBots();
     }).catch(() => setPill(false));
 
-    es = new EventSource('/v2/events?token=' + encodeURIComponent(token));
-    es.addEventListener('audit', (m) => {
+    // §20: stream via fælles TG_EVENTS — ticket-exchange; token kommer ALDRIG
+    // i query-param/URL (proxy-logs, browserhistorik). Auth-udløb → liveDot
+    // af + opfordring til genautentificering; netværksfejl → backoff-genstart.
+    window.TG_EVENTS.open();
+    window.TG_EVENTS.onStatus((s) => {
+      $('liveDot').className = 'dot ' + (s === 'open' ? 'on' : 'off');
+    });
+    window.TG_EVENTS.onAuthExpired(() => {
+      $('liveDot').className = 'dot off';
+      window.dispatchEvent(new CustomEvent('tg-auth-expired'));
+    });
+    window.TG_EVENTS.onAudit((e) => {
       try {
-        const e = JSON.parse(m.data);
         const stream = $('stream');
         stream.prepend(streamRow(e));
         while (stream.children.length > 200) stream.removeChild(stream.lastChild);
@@ -268,8 +276,6 @@
         window.dispatchEvent(new CustomEvent('tg-audit', { detail: e })); // fan-out to panels
       } catch { /* malformed frame — ignore */ }
     });
-    es.onerror = () => { $('liveDot').className = 'dot off'; };
-    es.onopen = () => { $('liveDot').className = 'dot on'; };
   }
 
   $('connectBtn').addEventListener('click', () => { token = tokenEl.value.replace(/•/g, '') || token; connect(); });

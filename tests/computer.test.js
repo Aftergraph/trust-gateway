@@ -14,6 +14,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { Gateway } = require('../src/gateway/server');
+const { issueTicket } = require('./sse-util');
 const { ComputerStore, frameHash, GENESIS_HASH } = require('../src/gateway/computer');
 
 // ── helpers (mirrors artifacts.test.js) ──────────────────────────
@@ -390,7 +391,7 @@ test('SSE: hub /v2/events receives event:computer broadcasts for frames and cont
   ctx.attach(gw);
   const base = await listen(ctx.server);
   try {
-    const stream = sseCollect(base, '/v2/events?token=tok-atlas', 700);
+    const stream = sseCollect(base, '/v2/events?ticket=' + await issueTicket(base, 'tok-atlas'), 700);
     await sleep(100);
     const made = await httpCall(base, 'POST', '/v2/computer', { body: {} });
     const id = made.body.session.id;

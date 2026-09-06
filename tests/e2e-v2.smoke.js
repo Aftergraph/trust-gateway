@@ -18,11 +18,23 @@ const check = (name, cond, extra = '') => {
   if (!cond) failures++;
 };
 
-function sseCollect(token, seconds) {
+async function sseCollect(token, seconds) {
+  const u = new URL(BASE);
+  const ticket = await new Promise((resolve, reject) => {
+    const req = http.request({
+      host: u.hostname, port: u.port, method: 'POST', path: '/v2/events/ticket',
+      headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' },
+    }, (res) => {
+      let buf = '';
+      res.on('data', (c) => { buf += c; });
+      res.on('end', () => { try { resolve(JSON.parse(buf).ticket); } catch (e) { reject(e); } });
+    });
+    req.on('error', reject);
+    req.end('{}');
+  });
   return new Promise((resolve, reject) => {
-    const u = new URL(BASE);
     const req = http.get({
-      host: u.hostname, port: u.port, path: '/v2/events?token=' + encodeURIComponent(token),
+      host: u.hostname, port: u.port, path: '/v2/events?ticket=' + encodeURIComponent(ticket),
     }, (res) => {
       let buf = '';
       const frames = [];

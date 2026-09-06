@@ -883,3 +883,4 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 278 | `rooms_hil` | mounts/150-rooms-hil.js (rooms HIL: hil event) |
 | 279 | `chat_branch` | mounts/151-chat-llm-branch.js (chat: branch) |
 | 280 | `proposal_leases` | mounts/153-proposal-leases.js (proposal: leases) |
+| 281 | `sse_ticket_issued` | mounts/11-events-ticket.js (SSE ticket mint) |
