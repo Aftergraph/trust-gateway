@@ -435,3 +435,46 @@ to-lags: script + DOMAINS/TABS_LEGACY). Samme skæbne for cards.js
 siden da 1 entry per skip-sæt-ændring. Skip-sættet = fn-style-mounts
 120+ (ved design). Ingen ændring nødvendig; ikke historie-omskrivning
 (chain-integritet > skønhed).
+## 17. Konsol-auth E2E lukket + rate-alerts live (2026-09-06)
+
+### Konsol-auth E2E (T1) — 8 PRs, browser-verificeret
+- **PR #38** (4396e71): registrering var åben + første bruger fik implicit
+  `owner` (firstUserRole-bootstrap = latent eskalation). Nu
+  `TG_AUTH_OPEN_REGISTER=0` → `403 registration_closed` +
+  `user_register_refused`-seal; `TG_FIRST_USER_ROLE=member`. Gating-bevis:
+  cookie-bruger → alle data-routes 401.
+- **PR #39** (355ef8f): konsol-login var 100 % dødt — POSTede `/v2/auth/signup`
+  + `username`, gateway har kun `/register` + `email`. Rettet til kontrakten.
+- **PR #40** (d7f8b69): race — sent boot-authMe (401) overskrev frisk
+  login-chip. Last-writer-wins-guard.
+- **PR #41** (7afee0f): statiske assets uden cache-headers → heuristisk
+  caching; `cache-control: no-cache` på static-path.
+- **PR #42** (7ac6be5): CI-flake = bloat-guard-testens 12.500 SQLite-inserts →
+  timeout i parallel CI. Tærskler læses ved kald-tid (env 5/50 i test).
+- **PR #43** (f3b8688): SW cache-first + VERSION aldrig bumped → evigt gammel
+  konsol. Rollout injicerer deploysha i SW-versionen.
+- **PR #44** (7bb00b4): sidste cache-hul — `/auth.js` serveres af separat mount
+  med egen `writeHead` uden no-cache. Delegeret til fælles static-vej.
+- **PR #45** (557231b): `authMe` returnerede `{user:{...}}` men chip læste
+  `me.display_name` → chip kunne ALDRIG vise navnet. Unwrap-fix.
+
+Browser-E2E (frisk session): overlay auto-åbner ved 401 → login →
+chip "Probe User" + logout → stabil efter 2.5s (ingen race). Testbruger
+slettet, sessioner ryddet, gateway restarted.
+
+### Rate-alerts (T2) — PR #46 (1bdd0d2), live-verificeret
+- `rate_bucket_near_limit` (TRANSPARENCY 282): audit-seal PRÆCIS én gang pr.
+  vindue, når bucket krydser 80 % (`count === floor(maxHits*0.8)`).
+- `/v2/rate/buckets` enrich: `maxHits` + `nearLimit` pr. bucket (console
+  skal ikke re-derivere regler client-side).
+- Konsol: pulserende ⚠-badge på nær-limit buckets.
+
+Live-verifikation (:8800, main 1bdd0d2):
+- 48× POST /v1/actions → `{"maxHits":60,"nearLimit":true}` i buckets-API
+- Præcis 1 seal `rate_bucket_near_limit {count:48, maxHits:60}` i chain
+- Bucket reset (removed:3) → 0 buckets, live-ren
+
+Ops-notat: rollout.sh fejlede stille på stale branch-config
+(`t2-rate-alerts` slettet ved squash → `git pull --ff-only` FEJLET, rollout
+abortede uden at fejle). Redning: `git checkout -B main origin/main` →
+rollout OK. Pitfall logget.
