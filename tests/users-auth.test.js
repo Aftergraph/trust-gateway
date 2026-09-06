@@ -421,3 +421,26 @@ test('users: disabled account cannot login (generic error), existing session kil
     cleanup(dir, srv);
   }
 });
+
+test('auth: register closed when TG_AUTH_OPEN_REGISTER=0 (production default) + refused audit', async () => {
+  const old = process.env.TG_AUTH_OPEN_REGISTER;
+  process.env.TG_AUTH_OPEN_REGISTER = '0';
+  try {
+    delete require.cache[require.resolve('../src/gateway/mounts/101-auth')];
+    delete require.cache[require.resolve('../src/gateway/server')];
+    const { Gateway } = require('../src/gateway/server');
+    const gw = new Gateway({ bots: {} });
+    const port = await new Promise((r) => { const srv = require('node:http').createServer((q, s) => gw.handle(q, s)); srv.listen(0, '127.0.0.1', () => r(srv.address().port)); gw.__srv = srv; });
+    const res = await fetch('http://127.0.0.1:' + port + '/v2/auth/register', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'closed@test.local', password: 'testpass-12345' }),
+    });
+    assert.equal(res.status, 403);
+    assert.equal((await res.json()).error, 'registration_closed');
+    const audits = gw.chain.entries.map((e) => e.payload.type);
+    assert.ok(audits.includes('user_register_refused'), 'user_register_refused audited');
+    await new Promise((r) => gw.__srv.close(r));
+  } finally {
+    process.env.TG_AUTH_OPEN_REGISTER = old || '';
+  }
+});
