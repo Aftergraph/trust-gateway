@@ -26,8 +26,10 @@ echo "rollout: pulled $(git rev-parse --short HEAD) (was $PREV)"
 #    serving its old app.js/auth.js/panels forever (cache-first runtime cache
 #    is keyed on VERSION). Injecting the sha makes each rollout a natural
 #    cache invalidation. File is deployment-mutated only; next pull restores it.
+#    Idempotent: matches ANY previously-injected sha too (a dirty checkout after
+#    a failed earlier run must not make the bump a silent no-op).
 SHA="$(git rev-parse --short HEAD)"
-sed -i "s|const VERSION = 'trust-gateway-v2-pwa-w9\.1\.0'|const VERSION = 'trust-gateway-v2-pwa-${SHA}'|" app/sw.js
+sed -i "s|const VERSION = 'trust-gateway-v2-pwa-[^']*'|const VERSION = 'trust-gateway-v2-pwa-${SHA}'|" app/sw.js
 grep -q "trust-gateway-v2-pwa-${SHA}" app/sw.js || { echo "rollout: SW version bump FAILED" >&2; exit 1; }
 echo "rollout: PWA shell version -> trust-gateway-v2-pwa-${SHA}"
 
