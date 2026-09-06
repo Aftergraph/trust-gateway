@@ -268,8 +268,17 @@ class Gateway extends EventEmitter {
       // Near-limit alert: audited exactly once per bucket window — the first
       // hit that crosses the 80% threshold (count === floor(0.8*maxHits)).
       const near = Math.floor((r.maxHits || 0) * 0.8);
-      if (near > 0 && r.count === near)
+      if (near > 0 && r.count === near) {
         this._audit({ type: 'rate_bucket_near_limit', bot: bot.name, pattern: r.pattern, path: pathname, count: r.count, maxHits: r.maxHits, windowMs: r.windowMs });
+        // Out-of-band notification (webhook/prefs subscribers, FS-L2/W3):
+        // fire-and-forget — never slow the request path. Inert unless
+        // TG_NOTIFY_DELIVERY=1.
+        try {
+          require('./notify-delivery')
+            .deliver('rate_bucket_near_limit', { bot: bot.name, pattern: r.pattern, path: pathname, count: r.count, maxHits: r.maxHits, windowMs: r.windowMs })
+            .catch(() => {});
+        } catch { /* notify unavailable — audit seal already durable */ }
+      }
       return null;
     }
     this._audit({ type: 'route_rate_limited', bot: bot.name, pattern: r.pattern, path: pathname });
