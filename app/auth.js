@@ -44,7 +44,9 @@
       if (seq !== _authSeq) return null; // stale response — ignore entirely
       if (res.status === 200) {
         hasCookieSession = true;
-        return res.json().catch(function () { return {}; });
+        // /v2/auth/me returns {user:{...}} — unwrap so every caller sees the
+        // user object directly (renderAuthChip reads display_name off it).
+        return res.json().then(function (j) { return j.user || j; }).catch(function () { return {}; });
       }
       if (res.status === 401) {
         // silent: not signed in — no console output, no user-facing error

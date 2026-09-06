@@ -171,3 +171,9 @@ test('_serveStaticFrom sends cache-control: no-cache (rollout must reach clients
   assert.ok(m, 'writeHead line found');
   assert.match(m[0], /cache-control': 'no-cache'/, 'app assets are revalidated on every load');
 });
+
+test('authMe unwraps {user:{...}} so the chip can render display_name', () => {
+  const js = read('app/auth.js');
+  assert.match(js, /j\.user \|\| j/, 'authMe unwraps the me-answer to the user object');
+  assert.match(js, /display_name/, 'renderAuthChip reads display_name straight off the resolved value');
+});
