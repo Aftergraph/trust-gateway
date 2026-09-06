@@ -93,8 +93,11 @@ async function deliver(eventType, payload, opts = {}) {
   // Deliver to webhook subscribers
   let webhookDelivered = 0;
   let webhookFailed = 0;
-  if (byChannel.webhook.length > 0) {
-    // Look up webhook URLs from FS-L2 webhook-subs (best-effort)
+  if (byChannel.webhook.length > 0 || _hasRegisteredHook()) {
+    // Look up webhook URLs from FS-L2 webhook-subs (best-effort).
+    // Delivery runs when the operator opened the channel via a pref row OR
+    // when explicit L2 subscriptions exist — the registered eventTypes list
+    // IS the subscription (operator-managed URLs).
     let subs;
     try { subs = require('./webhook-subs'); } catch { subs = null; }
     if (subs && subs.enabled()) {
@@ -120,6 +123,13 @@ async function deliver(eventType, payload, opts = {}) {
       webhook: byChannel.webhook.length,
     },
   };
+}
+
+function _hasRegisteredHook() {
+  let subs;
+  try { subs = require('./webhook-subs'); } catch { return false; }
+  if (!subs.enabled()) return false;
+  try { return subs.list().length > 0; } catch { return false; }
 }
 
 module.exports = {
