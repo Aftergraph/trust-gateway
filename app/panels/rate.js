@@ -1,7 +1,9 @@
 'use strict';
 // Trust Gateway v2 — Rate limits & ledger dashboard panel (FS-M3).
-// Shows route-limit policy + live current-window bucket counts, operator-only.
-// XSS policy: textContent only, no innerHTML.
+// XSS policy: textContent-only rendering (no element-html APIs).
+// §19: near-limit alert history (24h, from the federation audit dashboard) +
+// reactive SSE refresh — a rate_bucket_near_limit frame refreshes the panel
+// immediately instead of waiting up to 30s for the poll tick.
 (function () {
   if (typeof window === 'undefined') return;
   window.TG_PANELS = window.TG_PANELS || [];
@@ -9,6 +11,7 @@
 
   let root = null;
   let refreshTimer = null;
+  let es = null;
 
   function el(tag, cls, text) {
     const n = document.createElement(tag);
@@ -57,6 +60,45 @@
     return frag;
   }
 
+  function renderAlertRows(events) {
+    const frag = document.createDocumentFragment();
+    if (!events || !events.length) {
+      frag.appendChild(el('div', 'empty', 'No near-limit alerts in the last 24h.'));
+      return frag;
+    }
+    for (const e of events.slice(0, 12)) {
+      const row = el('div', 'row');
+      const d = (e.payload && e.payload.pattern) || (e.data && e.data.pattern) || e.type || '?';
+      const cnt = el('span', 'tag rate-near', fmtCount((e.payload || e.data || {}).count));
+      const max = el('span', 'tag limit', String((e.payload || e.data || {}).maxHits || '?') + '/s max');
+      const at = el('span', 'age', e.ts ? new Date(e.ts).toLocaleTimeString() : '');
+      row.append(el('span', 'hash', d), cnt, max, at);
+      frag.appendChild(row);
+    }
+    return frag;
+  }
+
+  function eventPayload(e) {
+    // chain entry: {payload:{type,...}} — SSE frames carry the same entry
+    return (e && e.payload) || {};
+  }
+
+  async function refreshAlerts() {
+    if (!root) return;
+    const box = root.querySelector('.rate-alerts');
+    if (!box) return;
+    box.textContent = '';
+    const since = Date.now() - 24 * 60 * 60 * 1000;
+    try {
+      const d = await window.TG.api('/v2/federation/audit/events?type=rate_bucket_near_limit&since=' + since + '&limit=25');
+      const ev = d.events || [];
+      box.appendChild(el('div', 'row head', ev.length ? ('⚠ ' + ev.length + ' near-limit alerts (24h)') : 'Near-limit alerts (24h)'));
+      box.appendChild(renderAlertRows(ev));
+    } catch (e) {
+      box.appendChild(el('div', 'empty', 'alerts: ' + (e && e.message ? e.message : 'unavailable')));
+    }
+  }
+
   async function refreshList() {
     if (!root) return;
     const list = root.querySelector('.rate-buckets');
@@ -80,6 +122,25 @@
     }
   }
 
+  function openStream() {
+    if (es) { es.close(); es = null; }
+    let tok = '';
+    try { tok = window.TG && typeof window.TG.token === 'function' ? window.TG.token() : ''; } catch (e) { tok = ''; }
+    if (!tok) return;
+    try {
+      es = new EventSource('/v2/events?token=' + encodeURIComponent(tok));
+      es.addEventListener('audit', (ev) => {
+        let entry = null;
+        try { entry = JSON.parse(ev.data); } catch (e) { return; }
+        const p = eventPayload(entry);
+        if (p && p.type === 'rate_bucket_near_limit') {
+          refreshList();
+          refreshAlerts();
+        }
+      });
+    } catch (e) { es = null; }
+  }
+
   function apiEnabled() {
     try { return !!(window.TG && window.TG.api); } catch (e) { return false; }
   }
@@ -87,22 +148,26 @@
   function render(container) {
     root = container;
     if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+    openStream();
 
     container.textContent = '';
     const title = el('h3', null, 'Rate limits & buckets');
     container.appendChild(title);
     if (!apiEnabled()) {
       container.appendChild(el('div', 'empty', 'API surface unavailable.'));
+      if (es) { es.close(); es = null; }
       return;
     }
+    container.appendChild(el('div', 'rate-alerts'));
     container.appendChild(el('div', 'rate-buckets'));
     container.appendChild(el('div', 'rate-limits'));
     const refresh = el('button', undefined, 'Refresh');
-    refresh.addEventListener('click', () => refreshList());
+    refresh.addEventListener('click', () => { refreshList(); refreshAlerts(); });
     container.appendChild(refresh);
 
     refreshList();
-    refreshTimer = setInterval(() => refreshList(), 30000);
+    refreshAlerts();
+    refreshTimer = setInterval(() => { refreshList(); refreshAlerts(); }, 30000);
   }
 
   window.TG_PANELS.push({ id: 'rate', title: 'Rate', render });
