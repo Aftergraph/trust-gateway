@@ -9,15 +9,15 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Workspace contract: tests boot the AIE gateway subprocess and read
       # governance contracts, so those siblings must be materialized inside
       # the workspace (checkout paths must stay under $GITHUB_WORKSPACE).
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: Aftergraph/aie
           path: aie
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: Aftergraph/after-graph-governance
           path: after-graph-governance
