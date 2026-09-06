@@ -232,7 +232,8 @@
 
   function connect() {
     saveToken();
-    if (es) es.close();
+    // §20: stream-ejerskab er flyttet til TG_EVENTS (events.js) — den er
+    // idempotent og lukker sin egen stream ved genåbning. Ingen lokal `es`.
     $('liveDot').className = 'dot on';
     // Phase 3: resolve identity before the composition inputs are read.
     // Phase 4 (G6): capability-scoped API surface — the console binds the
