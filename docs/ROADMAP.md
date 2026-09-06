@@ -510,3 +510,21 @@ rollout OK. Pitfall logget.
 - Live-fund under verifikation: `fmtCount()`-misbrug viste '—' i stedet for count (PR #50, regressionstest).
 - Tests: 7 nye (rate-panel-alerts.test.js, VM-sandbox + kildekode-kontrakter); suite 1830/1830 grøn; CI begge PRs parat.
 - Live-bevis: 58× POST pust → panelet opdaterede (~2s, uden Refresh-klik) → "⚠ 3 near-limit alerts (24h)" + bucket "POST:/v1/actions 58 ⚠ near-limit (60/s max)" + alle rækker viser count 48.
+## 20. SSE-resiliens: ticket-exchange + global near-limit badge (2026-09-06)
+
+Arkitektur-review-feedback (Jonas): token-i-URL lækker i proxy-logs/browserhistorik,
+burst-frames skaber backpressure, 401-reconnect thrash, payload-normalisering manglede.
+Prioritering: resiliens (4 tiltag) + global badge = top; Telegram-notify + ROLLOUT-LOG-eksport = §21-kandidater.
+
+- Backend — `POST /v2/events/ticket` (11-events-ticket.js + events-ticket.js): bearer-autentificeret mint af 30s single-use nonce (crypto-random 64 hex, in-memory TTL) med tenant-CLAIM (`tnt_<id>_ticket` — aldrig token-materiale). `/v2/events` tager nu `?ticket=` (server.js query-auth: ticket-branch); `?token=` på events = fail-closed 401. Andre query-auth-mounts (10-search) beholder `?token=` via `mount.queryAuth`-politik (kun SSE kræver ticket).
+- Fælles klient `app/events.js` (TG_EVENTS): ticket-exchange med Authorization-header, 401/403 → permanent stop (onAuthExpired — ingen reconnect-thrash), netværksfejl → backoff 3s→30s (5 retries), ny ticket pr. genoprettelse (single-use), idempotent open() + subscribe/unsubscribe + onStatus('open'|'reconnect').
+- `app/panels/rate.js`: trailing debounce 400ms på seal-frames (burst → ét UI-fetch), AbortController bundet til render (stream + udestående fetches afbrydes synkront), normalisering i fetch-laget (`normalizeAlertCount` type-guard: number eller {count}-objekt).
+- Global badge `app/alert-badge.js`: gul `⚠ N near-limit` i NOW-stripet — 24h-tæller ved boot (153-fed-audit-dash), live +1 pr. near-limit-frame via TG_EVENTS, skjult ved 0, klik → TG_CORE.switchTab('rate').
+- Live-fund under verifikation (4 ops-fixes, 4 PRs):
+  - #52: static asset-allowlist (server.js) dækkede ikke nye root-filer (events.js/alert-badge.js) OG manglede lib/*, auth.js, tenant-picker.js — alle 404. Allowlist udvidet + anti-drift-test: enhver script-src i index.html skal matche server-allowlisten.
+  - #53: connect() kaldte `es.close()` efter at §20 havde fjernet `let es` → ReferenceError ved boot → konsollen død (window.TG aldrig sat). Regressionstest: es.close() kræver es-deklaration.
+  - #54: alert-badge.js loadede FØR app.js → boot-fetch med tom token → 401 → badge 0 trods total=3. Script flyttet sidst i index.html.
+  - #55: badge-klik brugte `window.jumpTab` — den er en closure, ikke global. Skiftet til TG_CORE.switchTab('rate').
+- Tests: +15 (sse-ticket E2E: mint→stream→replay-401→gibberish-401→?token=-401; events-client 7 VM-kontrakter; alert-badge 5; rate debounce/abort/normalisering; allowlist-anti-drift; es-orphan-guard; 5 testfiler migreret til ticket). Suite 1846 tests / 0 fail. CI grøn på alle 5 PRs.
+- Live-bevis: mint → frisk stream 200; replay 401; ?token= 401; badge "3 near-limit" ved åbning → 48× POST pump → **"4 near-limit" ~2s senere** (SSE, før 30s-pollen); klik → Rate-panelet åbner. Live på 9aa1980.
+- Git-hygiejne: `branch.main.pushRemote origin` + `remote set-head origin -a` låst; rollout.sh fik pre-push remote-guard (fork-remote → abort); CDP-timeout-notat i skill.
