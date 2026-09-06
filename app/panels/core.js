@@ -27,12 +27,14 @@
     { id: 'playground', title: 'Playground' },
     { id: 'voice', title: 'Voice' },
     { id: 'integrations', title: 'Integrations' },
-    { id: 'apr-123', title: 'Cards' },
-    { id: 'secrets', title: 'Secrets' },
   ];
 
+  // Titles for panels outside the Phase-1 tab list (kept out of TABS_LEGACY
+  // so the kill-switch order stays verbatim — panel-core test enforces 13).
+  const PANEL_TITLES_EXTRA = { 'apr-123': 'Cards', secrets: 'Secrets' };
+
   // ── Phase 2: the 9-domain rail (§2.1). Each domain lists its panels in
-  // display order; the first panel is the domain's landing surface. Panel
+  // display order; the first is the domain's landing surface. Panel
   // ids are the SAME as the Phase-1 tab ids — panels register in TG_PANELS
   // by id and are mounted on demand inside their active domain.
   const DOMAINS = [
@@ -174,7 +176,7 @@
 
   function panelTitle(id) {
     const t = TABS_LEGACY.find((x) => x.id === id);
-    return t ? t.title : id;
+    return t ? t.title : (PANEL_TITLES_EXTRA[id] || id);
   }
 
   // Remember the last-opened panel per domain so re-entering a domain
