@@ -478,3 +478,26 @@ Ops-notat: rollout.sh fejlede stille på stale branch-config
 (`t2-rate-alerts` slettet ved squash → `git pull --ff-only` FEJLET, rollout
 abortede uden at fejle). Redning: `git checkout -B main origin/main` →
 rollout OK. Pitfall logget.
+## 18. Rate-alert notifikationer (webhook-push) live (2026-09-06)
+
+### PR #47 (fb6b209) + ops-fix PR #48
+- Når `rate_bucket_near_limit`-sealet krydses (80 % af maxHits), fan-out til
+  FS-L2 webhook-subs via `notify-delivery.deliver(...)` — fire-and-forget
+  efter audit-seal (try/catch + .catch(()=>{}), nul latency-tillæg på
+  rate-stien).
+- notify-delivery: L2-webhook-subs leveres nu også uden operator-pref-række —
+  de registrerede eventTypes ER abonnementet (operatør-managed URLs,
+  dokumenteret i koden). Eksisterende prefs-gate for `audit_chain`-kanalen
+  uændret.
+- Ops: TG_NOTIFY_DELIVERY=1 + TG_WEBHOOK_SUBS=1 live (TG_OPERATOR_NOTIFY
+  allerede aktiv).
+- Live-verifikation (:8800): webhook-sub (127.0.0.1:8799, eventTypes
+  [rate_bucket_near_limit]) → 48× POST /v1/actions → præcis 1 POST
+  `{type:"rate_bucket_near_limit", payload:{bot:"atlas", pattern:"/v1/actions",
+  count:48, maxHits:60, windowMs:60000}}` → sub slettet, bucket reset.
+- Tests: rate-alert-notify.test.js — (a) webhook-E2E med lokal http-server
+  (1 leverance, korrekt payload, seal i chain), (b) inert uden
+  TG_NOTIFY_DELIVERY (ingen POST, seal fortsat durable). Suite 1824/1824.
+- Ops-arv: rollout.sh SW-version-bump var kun baseline-matchet (w9.1.0) —
+  dirty sw.js efter tidligere kørsel = stille sed-no-op → rollout exit 1
+  midt i kæden. PR #48: idempotent `[^']*`-match.
