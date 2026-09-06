@@ -76,7 +76,7 @@ test('?auth=signup deep-link opens the overlay in signup mode', () => {
   const js = authJs();
   assert.match(js, /auth'\)\s*===\s*'signup'|get\('auth'\)/, 'reads the auth query param');
   assert.match(js, /openOverlay\('signup'\)/, 'opens overlay in signup mode');
-  assert.match(js, /\/v2\/auth\/signup/, 'signup endpoint wired');
+  assert.match(js, /\/v2\/auth\/register/, 'signup endpoint wired (live contract: register)');
   assert.match(js, /\/v2\/auth\/login/, 'login endpoint wired');
   assert.match(js, /\/v2\/auth\/logout/, 'logout endpoint wired');
 });
@@ -145,4 +145,14 @@ test('live HTTP: gateway serves /auth.js and the index references it', async () 
   } finally {
     await new Promise((r) => server.close(r));
   }
+});
+
+test('auth overlay uses the LIVE gateway contract: /v2/auth/register (not signup) + email field', () => {
+  const js = read('app/auth.js');
+  const gw = read('src/gateway/mounts/101-auth.js');
+  // client must call the same action names the mount implements
+  assert.ok(!/\/v2\/auth\/signup/.test(js), 'no /v2/auth/signup anywhere — mount only has register/login');
+  assert.ok(/\/v2\/auth\/register/.test(js), 'signup mode posts to /v2/auth/register');
+  assert.ok(/action === 'register'/.test(gw) && /action === 'login'/.test(gw), 'mount implements register+login');
+  assert.ok(/email: username/.test(js), 'client sends email field (mount contract is {email,password})');
 });
