@@ -1,0 +1,13 @@
+{
+  "repo": "trust-gateway",
+  "capturedAt": "2026-09-06",
+  "sourceRevision": "758ba1215641225dbd052ef1081b5d7a9f8cf118",
+  "captureMethod": "headless chrome, real running gateway (bin/gateway.js, TG_AIE_FAIL_OPEN=true), marketing + app static",
+  "note": "real product captures, no fabrication; dark mode not supported by product",
+  "files": {
+    "01-overview.webp": "Operator console \u2014 live gateway dashboard (exact HEAD 758ba12)",
+    "02-primary-workflow.webp": "Marketing front door \u2014 Trust Gateway product page",
+    "03-detail-view.webp": "Status surface \u2014 real product page",
+    "04-evidence.webp": "Documentation surface \u2014 real product page"
+  }
+}
