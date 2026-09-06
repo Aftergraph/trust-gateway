@@ -537,7 +537,7 @@ class Gateway extends EventEmitter {
             .replace(/href="styles\.css"/g, 'href="/home/styles.css"')
             .replace(/src="app\.js"/g, 'src="/home/app.js"'));
       }
-      res.writeHead(200, { 'content-type': MIME[path.extname(file)] || 'application/octet-stream' });
+      res.writeHead(200, { 'content-type': MIME[path.extname(file)] || 'application/octet-stream', 'cache-control': 'no-cache' });
       res.end(data);
     } catch {
       if (rel === 'index.html' && dir === this.staticDir) return send(res, 200, null, { html: this.dashboardHtml() }); // v1 fallback
