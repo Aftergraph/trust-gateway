@@ -9,6 +9,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 
 process.env.TG_RATE_LEDGER = '1';
+process.env.TG_ROUTE_LIMITS = '1';
 process.env.TG_DB_FILE = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'tg-rdash-')), 'gateway.db');
 
 const { Gateway, hashToken } = require('../src/gateway/server');
@@ -101,4 +102,22 @@ test('GET /v2/rate/buckets rejects invalid windowMs', async () => {
   await gw.handle(req, res);
   assert.equal(getStatus(), 400);
   assert.equal(getBody().error, 'invalid_windowMs');
+});
+test('GET /v2/rate/buckets enriches near-limit buckets (maxHits + nearLimit) from route rules', async () => {
+  const rl = require('../src/gateway/route-limits');
+  rl.set('GET /v2/bots', { maxHits: 10, windowMs: 60000 });
+  const gw = makeGateway();
+  const now = Date.now();
+  // 8/10 hits = exactly 80% → nearLimit true
+  for (let i = 0; i < 8; i++) ledger.hit('GET:/v2/bots', 60000, 10, now);
+  ledger.hit('GET:/v2/runs', 60000, 10, now); // no matching rule → no enrichment
+
+  const { req, res, getStatus, getBody } = makeReqRes({ url: '/v2/rate/buckets', token: 'tok-atlas' });
+  await gw.handle(req, res);
+  assert.equal(getStatus(), 200);
+  const byKey = Object.fromEntries(getBody().buckets.map((b) => [b.key, b]));
+  assert.equal(byKey['GET:/v2/bots'].nearLimit, true, '80%+ hits flagged');
+  assert.equal(byKey['GET:/v2/bots'].maxHits, 10, 'rule maxHits attached');
+  assert.equal(byKey['GET:/v2/runs'].nearLimit, false, 'no rule → no flag');
+  assert.equal(byKey['GET:/v2/runs'].maxHits, null);
 });

@@ -1,6 +1,7 @@
 // FS-M3 — rate-limit bucket mounts. Operator-only.
 
 const ledger = require('../rate-ledger');
+const rl = require('../route-limits');
 const { isOperator } = require('../tenants');
 const { audit } = require('../events');
 
@@ -22,7 +23,17 @@ module.exports = function mountRateLedger(gw) {
       res.statusCode = 400;
       return res.end(JSON.stringify({ error: 'invalid_windowMs' }));
     }
-    const buckets = ledger.listCurrent(windowMs);
+    const buckets = ledger.listCurrent(windowMs).map((b) => {
+      // Enrich with rule context so the console can show near-limit alerts
+      // without re-deriving rules client-side. Bucket key format = "METHOD:path".
+      const sep = b.key.indexOf(':');
+      const rule = sep > 0 ? rl.match(b.key.slice(0, sep), b.key.slice(sep + 1)) : null;
+      return {
+        ...b,
+        maxHits: rule ? rule.maxHits : null,
+        nearLimit: rule ? b.count >= Math.floor(rule.maxHits * 0.8) : false,
+      };
+    });
     audit('rate_buckets_read', { by: op.name, count: buckets.length });
     res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify({ count: buckets.length, windowMs, buckets, observedAt: Date.now() }));
