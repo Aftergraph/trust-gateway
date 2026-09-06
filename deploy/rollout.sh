@@ -21,6 +21,16 @@ if ! git pull --ff-only; then
 fi
 echo "rollout: pulled $(git rev-parse --short HEAD) (was $PREV)"
 
+# ── bump the PWA shell version to the deployed sha: the service worker is
+#    cache-first, so WITHOUT a version bump every already-open console keeps
+#    serving its old app.js/auth.js/panels forever (cache-first runtime cache
+#    is keyed on VERSION). Injecting the sha makes each rollout a natural
+#    cache invalidation. File is deployment-mutated only; next pull restores it.
+SHA="$(git rev-parse --short HEAD)"
+sed -i "s|const VERSION = 'trust-gateway-v2-pwa-w9\.1\.0'|const VERSION = 'trust-gateway-v2-pwa-${SHA}'|" app/sw.js
+grep -q "trust-gateway-v2-pwa-${SHA}" app/sw.js || { echo "rollout: SW version bump FAILED" >&2; exit 1; }
+echo "rollout: PWA shell version -> trust-gateway-v2-pwa-${SHA}"
+
 # ── smoke tests BEFORE touching the running service ──
 if ! node --test tests/standards.test.js tests/app.test.js; then
   echo "rollout: smoke tests FAILED — not restarting" >&2

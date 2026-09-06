@@ -13,6 +13,7 @@ const SHELL_ASSETS = [
   '/app.js',
   '/keys.js',
   '/compose.js',
+  '/auth.js',
   '/style.css',
   '/responsive.css',
   '/desktop.css',
