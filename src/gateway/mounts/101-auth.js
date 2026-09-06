@@ -106,6 +106,14 @@ module.exports = {
     const { users, sessions } = stores;
 
     if (req.method === 'POST' && action === 'register') {
+      // Registration is an attack surface (first-user-owner bootstrap + spam):
+      // explicitly CLOSED when TG_AUTH_OPEN_REGISTER=0 (production default in
+      // data/gateway-systemd.env). Unset env keeps legacy open behavior for
+      // test suites; '1' forces open. Never auto-opens at runtime.
+      if (process.env.TG_AUTH_OPEN_REGISTER === '0') {
+        gw._audit({ type: 'user_register_refused' });
+        return send(res, 403, { error: 'registration_closed' });
+      }
       if (rateLimited(stores, 'register', ipOf(req))) return send(res, 429, { error: 'rate_limited' });
       let body;
       try {
