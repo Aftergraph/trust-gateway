@@ -501,3 +501,12 @@ rollout OK. Pitfall logget.
 - Ops-arv: rollout.sh SW-version-bump var kun baseline-matchet (w9.1.0) —
   dirty sw.js efter tidligere kørsel = stille sed-no-op → rollout exit 1
   midt i kæden. PR #48: idempotent `[^']*`-match.
+## 19. Reaktiv rate-alert UX i konsollen (2026-09-06)
+
+### PR #49 (6509912) + visningsfix PR #50 (af1eff0)
+- Rate-panelet fik en 'Near-limit alerts (24h)'-sektion: tæller + seneste 12 seals fra `/v2/federation/audit/events?type=rate_bucket_near_limit&since=<24h>` (153-fed-audit-dash — ingen ny backend).
+- SSE-reaktivitet: panelet åbner `EventSource /v2/events?token=` (query-param, auth:'query'); en `rate_bucket_near_limit`-frame triggerer øjeblikkelig refresh af buckets + alerts — ingen op til 30s poll-vent. Stream lukkes ved re-render.
+- XSS: textContent-only (source-level test forbyder element-html-APIs).
+- Live-fund under verifikation: `fmtCount()`-misbrug viste '—' i stedet for count (PR #50, regressionstest).
+- Tests: 7 nye (rate-panel-alerts.test.js, VM-sandbox + kildekode-kontrakter); suite 1830/1830 grøn; CI begge PRs parat.
+- Live-bevis: 58× POST pust → panelet opdaterede (~2s, uden Refresh-klik) → "⚠ 3 near-limit alerts (24h)" + bucket "POST:/v1/actions 58 ⚠ near-limit (60/s max)" + alle rækker viser count 48.
