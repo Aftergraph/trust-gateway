@@ -40,7 +40,7 @@ function makeSandbox({ apiResult = { total: 3 } } = {}) {
       onAuthExpired() { return () => {}; },
       open() {},
     },
-    jumpTab: (id) => { win._jumped = id; },
+    TG_CORE: { switchTab: (id) => { win._jumped = id; } },
   };
   const strip = domNode('#nowQueue');
   const sandbox = {
@@ -86,7 +86,7 @@ test('S20: klik på badge åbner Rate-panelet (jumpTab)', async () => {
   const { win, strip } = makeSandbox({ apiResult: { total: 1 } });
   await new Promise((r) => setTimeout(r, 10));
   strip.children[0].click();
-  assert.equal(win._jumped, 'rate', 'klik → jumpTab("rate")');
+  assert.equal(win._jumped, 'rate', 'klik → TG_CORE.switchTab("rate")');
 });
 
 test('S20: tæller 0 → badge skjult (hidden) — ingen gul støj uden alerts', async () => {

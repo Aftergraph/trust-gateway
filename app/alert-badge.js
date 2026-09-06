@@ -31,7 +31,12 @@
     badge.appendChild(countEl);
     badge.appendChild(document.createTextNode(' near-limit'));
     badge.addEventListener('click', () => {
-      try { window.jumpTab('rate'); } catch (e) { /* tab-router utilgængelig */ }
+      // jumpTab er en closure i app.js (ikke global) — TG_CORE.switchTab er
+      // den støttede vej (core.js, panel-id → domæne-opløsning).
+      const core = window.TG_CORE;
+      if (core && typeof core.switchTab === 'function') {
+        try { core.switchTab('rate'); } catch (e) { /* tab-router utilgængelig */ }
+      }
     });
     strip.appendChild(badge);
     sync();
