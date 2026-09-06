@@ -412,3 +412,26 @@ systemdRun=true; `wrapCommand()` → wrapped=true method=unshare.
 `TG_SANDBOX=1` nu sat i data/gateway-systemd.env (gitignored) + restart;
 process-env verificeret live (PID-environ viser TG_SANDBOX=1 +
 TG_RATE_LEDGER=1). Sandbox-suiter 22/22 grønne.
+
+## 16. Rate-panel endelig synligt + orphan-panel-audit (2026-09-06)
+
+Rate-panelet (PR #30) var dobbelt-orphanet: (1) script-tag manglede i
+index.html, (2) domæne-registrering manglede i core.js (konsollen er
+to-lags: script + DOMAINS/TABS_LEGACY). Samme skæbne for cards.js
+(apr-123) og secrets.js. Fixes:
+- PR #35: index.html-script for rate + cards + regressionstest (hver
+  paneler/*.js skal have script-tag)
+- PR #36: core.js-wiring — rate→CONTROL, cards→CHAT, secrets→SYSTEM;
+  PANEL_TITLES_EXTRA (titler uden at bryde den verbatim 13-tab
+  TABS_LEGACY, panel-core-test enforcer)
+- Browser-verifikation (frisk session, atlas-operator): CONTROL →
+  subtabs "Computer | Rate" → panel renderer
+  "RATE LIMITS & BUCKETS" med /v1/actions 60/s 60s + live bucket
+  POST:/v1/actions count 2 efter 2 hits + Refresh (60s window,
+  timestamp) — fuld backend→ledger→API→konsol-kæde levende.
+
+### Audit-støj `mounts_function_style_skipped` (undersøgt, lukket)
+4999/5000 rækker stammer fra 09-04 (FØR dedupe-fixet i http-mounts.js);
+siden da 1 entry per skip-sæt-ændring. Skip-sættet = fn-style-mounts
+120+ (ved design). Ingen ændring nødvendig; ikke historie-omskrivning
+(chain-integritet > skønhed).
