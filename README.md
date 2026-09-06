@@ -86,6 +86,32 @@ read → write → needs_approval → human-in-the-loop workflow.
 A full web console lives in `app/` (login, tenant picker, chat, cards,
 compose, icons, offline page).
 
+### Visual walkthrough
+
+Real captures from a running gateway (headless Chrome, `TG_AIE_FAIL_OPEN=true`
+test mode, exact HEAD `758ba12` — see `.github/assets/screenshots/README.md` for
+provenance):
+
+<p align="center">
+  <img src=".github/assets/screenshots/01-overview.webp" alt="Trust Gateway operator console — dashboard with real session activity" width="100%">
+  <br><em>Operator console dashboard</em>
+</p>
+
+<p align="center">
+  <img src=".github/assets/screenshots/02-primary-workflow.webp" alt="Trust Gateway marketing front door" width="100%">
+  <br><em>Marketing front door</em>
+</p>
+
+<p align="center">
+  <img src=".github/assets/screenshots/03-detail-view.webp" alt="Trust Gateway status surface" width="100%">
+  <br><em>Status surface</em>
+</p>
+
+<p align="center">
+  <img src=".github/assets/screenshots/04-evidence.webp" alt="Trust Gateway documentation surface" width="100%">
+  <br><em>Documentation surface</em>
+</p>
+
 ### Plugin mounts
 
 New endpoints are files in `src/gateway/mounts/` — never touch `server.js`.
