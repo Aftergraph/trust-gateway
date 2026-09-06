@@ -397,35 +397,44 @@ test("mount: restore refuses missing manifest → 409 + chain_restore_refused au
 });
 
 test("mount: bloat-guard refusal over HTTP → 409 bloat_guard + audited chain_restore_refused", async () => {
-  await withEnv(async (dir) => {
-    const gw = makeGw(dir);
-    for (let i = 0; i < 3000; i++)
-      gw.chain.append({ type: "old", i }, Date.now() - 200 * DAY);
-    for (let i = 0; i < 20; i++)
-      gw.chain.append({ type: "fresh", i }, Date.now());
-    const s = await serve(gw);
-    try {
-      const a = await fetch(s.port, "POST", "/v2/chain/archive", OP, "{}");
-      assert.equal(a.json.archivedCount, 3000);
-      const seg = a.json.manifestKey.replace("archive:chain:", "");
-      // guard arithmetic: live (9500) + archive (3000) = 12500 > 10000
-      for (let i = 0; i < 9500; i++)
-        gw.chain.append({ type: "live", i }, Date.now() + i);
-      const r = await fetch(
-        s.port,
-        "POST",
-        `/v2/chain/archive/${seg}/restore`,
-        OP,
-        "{}",
-      );
-      assert.equal(r.status, 409);
-      assert.equal(r.json.reason, "bloat_guard");
-      const audits = gw.chain.entries.map((e) => e.payload.type);
-      assert.ok(audits.includes("chain_restore_refused"));
-    } finally {
-      await s.close();
-    }
-  });
+  // Small env thresholds (5/50) exercise the SAME guard arithmetic with ~66
+  // rows instead of 12.5k — the 12.5k variant timed out under CI parallelism.
+  await withEnv(
+    async (dir) => {
+      process.env.TG_BLOAT_GUARD_LENGTH = "5";
+      process.env.TG_BLOAT_GUARD_TOTAL = "50";
+      const gw = makeGw(dir);
+      for (let i = 0; i < 110; i++)
+        gw.chain.append({ type: "old", i }, Date.now() - 200 * DAY);
+      for (let i = 0; i < 20; i++)
+        gw.chain.append({ type: "fresh", i }, Date.now());
+      const s = await serve(gw);
+      try {
+        const a = await fetch(s.port, "POST", "/v2/chain/archive", OP, "{}");
+        assert.equal(a.json.archivedCount, 110);
+        const seg = a.json.manifestKey.replace("archive:chain:", "");
+        // guard arithmetic: live (60) + archive (110) = 170 > 50
+        for (let i = 0; i < 40; i++)
+          gw.chain.append({ type: "live", i }, Date.now() + i);
+        const r = await fetch(
+          s.port,
+          "POST",
+          `/v2/chain/archive/${seg}/restore`,
+          OP,
+          "{}",
+        );
+        assert.equal(r.status, 409);
+        assert.equal(r.json.reason, "bloat_guard");
+        const audits = gw.chain.entries.map((e) => e.payload.type);
+        assert.ok(audits.includes("chain_restore_refused"));
+      } finally {
+        delete process.env.TG_BLOAT_GUARD_LENGTH;
+        delete process.env.TG_BLOAT_GUARD_TOTAL;
+        await s.close();
+      }
+    },
+    async (dir) => {},
+  );
 });
 
 test("mount: restore with env-off → 501 archive_disabled (inert)", async () => {

@@ -214,8 +214,10 @@ function archiveChain(beforeTimestamp, opts = {}) {
 //
 // Returns {restoredCount, skippedDuplicates, newHead}.
 
-const BLOAT_GUARD_LENGTH = 1000;
-const BLOAT_GUARD_TOTAL = 10000;
+// Guard thresholds. Read at CALL time (not module load) so tests can set env
+// per-test without require.cache surgery; production defaults unchanged.
+const bloatLength = () => Number(process.env.TG_BLOAT_GUARD_LENGTH) || 1000;
+const bloatTotal = () => Number(process.env.TG_BLOAT_GUARD_TOTAL) || 10000;
 
 function restoreError(code, message) {
   const err = new Error(message);
@@ -298,7 +300,7 @@ function restoreArchive(manifestKey, opts = {}) {
   // Bloat guard — refuse BEFORE verifying hashes: a >1000-entry live chain
   // must not be pushed past 10000 entries by one accidental restore.
   const length = chain.length;
-  if (length > BLOAT_GUARD_LENGTH && length + entries.length > BLOAT_GUARD_TOTAL)
+  if (length > bloatLength() && length + entries.length > bloatTotal())
     return {
       refused: true,
       reason: 'bloat_guard',
@@ -390,6 +392,6 @@ module.exports = {
   archiveEnabled,
   archiveDays,
   MIN_CHAIN_LENGTH,
-  BLOAT_GUARD_LENGTH,
-  BLOAT_GUARD_TOTAL,
+  bloatLength,
+  bloatTotal,
 };
