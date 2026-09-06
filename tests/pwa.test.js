@@ -130,3 +130,11 @@ test('sw.js + manifest are static-safe (no server-side secrets, no innerHTML)', 
     assert.ok(!/Bearer\s+[A-Za-z0-9]{8,}/.test(src), name + ' must not embed tokens');
   }
 });
+test('rollout.sh bumps the SW VERSION to the deployed sha (cache-first invalidation)', () => {
+  const sh = fs.readFileSync('deploy/rollout.sh', 'utf8');
+  assert.match(sh, /rev-parse --short HEAD/, 'sha computed');
+  assert.match(sh, /sed -i .*const VERSION/, 'sed injects VERSION');
+  assert.match(sh, /trust-gateway-v2-pwa-\$\{SHA\}/, 'version template uses the sha');
+  const sw = fs.readFileSync('app/sw.js', 'utf8');
+  assert.ok(sw.includes("'/auth.js'"), 'auth.js is a shell asset (offline login UI)');
+});
