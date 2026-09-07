@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aftergraph.dev/contracts/capability/1.0.json",
+  "title": "Aftergraph Capability Contract",
+  "description": "Canonical Trust Gateway agent-role capability vocabulary. Owner: Aftergraph/trust-gateway (src/gateway/policy.js ROLE_CAPABILITIES); this file is the governed mirror — edits land in TG, then the mirror is re-copied. AIE lease scopes (resource_prefixes) are a separate axis and out of scope.",
+  "type": "object",
+  "properties": {
+    "role_capabilities": {
+      "type": "object",
+      "description": "Role → granted capability list, mirrored from TG policy.js at contract creation. Unknown roles fall back to ['fs.read', 'web.get']. The implementing-repo conformance test pins code == this map.",
+      "default": {
+        "worker": ["fs.read", "fs.write:*", "web.get", "web.search"],
+        "analyst": ["fs.read", "web.get", "web.search", "db.read:*"],
+        "operator": ["fs.read", "fs.write:*", "shell.run", "web.get"],
+        "auditor": ["fs.read", "audit.read"]
+      },
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "string" }
+      }
+    },
+    "wildcard_semantics": {
+      "type": "object",
+      "description": "Matching rules consumers MUST enforce.",
+      "properties": {
+        "full": {
+          "type": "string",
+          "const": "*",
+          "description": "'*' grants every tool."
+        },
+        "prefix": {
+          "type": "string",
+          "description": "Capability ending ':*' grants every tool with that prefix (e.g. 'fs.write:*' grants 'fs.write:logs')."
+        },
+        "exact": {
+          "type": "string",
+          "description": "Otherwise the capability must equal the tool name."
+        }
+      },
+      "required": ["full", "prefix", "exact"]
+    },
+    "validation_rules": {
+      "type": "array",
+      "description": "Issuance-time rules. Unknown or invented capabilities are rejected, never default-granted.",
+      "default": [
+        "unknown capabilities are rejected at issuance (invalid_capability)",
+        "invented privileged capabilities (e.g. meta-caps like approval.decide outside role) are rejected",
+        "absent capabilities resolve to role defaults, never to union or wildcard"
+      ],
+      "items": { "type": "string" }
+    }
+  },
+  "required": ["role_capabilities", "wildcard_semantics", "validation_rules"]
+}
