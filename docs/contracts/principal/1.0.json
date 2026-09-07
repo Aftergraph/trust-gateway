@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aftergraph.dev/contracts/principal/1.0.json",
+  "title": "Aftergraph Principal 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "principal_id",
+    "tenant_id",
+    "type",
+    "identity_ref",
+    "status"
+  ],
+  "properties": {
+    "schema": {
+      "const": "principal/1.0"
+    },
+    "principal_id": {
+      "type": "string",
+      "pattern": "^prn_[a-f0-9]{32}$"
+    },
+    "tenant_id": {
+      "type": "string",
+      "pattern": "^ten_[a-f0-9]{32}$"
+    },
+    "type": {
+      "enum": ["human", "agent", "service", "worker"]
+    },
+    "identity_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": ["active", "disabled"]
+    }
+  }
+}
