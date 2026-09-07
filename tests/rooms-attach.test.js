@@ -106,3 +106,27 @@ test('B1: ugyldig kind 400; tom content 400; for stor content 400', async () => 
     assert.equal(tooBig.status, 400);
   } finally { await new Promise((r) => server.close(r)); }
 });
+
+test('B1: audit indeholder metadata, aldrig filindhold', async () => {
+  const gw = makeGateway();
+  const seen = [];
+  const orig = gw._audit.bind(gw);
+  gw._audit = (e) => { seen.push(e); return orig(e); };
+  const { server, port } = await boot(gw);
+  try {
+    const secret = 'hemmeligt-indhold-' + Date.now();
+    const c = await req(port, 'POST', '/v2/rooms', 'tok-op', { name: 'b1d', bots: ['op'] });
+    const roomId = c.body.room.id;
+    const a = await req(port, 'POST', `/v2/rooms/${roomId}/attach`, 'tok-op', {
+      name: 'secret.md', content: secret, kind: 'doc',
+    });
+    assert.equal(a.status, 201);
+    const entry = seen.find((e) => e.type === 'room_attach');
+    assert.ok(entry, 'room_attach audit entry findes');
+    assert.equal(entry.artifactId, a.body.artifactId);
+    assert.ok(entry.size > 0);
+    // ponytail: JSON-stringify hele audit-sporet — hvis indholdet lækker
+    // noget sted (data-felt, fejlbesked, metadata), fanger denne ene assert det.
+    assert.ok(!JSON.stringify(seen).includes(secret), 'filindhold må aldrig nå audit-sporet');
+  } finally { await new Promise((r) => server.close(r)); }
+});
