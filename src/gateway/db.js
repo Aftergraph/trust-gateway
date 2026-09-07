@@ -55,6 +55,28 @@ function open(file = resolveDbFile()) {
       updated_at       INTEGER NOT NULL
     );
   `);
+  // Platform Convergence V2.1: additive mappings from existing local tenant
+  // slugs/auth identities to canonical cross-repo Tenant and Principal IDs.
+  // These tables bind identity only; they never contain authority or leases.
+  d.exec(`
+    CREATE TABLE IF NOT EXISTS platform_tenant_bindings (
+      local_tenant_id TEXT PRIMARY KEY,
+      tenant_id       TEXT NOT NULL UNIQUE,
+      organization_id TEXT NOT NULL,
+      created_at       TEXT NOT NULL
+    );
+  `);
+  d.exec(`
+    CREATE TABLE IF NOT EXISTS platform_principal_bindings (
+      tenant_id      TEXT NOT NULL,
+      identity_ref   TEXT NOT NULL,
+      principal_id   TEXT NOT NULL UNIQUE,
+      principal_type TEXT NOT NULL,
+      status         TEXT NOT NULL,
+      created_at     TEXT NOT NULL,
+      PRIMARY KEY (tenant_id, identity_ref)
+    );
+  `);
   // FS-I5 — tenant-scoped secrets vault (encrypted values, see
   // secrets-vault.js). Table exists unconditionally so the schema is stable
   // whether or not TG_SECRETS_VAULT is enabled.
