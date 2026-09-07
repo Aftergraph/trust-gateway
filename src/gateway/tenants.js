@@ -19,7 +19,11 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { db, tx } = require('./db');
+// ponytail: access db through the module getter — destructuring freezes the
+// require-time snapshot (null before first use; orphaned after closeDb()),
+// which made TenantStore hold a closed connection across test-module resets.
+const dbmod = require('./db');
+const { tx } = dbmod;
 
 const TABLE = 'tenants';
 // Strict slug: lowercase letters/digits/dashes only, 3-24, no leading/trailing
@@ -56,10 +60,10 @@ class TenantStore {
    *                                or <cwd>/data, matching db.js resolution).
    */
   constructor({ now, dataDir } = {}) {
-    this.db = db; // shared single connection from db.js
+    this._dbmod = dbmod; // live accessor — never snapshots the connection
     this.now = now ?? (() => new Date().toISOString());
     this.dataDir = dataDir ?? process.env.TG_DATA_DIR ?? path.join(process.cwd(), 'data');
-    this.db.exec(`
+    this._dbmod.db.exec(`
       CREATE TABLE IF NOT EXISTS ${TABLE} (
         id         TEXT PRIMARY KEY,
         name       TEXT NOT NULL,
@@ -76,7 +80,7 @@ class TenantStore {
     if (!isValidTenantId(base)) return { ok: false, error: 'invalid_name' };
     return tx(() => {
       const exists = (id) =>
-        !!this.db.prepare(`SELECT 1 FROM ${TABLE} WHERE id = ?`).get(id);
+        !!this._dbmod.db.prepare(`SELECT 1 FROM ${TABLE} WHERE id = ?`).get(id);
       let id = base;
       if (exists(id)) {
         let placed = false;
@@ -87,7 +91,7 @@ class TenantStore {
         if (!placed) return { ok: false, error: 'slug_exhausted' };
       }
       const record = { id, name, created_at: this.now(), disabled: false };
-      this.db
+      this._dbmod.db
         .prepare(`INSERT INTO ${TABLE}(id, name, created_at, disabled) VALUES(?, ?, ?, 0)`)
         .run(record.id, record.name, record.created_at);
       return { ok: true, id: record.id, record };
@@ -96,7 +100,7 @@ class TenantStore {
 
   /** All tenants, oldest first. */
   list() {
-    return this.db
+    return this._dbmod.db
       .prepare(`SELECT id, name, created_at, disabled FROM ${TABLE} ORDER BY created_at, id`)
       .all()
       .map(_row);
@@ -105,7 +109,7 @@ class TenantStore {
   /** One tenant or null. Never trusts a non-slug id. */
   get(id) {
     if (!isValidTenantId(id)) return null;
-    return _row(this.db
+    return _row(this._dbmod.db
       .prepare(`SELECT id, name, created_at, disabled FROM ${TABLE} WHERE id = ?`)
       .get(id));
   }
@@ -114,7 +118,7 @@ class TenantStore {
   setDisabled(id, flag) {
     const t = this.get(id);
     if (!t) return { ok: false, error: 'not_found' };
-    this.db.prepare(`UPDATE ${TABLE} SET disabled = ? WHERE id = ?`).run(flag ? 1 : 0, t.id);
+    this._dbmod.db.prepare(`UPDATE ${TABLE} SET disabled = ? WHERE id = ?`).run(flag ? 1 : 0, t.id);
     return { ok: true, record: { ...t, disabled: !!flag } };
   }
 
@@ -123,7 +127,7 @@ class TenantStore {
     const existing = this.get('main');
     if (existing) return existing;
     tx(() => {
-      this.db
+      this._dbmod.db
         .prepare(`INSERT OR IGNORE INTO ${TABLE}(id, name, created_at, disabled) VALUES('main', 'Main', ?, 0)`)
         .run(this.now());
     });
