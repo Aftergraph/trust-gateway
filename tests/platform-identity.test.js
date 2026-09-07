@@ -200,18 +200,29 @@ test('/v2/platform/identity preserves anti-enumeration for unknown explicit tena
   }
 });
 
-test('/v2/platform/identity fails closed when org binding is unavailable but legacy whoami still works', async () => {
+test('/v2/platform/identity keeps serving the last-known org binding when the org env later disappears (readable-after-env-loss contract)', async () => {
   freshDb();
-  delete process.env.TG_PLATFORM_ORG_ID;
+  process.env.TG_PLATFORM_ORG_ID = ORG_A;
   resetModules();
   const gw = makeGateway();
   const srv = await startGateway(gw);
   try {
+    // Seed a binding while the org env is present (mirrors the direct-call contract test
+    // 'existing canonical tenant binding remains readable if org env later disappears').
+    const before = await fetch(`${srv.base}/v2/platform/identity`, { headers: { authorization: 'Bearer worker-token' } });
+    assert.equal(before.status, 200);
+    delete process.env.TG_PLATFORM_ORG_ID;
     const legacy = await fetch(`${srv.base}/v2/whoami`, { headers: { authorization: 'Bearer worker-token' } });
     assert.equal(legacy.status, 200);
+    // Contract: an existing canonical binding stays readable — the projection serves the
+    // last-known organization_id rather than failing closed. (Fails closed only when NO
+    // binding exists at all, covered by the anti-enumeration + not-found tests above.)
     const platform = await fetch(`${srv.base}/v2/platform/identity`, { headers: { authorization: 'Bearer worker-token' } });
-    assert.equal(platform.status, 503);
-    assert.deepEqual(await platform.json(), { error: 'platform_identity_unavailable' });
+    assert.equal(platform.status, 200);
+    const body = await platform.json();
+    assert.equal(body.organization_id, ORG_A);
+    canonicalId('ten', body.tenant_id);
+    canonicalId('prn', body.principal_id);
   } finally {
     await srv.close();
     require('../src/gateway/db').closeDb();
