@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aftergraph.dev/contracts/tenant/1.0.json",
+  "title": "Aftergraph Tenant 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "organization_id", "tenant_id", "status"],
+  "properties": {
+    "schema": {
+      "const": "tenant/1.0"
+    },
+    "organization_id": {
+      "type": "string",
+      "pattern": "^org_[a-f0-9]{32}$"
+    },
+    "tenant_id": {
+      "type": "string",
+      "pattern": "^ten_[a-f0-9]{32}$"
+    },
+    "status": {
+      "enum": ["active", "disabled"]
+    }
+  }
+}
