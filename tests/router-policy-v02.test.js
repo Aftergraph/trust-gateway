@@ -8,6 +8,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const http = require('node:http');
 const { Gateway } = require('../src/gateway/server');
+const { getRegistry } = require('../src/gateway/providers-singleton');
 
 function makeGateway() {
   return new Gateway({
@@ -102,4 +103,25 @@ test('legacy capability + budget_tier route remains byte-shape compatible', asyn
     assert.ok(Array.isArray(body.fallbacks));
     assert.equal(body.receipt, undefined);
   });
+});
+
+test('provider registry exposes direct Meta Model API Spark 1.3 routes', () => {
+  const gw = makeGateway();
+  const models = getRegistry(gw).models();
+  assert.ok(models.some((x) => x.provider === 'meta-model-api' && x.model === 'muse-spark-1.3'));
+  assert.ok(models.some((x) => x.provider === 'meta-model-api' && x.model === 'muse-spark-1.3-contributor'));
+});
+
+test('route catalog distinguishes Spark Contributor data use and price from standard', () => {
+  const { getRouteModel } = require('../src/gateway/model-route-catalog');
+  const contributor = getRouteModel('meta-model-api', 'muse-spark-1.3-contributor');
+  assert.ok(contributor);
+  assert.equal(contributor.dataUse, 'provider_training');
+  assert.equal(contributor.pricing.inputPerMtokUsd, 0.10);
+  assert.equal(contributor.pricing.outputPerMtokUsd, 0.20);
+  assert.equal(contributor.pricing.cacheReadPerMtokUsd, 0.002);
+
+  const standard = getRouteModel('meta-model-api', 'muse-spark-1.3');
+  assert.ok(standard);
+  assert.equal(standard.dataUse, 'no_provider_training');
 });
