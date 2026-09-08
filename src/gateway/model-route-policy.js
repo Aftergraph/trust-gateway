@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('node:crypto');
 const { ROUTE_MODELS } = require('./model-route-catalog');
 
 const POLICY_FIELDS = new Set([
@@ -122,8 +123,6 @@ function selectPolicyRoute({ registryModels, request, telemetry = null } = {}) {
     .filter((row) => !blacklisted.has(row.provider))
     .map((row) => ({
       row,
-      // V0.2 shadow budget proxy only: price for 1 MTok input + 1 MTok output.
-      // Actual per-work execution cost belongs to Runtime/WORKS in later waves.
       comparisonCostUsd: row.pricing.inputPerMtokUsd + row.pricing.outputPerMtokUsd,
     }))
     .filter(({ comparisonCostUsd }) =>
@@ -154,6 +153,23 @@ function selectPolicyRoute({ registryModels, request, telemetry = null } = {}) {
   };
 }
 
+function createRouteReceipt({ request, selected, reasonCodes, now = new Date() } = {}) {
+  const issuedAt = now instanceof Date ? now.toISOString() : new Date(now).toISOString();
+  const sortedReasonCodes = [...new Set(Array.isArray(reasonCodes) ? reasonCodes : [])].sort();
+
+  return {
+    schema: 'model-route/1.0',
+    route_id: `rte_${crypto.randomBytes(16).toString('hex')}`,
+    issued_at: issuedAt,
+    provider: selected.provider,
+    model: selected.model,
+    verification_required: request?.execution_mode === 'verified' || request?.verification != null,
+    selection: {
+      reason_codes: sortedReasonCodes,
+    },
+  };
+}
+
 module.exports = {
   POLICY_FIELDS,
   EXECUTION_MODES,
@@ -162,4 +178,5 @@ module.exports = {
   isPolicyAwareRequest,
   parsePolicyRouteRequest,
   selectPolicyRoute,
+  createRouteReceipt,
 };
