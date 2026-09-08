@@ -4,7 +4,7 @@
 // providers.json (data/providers.json, atomic tmp+rename, 0600, fail closed
 // on corrupt — approvals.js pattern) seeds the REAL provider set:
 //   dialagram, ollama-cloud, openrouter, opencode-zen, opencode-go,
-//   anthropic, openai
+//   anthropic, openai, meta-model-api
 // with kind + model lists. dialagram's list mirrors config.yaml
 // (providers.dialagram.models). NEVER any key/token material here — the
 // registry stores names, base URLs and model ids only; keys live in the
@@ -92,6 +92,13 @@ const SEED = [
     models: ['gpt-5.4', 'gpt-5.4-mini'],
     defaultModel: 'gpt-5.4',
   },
+  {
+    name: 'meta-model-api',
+    kind: 'direct',
+    baseUrl: 'https://api.meta.ai/v1',
+    models: ['muse-spark-1.3', 'muse-spark-1.3-contributor'],
+    defaultModel: 'muse-spark-1.3',
+  },
 ];
 
 // Free-tier-first lane order (operator knowledge, 2026-09-02):
@@ -159,7 +166,7 @@ class ProviderRegistry {
         name: p.name,
         kind: p.kind || 'direct',
         baseUrl: p.baseUrl || null,
-        models: Array.isArray(p.models) ? p.models.slice() : [],
+        models: Array.isArray(p.models) ? p.models.slice(),
         defaultModel: p.defaultModel || null,
         status: p.status || 'unknown',
         lastProbeAt: p.lastProbeAt || null,
