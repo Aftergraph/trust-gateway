@@ -125,3 +125,67 @@ test('route catalog distinguishes Spark Contributor data use and price from stan
   assert.ok(standard);
   assert.equal(standard.dataUse, 'no_provider_training');
 });
+
+test('policy-aware public code route prefers Contributor only with explicit training permission', async () => {
+  await withGateway(async ({ url }) => {
+    const r = await post(url, '/v2/router/route', {
+      capability: 'code',
+      execution_mode: 'auto',
+      data_class: 'public',
+      provider_training_allowed: true,
+      max_cost_usd: 2,
+    });
+    assert.equal(r.status, 200);
+    const body = r.json();
+    assert.equal(body.provider, 'meta-model-api');
+    assert.equal(body.model, 'muse-spark-1.3-contributor');
+  });
+});
+
+test('policy-aware public code route excludes Contributor when training permission is false', async () => {
+  await withGateway(async ({ url }) => {
+    const r = await post(url, '/v2/router/route', {
+      capability: 'code',
+      execution_mode: 'auto',
+      data_class: 'public',
+      provider_training_allowed: false,
+      max_cost_usd: 10,
+    });
+    assert.equal(r.status, 200);
+    const body = r.json();
+    assert.equal(body.provider, 'meta-model-api');
+    assert.equal(body.model, 'muse-spark-1.3');
+    assert.ok(!body.fallbacks.some((x) => x.model === 'muse-spark-1.3-contributor'));
+  });
+});
+
+test('restricted data excludes Contributor even when caller permits provider training', async () => {
+  await withGateway(async ({ url }) => {
+    const r = await post(url, '/v2/router/route', {
+      capability: 'code',
+      execution_mode: 'auto',
+      data_class: 'restricted',
+      provider_training_allowed: true,
+      max_cost_usd: 10,
+    });
+    assert.equal(r.status, 200);
+    const body = r.json();
+    assert.equal(body.provider, 'meta-model-api');
+    assert.equal(body.model, 'muse-spark-1.3');
+    assert.ok(!body.fallbacks.some((x) => x.model === 'muse-spark-1.3-contributor'));
+  });
+});
+
+test('policy-aware route fails closed when budget leaves no eligible route', async () => {
+  await withGateway(async ({ url }) => {
+    const r = await post(url, '/v2/router/route', {
+      capability: 'code',
+      execution_mode: 'auto',
+      data_class: 'public',
+      provider_training_allowed: true,
+      max_cost_usd: 0,
+    });
+    assert.equal(r.status, 409);
+    assert.equal(r.json().error, 'no_eligible_route');
+  });
+});
