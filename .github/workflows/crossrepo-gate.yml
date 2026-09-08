@@ -22,7 +22,7 @@ permissions:
 
 jobs:
   gate:
-    uses: Aftergraph/.github/.github/workflows/polyrepo-integration-gate.yml@main
+    uses: Aftergraph/.github/.github/workflows/polyrepo-integration-gate.yml@56d70aace61364978e23cd75c9925a54aa706e18 # main
     with:
       target_repo: trust-gateway
       target_ref: ${{ github.event_name == 'pull_request' && github.head_ref || 'main' }}
