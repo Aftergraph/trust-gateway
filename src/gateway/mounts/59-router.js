@@ -6,7 +6,11 @@ const { send } = require('../server');
 const { getRegistry } = require('../providers-singleton');
 const path = require('node:path');
 const { RouterTelemetry } = require('../router-telemetry');
-const { parsePolicyRouteRequest, selectPolicyRoute } = require('../model-route-policy');
+const {
+  parsePolicyRouteRequest,
+  selectPolicyRoute,
+  createRouteReceipt,
+} = require('../model-route-policy');
 
 module.exports = {
   name: 'v2-router',
@@ -33,7 +37,6 @@ module.exports = {
     }
     const telemetry = gw._routerTelemetry;
 
-    // ── POST /v2/router/outcome — telemetry recording (v0.2) ──
     if (ctx.url.pathname.endsWith('/outcome')) {
       const { provider, model, ok, latency_ms } = body;
       if (!provider || !model) return send(res, 400, { error: 'provider_and_model_required' });
@@ -51,26 +54,43 @@ module.exports = {
     const capability = String(body.capability || '').slice(0, 64);
     const reg = getRegistry(gw);
 
-    // Policy-aware requests use only Trust-owned operational route metadata.
-    // This branch is advisory/shadow-only: it selects and explains a route,
-    // but does not dispatch a model or write Runtime/WORKS state.
     if (policyRequest.policyAware) {
+      const routingRequest = { ...policyRequest.value, capability };
       const selected = selectPolicyRoute({
         registryModels: reg.models(),
-        request: { ...policyRequest.value, capability },
+        request: routingRequest,
         telemetry,
       });
       if (selected.error) return send(res, 409, { error: selected.error });
+
+      const receipt = createRouteReceipt({
+        request: routingRequest,
+        selected: selected.primary,
+        reasonCodes: selected.reasonCodes,
+      });
+
+      gw._audit({
+        type: 'model_route_policy',
+        routeId: receipt.route_id,
+        executionMode: routingRequest.execution_mode,
+        dataClass: routingRequest.data_class,
+        trainingAllowed: routingRequest.provider_training_allowed,
+        primaryProvider: selected.primary.provider,
+        primaryModel: selected.primary.model,
+        fallbackCount: selected.fallbacks.length,
+        reasonCodes: receipt.selection.reason_codes,
+      });
+
       return send(res, 200, {
         model: selected.primary.model,
         provider: selected.primary.provider,
         fallbacks: selected.fallbacks,
+        receipt,
       });
     }
 
     const budgetTier = String(body.budget_tier || 'standard').slice(0, 32);
 
-    // Legacy routing path remains unchanged.
     const preferFree = budgetTier === 'free' || budgetTier === 'economy';
     const maxLanes = budgetTier === 'premium' ? 10 : 5;
 
@@ -90,7 +110,6 @@ module.exports = {
       fallbacks,
     };
 
-    // Audit routing decision (no capability text to avoid secrets)
     gw._audit({
       type: 'model_route',
       capabilityTag: capability || 'general',
