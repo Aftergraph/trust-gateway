@@ -88,14 +88,29 @@ function _eventId(entry) {
   return `evt_${digest.slice(0, 32)}`;
 }
 
-function projectPlatformEventRef(entry, { subjectRef, correlation } = {}) {
+function projectPlatformEventRef(entry, { subjectRef, correlation, tenantBinding } = {}) {
   _assertNativeEntry(entry);
   _assertCorrelation(correlation);
   if (!_nonEmpty(subjectRef, 256)) throw new TypeError('invalid subjectRef');
+  if (!tenantBinding || typeof tenantBinding !== 'object' || Array.isArray(tenantBinding)) {
+    throw new TypeError('tenant binding is required');
+  }
+  if (!_nonEmpty(tenantBinding.local_tenant_id, 160)) {
+    throw new TypeError('invalid tenant binding local_tenant_id');
+  }
+  if (typeof tenantBinding.tenant_id !== 'string' || !IDS.tenant_id.test(tenantBinding.tenant_id)) {
+    throw new TypeError('invalid tenant binding tenant_id');
+  }
+  if (correlation.tenant_id !== tenantBinding.tenant_id) {
+    throw new Error('canonical tenant does not match tenant binding');
+  }
 
-  const nativeTenant = entry.payload.tenant;
-  if (nativeTenant !== undefined && nativeTenant !== correlation.tenant_id) {
-    throw new Error('native audit tenant does not match canonical tenant_id');
+  // Native entries carry the LOCAL tenant id; entries without an explicit
+  // tenant belong to the main tenant row. The durable binding is the only
+  // local-to-canonical authority - never compare a local id to canonical.
+  const nativeTenant = entry.payload.tenant === undefined ? 'main' : entry.payload.tenant;
+  if (nativeTenant !== tenantBinding.local_tenant_id) {
+    throw new Error('native audit tenant does not match tenant binding');
   }
 
   const projectedCorrelation = {};
