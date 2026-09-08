@@ -7,6 +7,7 @@
 // replaces the native hash-chain entry and never carries or grants authority.
 
 const crypto = require('node:crypto');
+const { entryHash } = require('./hash-chain');
 
 const HEX64 = /^[a-f0-9]{64}$/u;
 const IDS = {
@@ -66,11 +67,17 @@ function _assertNativeEntry(entry) {
   }
   if (!Number.isSafeInteger(entry.seq) || entry.seq < 0) throw new TypeError('invalid audit seq');
   if (!Number.isSafeInteger(entry.ts) || entry.ts < 0) throw new TypeError('invalid audit ts');
+  if (typeof entry.prevHash !== 'string' || !HEX64.test(entry.prevHash)) {
+    throw new TypeError('invalid audit prevHash');
+  }
   if (typeof entry.hash !== 'string' || !HEX64.test(entry.hash)) throw new TypeError('invalid audit hash');
   if (!entry.payload || typeof entry.payload !== 'object' || Array.isArray(entry.payload)) {
     throw new TypeError('invalid audit payload');
   }
   if (!_nonEmpty(entry.payload.type, 160)) throw new TypeError('audit payload missing type');
+
+  const expectedHash = entryHash(entry.seq, entry.prevHash, entry.ts, entry.payload);
+  if (expectedHash !== entry.hash) throw new Error('native audit hash mismatch');
 }
 
 function _eventId(entry) {
