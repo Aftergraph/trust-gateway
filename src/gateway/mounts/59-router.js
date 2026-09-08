@@ -7,10 +7,40 @@ const { getRegistry } = require('../providers-singleton');
 const path = require('node:path');
 const { RouterTelemetry } = require('../router-telemetry');
 const {
+  POLICY_FIELDS,
+  EXECUTION_MODES,
+  DATA_CLASSES,
   parsePolicyRouteRequest,
   selectPolicyRoute,
   createRouteReceipt,
 } = require('../model-route-policy');
+
+function hasOwn(obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj, key);
+}
+
+function presentPolicyFields(body) {
+  return [...POLICY_FIELDS].filter((key) => hasOwn(body, key));
+}
+
+function prevalidateCompatibilityFields(body) {
+  if (hasOwn(body, 'execution_mode') &&
+      (typeof body.execution_mode !== 'string' || !EXECUTION_MODES.has(body.execution_mode))) {
+    return 'invalid_execution_mode';
+  }
+  if (hasOwn(body, 'data_class') &&
+      (typeof body.data_class !== 'string' || !DATA_CLASSES.has(body.data_class))) {
+    return 'invalid_data_class';
+  }
+  if (hasOwn(body, 'provider_training_allowed') && typeof body.provider_training_allowed !== 'boolean') {
+    return 'invalid_provider_training_allowed';
+  }
+  if (hasOwn(body, 'max_cost_usd') &&
+      (typeof body.max_cost_usd !== 'number' || !Number.isFinite(body.max_cost_usd) || body.max_cost_usd < 0)) {
+    return 'invalid_max_cost_usd';
+  }
+  return null;
+}
 
 module.exports = {
   name: 'v2-router',
@@ -46,7 +76,36 @@ module.exports = {
       return send(res, 200, { ok: true, recorded: ev, health: telemetry.health() });
     }
 
-    const policyRequest = parsePolicyRouteRequest(body);
+    const compatibilityError = prevalidateCompatibilityFields(body);
+    if (compatibilityError) return send(res, 400, { error: compatibilityError });
+
+    const policyFields = presentPolicyFields(body);
+
+    // Phase-0 compatibility: execution_mode by itself used to be accepted.
+    // Keep that narrow call shape working, but synthesize the safest explicit
+    // v0.2 envelope so it cannot widen provider eligibility.
+    let policyBody = body;
+    if (policyFields.length === 1 && policyFields[0] === 'execution_mode') {
+      policyBody = {
+        ...body,
+        data_class: 'public',
+        provider_training_allowed: false,
+      };
+    }
+
+    // Phase-0 compatibility: a restrictive data class by itself used to be
+    // denied explicitly. Preserve that exact error shape; a complete v0.2
+    // policy may route restricted data to a no-provider-training model.
+    if (policyFields.length === 1 && policyFields[0] === 'data_class' &&
+        (body.data_class === 'confidential' || body.data_class === 'restricted')) {
+      gw._audit({ type: 'model_route_denied', reason: 'route_policy_denied', dataClass: body.data_class });
+      return send(res, 403, {
+        error: 'route_policy_denied',
+        reason: 'complete_policy_envelope_required_for_restrictive_data',
+      });
+    }
+
+    const policyRequest = parsePolicyRouteRequest(policyBody);
     if (!policyRequest.ok) {
       return send(res, policyRequest.status, { error: policyRequest.error });
     }
@@ -55,7 +114,11 @@ module.exports = {
     const reg = getRegistry(gw);
 
     if (policyRequest.policyAware) {
-      const routingRequest = { ...policyRequest.value, capability };
+      const routingRequest = {
+        ...policyRequest.value,
+        capability,
+        budget_tier: String(body.budget_tier || 'standard').slice(0, 32),
+      };
       const selected = selectPolicyRoute({
         registryModels: reg.models(),
         request: routingRequest,
@@ -90,7 +153,6 @@ module.exports = {
     }
 
     const budgetTier = String(body.budget_tier || 'standard').slice(0, 32);
-
     const preferFree = budgetTier === 'free' || budgetTier === 'economy';
     const maxLanes = budgetTier === 'premium' ? 10 : 5;
 

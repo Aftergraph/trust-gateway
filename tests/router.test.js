@@ -129,3 +129,118 @@ test('POST /v2/router/route: empty body defaults work', async () => {
     await ctx.close();
   }
 });
+
+// ── Verified Auto Phase 0: advisory policy fields ──
+
+test('POST /v2/router/route: verified mode emits receipt with verification_required', async () => {
+  const gw = makeGateway();
+  const ctx = buildServer(gw);
+  const url = await ctx.url;
+  try {
+    const r = await post(url, '/v2/router/route', {
+      capability: 'code',
+      budget_tier: 'economy',
+      execution_mode: 'verified',
+      data_class: 'public',
+      provider_training_allowed: true,
+      max_cost_usd: 2.0,
+      verification: 'exact_head',
+      execution_context_id: 'ctx_0123456789abcdef0123456789abcdef',
+    });
+    assert.equal(r.status, 200);
+    const result = await r.json();
+    assert.ok(result.receipt);
+    assert.equal(result.receipt.schema, 'model-route/1.0');
+    assert.ok(result.receipt.route_id.startsWith('rte_'));
+    assert.equal(result.receipt.execution_mode, 'verified');
+    assert.equal(result.receipt.verification_required, true);
+    assert.equal(result.receipt.data_class, 'public');
+    assert.equal(result.receipt.provider_training_allowed, true);
+    assert.equal(result.receipt.max_cost_usd, 2.0);
+    assert.equal(result.receipt.verification, 'exact_head');
+    assert.equal(result.receipt.execution_context_id, 'ctx_0123456789abcdef0123456789abcdef');
+    assert.ok(result.receipt.reason_codes.includes('capability_match'));
+    assert.ok(result.receipt.reason_codes.includes('cost_ceiling_recorded_unenforced'));
+    assert.ok(result.receipt.reason_codes.includes('training_policy_unevaluated_no_terms_metadata'));
+    // legacy fields unchanged
+    assert.ok(result.model);
+    assert.ok(result.provider);
+  } finally {
+    await ctx.close();
+  }
+});
+
+test('POST /v2/router/route: auto mode does not require verification', async () => {
+  const gw = makeGateway();
+  const ctx = buildServer(gw);
+  const url = await ctx.url;
+  try {
+    const r = await post(url, '/v2/router/route', { capability: 'code', execution_mode: 'auto' });
+    assert.equal(r.status, 200);
+    const result = await r.json();
+    assert.equal(result.receipt.execution_mode, 'auto');
+    assert.equal(result.receipt.verification_required, false);
+  } finally {
+    await ctx.close();
+  }
+});
+
+test('POST /v2/router/route: invalid execution_mode fails closed', async () => {
+  const gw = makeGateway();
+  const ctx = buildServer(gw);
+  const url = await ctx.url;
+  try {
+    const r = await post(url, '/v2/router/route', { capability: 'code', execution_mode: 'economy' });
+    assert.equal(r.status, 400);
+    const result = await r.json();
+    assert.equal(result.error, 'invalid_execution_mode');
+  } finally {
+    await ctx.close();
+  }
+});
+
+test('POST /v2/router/route: invalid data_class fails closed', async () => {
+  const gw = makeGateway();
+  const ctx = buildServer(gw);
+  const url = await ctx.url;
+  try {
+    const r = await post(url, '/v2/router/route', { capability: 'code', data_class: 'topsecret' });
+    assert.equal(r.status, 400);
+    const result = await r.json();
+    assert.equal(result.error, 'invalid_data_class');
+  } finally {
+    await ctx.close();
+  }
+});
+
+test('POST /v2/router/route: confidential data class denied, not silently treated as public', async () => {
+  const gw = makeGateway();
+  const ctx = buildServer(gw);
+  const url = await ctx.url;
+  try {
+    for (const dataClass of ['confidential', 'restricted']) {
+      const r = await post(url, '/v2/router/route', { capability: 'code', data_class: dataClass });
+      assert.equal(r.status, 403);
+      const result = await r.json();
+      assert.equal(result.error, 'route_policy_denied');
+    }
+    const denied = gw.chain.entries.filter((e) => e.payload.type === 'model_route_denied');
+    assert.equal(denied.length, 2);
+  } finally {
+    await ctx.close();
+  }
+});
+
+test('POST /v2/router/route: non-boolean training flag fails closed', async () => {
+  const gw = makeGateway();
+  const ctx = buildServer(gw);
+  const url = await ctx.url;
+  try {
+    const r = await post(url, '/v2/router/route', { capability: 'code', provider_training_allowed: 'yes' });
+    assert.equal(r.status, 400);
+    const result = await r.json();
+    assert.equal(result.error, 'invalid_provider_training_allowed');
+  } finally {
+    await ctx.close();
+  }
+});

@@ -144,6 +144,11 @@ function selectPolicyRoute({ registryModels, request, telemetry = null } = {}) {
       : 'no_provider_training_route',
   );
   if (capability) reasonCodes.push('capability_match');
+  if (request?.budget_tier) reasonCodes.push(`budget_tier:${request.budget_tier}`);
+  if (request?.max_cost_usd != null) reasonCodes.push('cost_ceiling_enforced');
+  if (request?.verification != null || request?.execution_mode === 'verified') {
+    reasonCodes.push('verification_required');
+  }
   reasonCodes.sort();
 
   return {
@@ -156,14 +161,31 @@ function selectPolicyRoute({ registryModels, request, telemetry = null } = {}) {
 function createRouteReceipt({ request, selected, reasonCodes, now = new Date() } = {}) {
   const issuedAt = now instanceof Date ? now.toISOString() : new Date(now).toISOString();
   const sortedReasonCodes = [...new Set(Array.isArray(reasonCodes) ? reasonCodes : [])].sort();
+  const verificationRequired = request?.execution_mode === 'verified' || request?.verification != null;
+  const selectedAlias = { provider: selected.provider, model: selected.model };
+  const budget = {
+    budget_tier: request?.budget_tier ?? null,
+    max_cost_usd: request?.max_cost_usd ?? null,
+  };
 
   return {
     schema: 'model-route/1.0',
+    receipt_type: 'model-route/1.0',
     route_id: `rte_${crypto.randomBytes(16).toString('hex')}`,
     issued_at: issuedAt,
     provider: selected.provider,
     model: selected.model,
-    verification_required: request?.execution_mode === 'verified' || request?.verification != null,
+    selected: selectedAlias,
+    capability: String(request?.capability || 'general'),
+    execution_mode: request?.execution_mode || 'auto',
+    data_class: request?.data_class ?? null,
+    provider_training_allowed: request?.provider_training_allowed ?? null,
+    max_cost_usd: request?.max_cost_usd ?? null,
+    budget,
+    verification: request?.verification ?? null,
+    execution_context_id: request?.execution_context_id ?? null,
+    verification_required: verificationRequired,
+    reason_codes: sortedReasonCodes,
     selection: {
       reason_codes: sortedReasonCodes,
     },
