@@ -6,7 +6,7 @@ const { send } = require('../server');
 const { getRegistry } = require('../providers-singleton');
 const path = require('node:path');
 const { RouterTelemetry } = require('../router-telemetry');
-const { parsePolicyRouteRequest } = require('../model-route-policy');
+const { parsePolicyRouteRequest, selectPolicyRoute } = require('../model-route-policy');
 
 module.exports = {
   name: 'v2-router',
@@ -43,22 +43,37 @@ module.exports = {
       return send(res, 200, { ok: true, recorded: ev, health: telemetry.health() });
     }
 
-    // Policy-aware requests opt into the Verified Auto contract. Invalid
-    // restrictive fields fail closed. Valid requests still use the legacy
-    // advisory selection path until the policy selector lands in the next TDD slice.
     const policyRequest = parsePolicyRouteRequest(body);
     if (!policyRequest.ok) {
       return send(res, policyRequest.status, { error: policyRequest.error });
     }
 
     const capability = String(body.capability || '').slice(0, 64);
+    const reg = getRegistry(gw);
+
+    // Policy-aware requests use only Trust-owned operational route metadata.
+    // This branch is advisory/shadow-only: it selects and explains a route,
+    // but does not dispatch a model or write Runtime/WORKS state.
+    if (policyRequest.policyAware) {
+      const selected = selectPolicyRoute({
+        registryModels: reg.models(),
+        request: { ...policyRequest.value, capability },
+        telemetry,
+      });
+      if (selected.error) return send(res, 409, { error: selected.error });
+      return send(res, 200, {
+        model: selected.primary.model,
+        provider: selected.primary.provider,
+        fallbacks: selected.fallbacks,
+      });
+    }
+
     const budgetTier = String(body.budget_tier || 'standard').slice(0, 32);
 
-    // Build routing constraints
+    // Legacy routing path remains unchanged.
     const preferFree = budgetTier === 'free' || budgetTier === 'economy';
     const maxLanes = budgetTier === 'premium' ? 10 : 5;
 
-    const reg = getRegistry(gw);
     let plan;
     try {
       plan = reg.plan({ task: capability || 'general', preferFree, maxLanes });
@@ -66,7 +81,6 @@ module.exports = {
       return send(res, 500, { error: 'routing_failed', detail: String(e.message) });
     }
 
-    // Build response with primary and fallbacks
     const fallbacks = telemetry.reorderFallbacks(
       plan.fallbacks.slice(0, 3).map(({ model, provider }) => ({ model, provider })),
     );
