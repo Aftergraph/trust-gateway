@@ -6,6 +6,7 @@ const { send } = require('../server');
 const { getRegistry } = require('../providers-singleton');
 const path = require('node:path');
 const { RouterTelemetry } = require('../router-telemetry');
+const { parsePolicyRouteRequest } = require('../model-route-policy');
 
 module.exports = {
   name: 'v2-router',
@@ -40,6 +41,14 @@ module.exports = {
       const ev = telemetry.record({ provider, model, ok, latency_ms });
       gw._audit({ type: 'router_outcome_recorded', provider, model, ok });
       return send(res, 200, { ok: true, recorded: ev, health: telemetry.health() });
+    }
+
+    // Policy-aware requests opt into the Verified Auto contract. Invalid
+    // restrictive fields fail closed. Valid requests still use the legacy
+    // advisory selection path until the policy selector lands in the next TDD slice.
+    const policyRequest = parsePolicyRouteRequest(body);
+    if (!policyRequest.ok) {
+      return send(res, policyRequest.status, { error: policyRequest.error });
     }
 
     const capability = String(body.capability || '').slice(0, 64);
