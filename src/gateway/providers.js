@@ -166,7 +166,7 @@ class ProviderRegistry {
         name: p.name,
         kind: p.kind || 'direct',
         baseUrl: p.baseUrl || null,
-        models: Array.isArray(p.models) ? p.models.slice(),
+        models: Array.isArray(p.models) ? p.models.slice() : [],
         defaultModel: p.defaultModel || null,
         status: p.status || 'unknown',
         lastProbeAt: p.lastProbeAt || null,
