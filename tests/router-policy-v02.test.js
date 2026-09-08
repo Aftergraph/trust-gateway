@@ -189,3 +189,51 @@ test('policy-aware route fails closed when budget leaves no eligible route', asy
     assert.equal(r.json().error, 'no_eligible_route');
   });
 });
+
+test('policy-aware verified route issues explanatory model-route/1.0 receipt', async () => {
+  await withGateway(async ({ url }) => {
+    const r = await post(url, '/v2/router/route', {
+      capability: 'code',
+      execution_mode: 'verified',
+      data_class: 'public',
+      provider_training_allowed: true,
+      max_cost_usd: 2,
+    });
+    assert.equal(r.status, 200);
+    const body = r.json();
+    assert.equal(body.receipt.schema, 'model-route/1.0');
+    assert.match(body.receipt.route_id, /^rte_[a-f0-9]{32}$/);
+    assert.equal(body.receipt.provider, body.provider);
+    assert.equal(body.receipt.model, body.model);
+    assert.equal(body.receipt.verification_required, true);
+    assert.deepEqual(
+      body.receipt.selection.reason_codes,
+      [...body.receipt.selection.reason_codes].sort(),
+    );
+  });
+});
+
+test('policy-aware audit allowlists metadata and redacts capability/context payloads', async () => {
+  await withGateway(async ({ gw, url }) => {
+    const secretCapability = 'super-secret-capability-payload';
+    const executionContextId = 'ctx_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    const r = await post(url, '/v2/router/route', {
+      capability: secretCapability,
+      execution_mode: 'auto',
+      data_class: 'public',
+      provider_training_allowed: true,
+      max_cost_usd: 2,
+      execution_context_id: executionContextId,
+    });
+    assert.equal(r.status, 200);
+    const body = r.json();
+    const audit = gw.chain.entries.find((e) => e.payload.type === 'model_route_policy');
+    assert.ok(audit);
+    assert.equal(audit.payload.routeId, body.receipt.route_id);
+    assert.equal(audit.payload.dataClass, 'public');
+    assert.equal(audit.payload.trainingAllowed, true);
+    const serialized = JSON.stringify(audit.payload);
+    assert.equal(serialized.includes(secretCapability), false);
+    assert.equal(serialized.includes(executionContextId), false);
+  });
+});
