@@ -62,3 +62,227 @@ describe('FS-M1 tenant lifecycle', () => {
     assert.deepEqual(r, []);
   });
 });
+
+describe('TEN tenant lifecycle admission (tenant-lifecycle/0.1)', () => {
+  const HEX32 = '0123456789abcdef0123456789abcdef';
+  function tenRecord(overrides = {}) {
+    return {
+      schema: 'tenant-lifecycle/0.1',
+      lifecycle_id: `lif_${HEX32}`,
+      tenant_id: `ten_${HEX32}`,
+      state: 'active',
+      previous_state: null,
+      required_owners: ['owner-a', 'owner-b'],
+      owner_acknowledgements: [],
+      attempted_action: { kind: 'none', at: '2026-09-09T00:00:00Z' },
+      recorded_at: '2026-09-09T00:00:00Z',
+      ...overrides,
+    };
+  }
+  const decide = (rec) => require('../src/gateway/tenant-lifecycle').decideTenantAction(rec);
+  const transition = (rec, to) => require('../src/gateway/tenant-lifecycle').canTransitionTenant(rec, to);
+
+  it('TEN-001: ACTIVE with recorded acknowledgements admits grant', () => {
+    const r = decide(tenRecord({
+      state: 'active',
+      owner_acknowledgements: [{ owner: 'owner-a', ack: 'retention' }],
+      attempted_action: { kind: 'grant', at: '2026-09-09T00:00:00Z' },
+    }));
+    assert.equal(r.admitted, true);
+  });
+
+  it('TEN-001: ACTIVE admits grant even with no acks (acks gate only terminal completion)', () => {
+    const r = decide(tenRecord({
+      state: 'active',
+      attempted_action: { kind: 'grant', at: '2026-09-09T00:00:00Z' },
+    }));
+    assert.equal(r.admitted, true);
+  });
+
+  it('TEN-002: DELETING denies new grants', () => {
+    const r = decide(tenRecord({
+      state: 'deleting', previous_state: 'active',
+      attempted_action: { kind: 'grant', at: '2026-09-09T00:00:00Z' },
+    }));
+    assert.equal(r.admitted, false);
+  });
+
+  it('TEN-002: DELETING denies ingestion', () => {
+    const r = decide(tenRecord({
+      state: 'deleting', previous_state: 'active',
+      attempted_action: { kind: 'ingestion', at: '2026-09-09T00:00:00Z' },
+    }));
+    assert.equal(r.admitted, false);
+  });
+
+  it('TEN-002: DELETING denies execution', () => {
+    const r = decide(tenRecord({
+      state: 'deleting', previous_state: 'active',
+      attempted_action: { kind: 'execution', at: '2026-09-09T00:00:00Z' },
+    }));
+    assert.equal(r.admitted, false);
+  });
+
+  it('TEN-003: complete_deletion without all owner acks is rejected', () => {
+    const r = decide(tenRecord({
+      state: 'deleting', previous_state: 'active',
+      owner_acknowledgements: [{ owner: 'owner-a', ack: 'deletion' }],
+      attempted_action: { kind: 'complete_deletion', at: '2026-09-09T00:00:00Z' },
+    }));
+    assert.equal(r.admitted, false);
+  });
+
+  it('TEN-003: complete_deletion admitted only with every required owner deletion ack', () => {
+    const r = decide(tenRecord({
+      state: 'deleting', previous_state: 'active',
+      owner_acknowledgements: [
+        { owner: 'owner-a', ack: 'deletion' },
+        { owner: 'owner-b', ack: 'deletion' },
+      ],
+      attempted_action: { kind: 'complete_deletion', at: '2026-09-09T00:00:00Z' },
+    }));
+    assert.equal(r.admitted, true);
+  });
+
+  it('TEN-003: retention ack does not satisfy deletion completion', () => {
+    const r = decide(tenRecord({
+      state: 'deleting', previous_state: 'active',
+      owner_acknowledgements: [
+        { owner: 'owner-a', ack: 'deletion' },
+        { owner: 'owner-b', ack: 'retention' },
+      ],
+      attempted_action: { kind: 'complete_deletion', at: '2026-09-09T00:00:00Z' },
+    }));
+    assert.equal(r.admitted, false);
+  });
+
+  it('TEN-003: duplicate ack from one owner does not cover another owner', () => {
+    const r = decide(tenRecord({
+      state: 'deleting', previous_state: 'active',
+      owner_acknowledgements: [
+        { owner: 'owner-a', ack: 'deletion' },
+        { owner: 'owner-a', ack: 'deletion' },
+      ],
+      attempted_action: { kind: 'complete_deletion', at: '2026-09-09T00:00:00Z' },
+    }));
+    assert.equal(r.admitted, false);
+  });
+
+  it('TEN-003: complete_deletion outside DELETING is denied even with full acks', () => {
+    const r = decide(tenRecord({
+      state: 'active',
+      owner_acknowledgements: [
+        { owner: 'owner-a', ack: 'deletion' },
+        { owner: 'owner-b', ack: 'deletion' },
+      ],
+      attempted_action: { kind: 'complete_deletion', at: '2026-09-09T00:00:00Z' },
+    }));
+    assert.equal(r.admitted, false);
+  });
+
+  it('TEN-004: SUSPENDED denies execution', () => {
+    const r = decide(tenRecord({
+      state: 'suspended', previous_state: 'active',
+      attempted_action: { kind: 'execution', at: '2026-09-09T00:00:00Z' },
+    }));
+    assert.equal(r.admitted, false);
+  });
+
+  it('TEN-004: SUSPENDED still admits grants (only execution is gated)', () => {
+    const r = decide(tenRecord({
+      state: 'suspended', previous_state: 'active',
+      attempted_action: { kind: 'grant', at: '2026-09-09T00:00:00Z' },
+    }));
+    assert.equal(r.admitted, true);
+  });
+
+  it('TEN-005: EXPORTING denies ingestion', () => {
+    const r = decide(tenRecord({
+      state: 'exporting', previous_state: 'active',
+      attempted_action: { kind: 'ingestion', at: '2026-09-09T00:00:00Z' },
+    }));
+    assert.equal(r.admitted, false);
+  });
+
+  it('TEN-005: EXPORTING still admits execution (only ingestion is gated)', () => {
+    const r = decide(tenRecord({
+      state: 'exporting', previous_state: 'active',
+      attempted_action: { kind: 'execution', at: '2026-09-09T00:00:00Z' },
+    }));
+    assert.equal(r.admitted, true);
+  });
+
+  it('TEN-005: complete_export admitted only with every required owner export ack', () => {
+    const denied = decide(tenRecord({
+      state: 'exporting', previous_state: 'active',
+      owner_acknowledgements: [{ owner: 'owner-a', ack: 'export' }],
+      attempted_action: { kind: 'complete_export', at: '2026-09-09T00:00:00Z' },
+    }));
+    assert.equal(denied.admitted, false);
+    const admitted = decide(tenRecord({
+      state: 'exporting', previous_state: 'active',
+      owner_acknowledgements: [
+        { owner: 'owner-a', ack: 'export' },
+        { owner: 'owner-b', ack: 'export' },
+      ],
+      attempted_action: { kind: 'complete_export', at: '2026-09-09T00:00:00Z' },
+    }));
+    assert.equal(admitted.admitted, true);
+  });
+
+  it('DELETED denies all new actions', () => {
+    const r = decide(tenRecord({
+      state: 'deleted', previous_state: 'deleting',
+      attempted_action: { kind: 'grant', at: '2026-09-09T00:00:00Z' },
+    }));
+    assert.equal(r.admitted, false);
+  });
+
+  it('unknown state denies (fail-closed)', () => {
+    const r = decide(tenRecord({
+      state: 'archived',
+      attempted_action: { kind: 'grant', at: '2026-09-09T00:00:00Z' },
+    }));
+    assert.equal(r.admitted, false);
+  });
+
+  it('unknown action kind denies (fail-closed)', () => {
+    const r = decide(tenRecord({
+      state: 'active',
+      attempted_action: { kind: 'launch', at: '2026-09-09T00:00:00Z' },
+    }));
+    assert.equal(r.admitted, false);
+  });
+
+  it('DELETING→ACTIVE transition is rejected (no state-transition bypass)', () => {
+    const r = transition(tenRecord({
+      state: 'deleting', previous_state: 'active',
+      owner_acknowledgements: [
+        { owner: 'owner-a', ack: 'deletion' },
+        { owner: 'owner-b', ack: 'deletion' },
+      ],
+    }), 'active');
+    assert.equal(r.allowed, false);
+  });
+
+  it('DELETING→DELETED requires all owner acks', () => {
+    const denied = transition(tenRecord({
+      state: 'deleting', previous_state: 'active',
+      owner_acknowledgements: [{ owner: 'owner-a', ack: 'deletion' }],
+    }), 'deleted');
+    assert.equal(denied.allowed, false);
+    const allowed = transition(tenRecord({
+      state: 'deleting', previous_state: 'active',
+      owner_acknowledgements: [
+        { owner: 'owner-a', ack: 'deletion' },
+        { owner: 'owner-b', ack: 'deletion' },
+      ],
+    }), 'deleted');
+    assert.equal(allowed.allowed, true);
+  });
+
+  it('DELETED is terminal: no outbound transitions', () => {
+    const r = transition(tenRecord({ state: 'deleted', previous_state: 'deleting' }), 'active');
+    assert.equal(r.allowed, false);
+  });
+});
