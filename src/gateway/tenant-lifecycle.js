@@ -140,9 +140,31 @@ function cleanupOrphanedTenants(now) {
 // required owner's acknowledgement of the matching kind; retention acks
 // stay distinct and never satisfy export/deletion completion.
 
+const TEN_SCHEMA = 'tenant-lifecycle/0.1';
+
 const TEN_STATES = ['active', 'suspended', 'exporting', 'deleting', 'deleted'];
 
 const TEN_ACTIONS = ['none', 'grant', 'ingestion', 'execution', 'complete_export', 'complete_deletion'];
+
+const TEN_ACK_KINDS = ['export', 'deletion', 'retention'];
+
+// Fail-closed shape gate: only exact 0.1 records reach 0.1 semantics.
+function tenIsOwnerList(v) {
+  return Array.isArray(v) && v.length > 0
+    && v.every((o) => typeof o === 'string' && o.length > 0);
+}
+
+function tenAcksShapeValid(acks) {
+  if (!Array.isArray(acks)) return false;
+  return acks.every((a) => a && typeof a === 'object'
+    && typeof a.owner === 'string' && a.owner.length > 0
+    && TEN_ACK_KINDS.includes(a.ack));
+}
+
+function tenRecordShapeValid(record) {
+  return tenIsOwnerList(record.required_owners)
+    && tenAcksShapeValid(record.owner_acknowledgements);
+}
 
 // Legal outbound transitions. deleting has no path back to active — a
 // DELETING tenant reaches deleted only, and only with all owner acks.
@@ -178,10 +200,12 @@ function tenAllOwnersAck(requiredOwners, acks, ackKind) {
 function decideTenantAction(record) {
   const deny = (reason) => ({ admitted: false, reason });
   if (!record || typeof record !== 'object') return deny('missing_record');
+  if (record.schema !== TEN_SCHEMA) return deny('invalid_schema');
   const { state, required_owners, owner_acknowledgements, attempted_action } = record;
   if (!TEN_STATES.includes(state)) return deny('unknown_state');
   const kind = attempted_action && attempted_action.kind;
   if (!TEN_ACTIONS.includes(kind)) return deny('unknown_action');
+  if (!tenRecordShapeValid(record)) return deny('invalid_schema');
   if (kind === 'none') return { admitted: true, reason: 'no_action' };
   if (state === 'deleted') return deny('tenant_deleted');
   if (kind === 'complete_deletion') {
@@ -212,9 +236,11 @@ function decideTenantAction(record) {
 function canTransitionTenant(record, toState) {
   const deny = (reason) => ({ allowed: false, reason });
   if (!record || typeof record !== 'object') return deny('missing_record');
+  if (record.schema !== TEN_SCHEMA) return deny('invalid_schema');
   const from = record.state;
   if (!TEN_STATES.includes(from)) return deny('unknown_state');
   if (!TEN_STATES.includes(toState)) return deny('unknown_target_state');
+  if (!tenRecordShapeValid(record)) return deny('invalid_schema');
   if (toState === from) return { allowed: true, reason: 'no_op' };
   if (!(TEN_TRANSITIONS[from] || []).includes(toState)) return deny('illegal_transition');
   if (from === 'exporting' && toState === 'active') {

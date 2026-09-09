@@ -286,3 +286,71 @@ describe('TEN tenant lifecycle admission (tenant-lifecycle/0.1)', () => {
     assert.equal(r.allowed, false);
   });
 });
+
+describe('TEN schema discriminator (tenant-lifecycle/0.1)', () => {
+  const HEX32 = '0123456789abcdef0123456789abcdef';
+  function tenRecord(overrides = {}) {
+    return {
+      schema: 'tenant-lifecycle/0.1',
+      lifecycle_id: `lif_${HEX32}`,
+      tenant_id: `ten_${HEX32}`,
+      state: 'active',
+      previous_state: null,
+      required_owners: ['owner-a', 'owner-b'],
+      owner_acknowledgements: [],
+      attempted_action: { kind: 'grant', at: '2026-09-09T00:00:00Z' },
+      recorded_at: '2026-09-09T00:00:00Z',
+      ...overrides,
+    };
+  }
+  const decide = (rec) => require('../src/gateway/tenant-lifecycle').decideTenantAction(rec);
+  const transition = (rec, to) => require('../src/gateway/tenant-lifecycle').canTransitionTenant(rec, to);
+
+  it('incompatible schema version is denied even for active/grant', () => {
+    const r = decide(tenRecord({ schema: 'tenant-lifecycle/9.0' }));
+    assert.equal(r.admitted, false);
+  });
+
+  it('missing schema is denied even for active/grant', () => {
+    const rec = tenRecord();
+    delete rec.schema;
+    const r = decide(rec);
+    assert.equal(r.admitted, false);
+  });
+
+  it('malformed acknowledgements are denied even for active/grant', () => {
+    const r = decide(tenRecord({
+      owner_acknowledgements: [{ owner: 'owner-a' }],
+    }));
+    assert.equal(r.admitted, false);
+  });
+
+  it('missing required_owners is denied even for active/grant', () => {
+    const rec = tenRecord();
+    delete rec.required_owners;
+    const r = decide(rec);
+    assert.equal(r.admitted, false);
+  });
+
+  it('valid 0.1 record is still admitted', () => {
+    const r = decide(tenRecord());
+    assert.equal(r.admitted, true);
+  });
+
+  it('transition with incompatible schema is denied', () => {
+    const r = transition(tenRecord({ schema: 'tenant-lifecycle/9.0' }), 'suspended');
+    assert.equal(r.allowed, false);
+  });
+
+  it('transition with missing schema is denied', () => {
+    const rec = tenRecord();
+    delete rec.schema;
+    const r = transition(rec, 'suspended');
+    assert.equal(r.allowed, false);
+  });
+
+  it('transition with valid 0.1 record is still allowed', () => {
+    const r = transition(tenRecord(), 'suspended');
+    assert.equal(r.allowed, true);
+  });
+});
