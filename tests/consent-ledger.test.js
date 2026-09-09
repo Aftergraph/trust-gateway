@@ -482,4 +482,42 @@ describe('consent-ledger P1 review fixes (fail-closed TDD)', () => {
     assert.equal(interim.decision, 'deny');
     assert.match(interim.reason, /expir/);
   });
+
+  it('P1-4: verifyAudit binds top-level grant fields to the genesis entry', () => {
+    const g = generalGrant();
+    const genesis = g.history[0].grant || {};
+    assert.equal(genesis.subject, SUBJECT);
+    assert.equal(genesis.purpose, GENERAL);
+    assert.equal(genesis.scope_tenant, TENANT);
+    assert.equal(genesis.scope_domain, DOMAIN);
+    const mutations = [
+      ['subject', 'user:mallory'],
+      ['purpose', 'other-purpose'],
+      ['scope_tenant', OTHER_TENANT],
+      ['scope_domain', 'evil.example.com'],
+    ];
+    for (const [field, value] of mutations) {
+      const tampered = JSON.parse(JSON.stringify(g));
+      tampered[field] = value;
+      const v = verifyAudit(tampered);
+      assert.equal(v.ok, false, `mutated ${field} must not verify`);
+      assert.match(v.error, /genesis|grant_binding/);
+    }
+    assert.equal(verifyAudit(g).ok, true);
+  });
+
+  it('P2-1: a use exactly at the expiry cutoff is denied', () => {
+    const d = evaluateUse(grant(), fullBind(PURPOSE, T_VALID_UNTIL));
+    assert.equal(d.decision, 'deny');
+    assert.match(d.reason, /expir/);
+  });
+
+  it('P2-2: an artifact cannot be effective before its derivation instant', () => {
+    const r = evaluateDerivedUse(generalGrant(), {
+      ...fullDerived(GENERAL, T_JUL_USE),
+    }, { at: T_MAR_USE });
+    assert.equal(r.effective, false);
+    assert.match(r.reason, /derivation/);
+    assert.equal(r.validAtDerivation, false);
+  });
 });

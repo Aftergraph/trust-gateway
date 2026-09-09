@@ -97,7 +97,12 @@ function createGrant(input = {}) {
     recorded_at: recordedIso,
     valid_until: validIso,
     revoked_at: null,
-    history: [{ event: 'granted', at: recordedIso, version: '1' }],
+    history: [{
+      event: 'granted',
+      at: recordedIso,
+      version: '1',
+      grant: { subject, purpose, scope_tenant: scopeTenant, scope_domain: scopeDomain },
+    }],
   };
   return { ok: true, record };
 }
@@ -131,7 +136,10 @@ function applyEvent(record, event, opts = {}) {
 
   const next = {
     ...record,
-    history: record.history.map((h) => ({ ...h })),
+    history: record.history.map((h) => ({
+      ...h,
+      ...(h && h.grant ? { grant: { ...h.grant } } : null),
+    })),
   };
   if (event === 'restricted') {
     if (!isNonEmptyString(opts.narrowedPurpose, 256)) {
@@ -248,8 +256,8 @@ function evaluateUse(record, use = {}) {
   const expiryMs = terminalCutoffMs(record, 'expired');
   if (record.event === 'expired' && expiryMs === null) return deny('expired');
 
-  // Expiry: uses past the cutoff are rejected.
-  if (expiryMs !== null && atMs > expiryMs) {
+  // Expiry: uses at or past the cutoff are rejected.
+  if (expiryMs !== null && atMs >= expiryMs) {
     return deny('expired');
   }
 
@@ -316,6 +324,9 @@ function evaluateDerivedUse(record, derived = {}, opts = {}) {
   if (!derivedAt) return ineffective('invalid_derived_at');
   const at = toIso(opts.at === undefined ? Date.now() : opts.at);
   if (!at) return ineffective('invalid_at');
+  if (Date.parse(at) < Date.parse(derivedAt)) {
+    return ineffective('use_before_derivation', false);
+  }
 
   // Binding is fail closed: a derived entry must carry its own
   // subject/tenant/domain — nothing is defaulted from the record, so an
@@ -458,6 +469,13 @@ function verifyAudit(record) {
     return { ok: false, error: 'version_mismatch' };
   }
   if (record.history[0].event !== 'granted') return { ok: false, error: 'genesis_not_granted' };
+  const genesisGrant = record.history[0].grant || {};
+  if (genesisGrant.subject !== record.subject ||
+      genesisGrant.purpose !== record.purpose ||
+      genesisGrant.scope_tenant !== record.scope_tenant ||
+      genesisGrant.scope_domain !== record.scope_domain) {
+    return { ok: false, error: 'genesis_grant_binding_mismatch' };
+  }
   const last = record.history[record.history.length - 1];
   if (last.event !== record.event) return { ok: false, error: 'head_event_mismatch' };
   return { ok: true, versions: record.history.length };
