@@ -76,7 +76,7 @@ module.exports = {
           const runtimePath = process.env.AIE_RUNTIME_PATH || path.join(__dirname, '..', '..', '..', 'aie');
           const bridge = path.join(runtimePath, 'scripts', 'aie_authority_bridge.py');
           const stateFile = process.env.AIE_STATE_FILE || path.join(process.cwd(), 'data', 'aie-state.db');
-          const py = process.env.AIE_PYTHON || 'python';
+          const py = process.env.AIE_PYTHON || authorityProxy.resolvePython();
           const result = spawnSync(py, [bridge, '--state', stateFile, '--kind', 'leases'], {
             timeout: 10000, encoding: 'utf8', windowsHide: true, maxBuffer: 1024 * 1024,
           });
