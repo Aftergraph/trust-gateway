@@ -146,10 +146,11 @@ function broker(store, opts = {}) {
         headers: { ...req.http.headers, authorization: `Bearer ${secret}` },
       },
     }),
-    transport: opts.transport || (async (req) => {
+    transport: async (req) => {
       transportCalls.push(req);
+      if (opts.transport) return opts.transport(req);
       return { status: 201, headers: {}, body: { ok: true } };
-    }),
+    },
   });
   return { broker: b, audit, transportCalls };
 }
@@ -317,10 +318,7 @@ test('redirect response is not followed; every redirected request requires re-ad
     const store = new CredentialHandleStore({ db, vault, now: () => 1_000 });
     const h = issue(store);
     const { broker: b, transportCalls } = broker(store, {
-      transport: async (req) => {
-        transportCalls.push(req);
-        return { status: 307, headers: { location: '/repos/Aftergraph/example/other' }, body: null };
-      },
+      transport: async () => ({ status: 307, headers: { location: '/repos/Aftergraph/example/other' }, body: null }),
     });
     const admission = await b.admit(request(h.handleId));
     await assert.rejects(() => b.dispatch(admission, request(h.handleId)), /redirect_requires_readmission/);
