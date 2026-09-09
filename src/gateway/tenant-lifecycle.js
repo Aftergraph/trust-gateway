@@ -161,7 +161,21 @@ function tenAcksShapeValid(acks) {
     && TEN_ACK_KINDS.includes(a.ack));
 }
 
+function tenIsIso(v) {
+  return typeof v === 'string' && Number.isFinite(Date.parse(v));
+}
+
+// Fail-closed shape gate: only exact 0.1 records reach 0.1 semantics.
+// Audit identity travels with the decision — a record missing its
+// lifecycle/tenant identity, lineage, or timestamps is not evaluable.
 function tenRecordShapeValid(record) {
+  if (!record || typeof record !== 'object') return false;
+  if (typeof record.lifecycle_id !== 'string' || record.lifecycle_id.length === 0) return false;
+  if (typeof record.tenant_id !== 'string' || record.tenant_id.length === 0) return false;
+  if (record.previous_state !== null && !TEN_STATES.includes(record.previous_state)) return false;
+  if (!tenIsIso(record.recorded_at)) return false;
+  const action = record.attempted_action;
+  if (!action || typeof action !== 'object' || !tenIsIso(action.at)) return false;
   return tenIsOwnerList(record.required_owners)
     && tenAcksShapeValid(record.owner_acknowledgements);
 }

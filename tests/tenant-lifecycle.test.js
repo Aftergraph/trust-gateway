@@ -353,4 +353,21 @@ describe('TEN schema discriminator (tenant-lifecycle/0.1)', () => {
     const r = transition(tenRecord(), 'suspended');
     assert.equal(r.allowed, true);
   });
+
+  it('records missing audit identity fields are denied, not admitted', () => {
+    for (const field of ['lifecycle_id', 'tenant_id', 'recorded_at']) {
+      const rec = tenRecord();
+      delete rec[field];
+      const d = decide(rec);
+      assert.equal(d.admitted, false, `missing ${field} must deny`);
+      assert.match(d.reason, /schema/);
+      const t = transition(rec, 'suspended');
+      assert.equal(t.allowed, false, `missing ${field} must block transition`);
+    }
+    const noActionAt = tenRecord({ attempted_action: { kind: 'grant' } });
+    assert.equal(decide(noActionAt).admitted, false);
+    const badPrev = tenRecord({ previous_state: 'not-a-state' });
+    assert.equal(decide(badPrev).admitted, false);
+    assert.equal(transition(badPrev, 'suspended').allowed, false);
+  });
 });
