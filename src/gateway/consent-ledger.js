@@ -149,8 +149,62 @@ function applyEvent(record, event, opts = {}) {
     }
   }
   next.ledger_version = String(Number(record.ledger_version || '0') + 1);
-  next.history.push({ event, at, version: next.ledger_version });
+  const entry = { event, at, version: next.ledger_version };
+  // Record the narrowing on the entry itself so the purpose in force at any
+  // past instant can be reconstructed (restriction applies prospectively).
+  if (event === 'restricted') entry.narrowedPurpose = opts.narrowedPurpose;
+  next.history.push(entry);
   return { ok: true, record: next };
+}
+
+/**
+ * Purpose state applicable at an instant, reconstructed from history: a
+ * restriction narrows the purpose prospectively from its own timestamp, so a
+ * pre-restriction use is still evaluated under the granted purpose.
+ * Histories that predate per-entry narrowedPurpose values fall back to the
+ * record's current narrowed_purpose once a restriction applies.
+ */
+function purposeStateAt(record, atMs) {
+  const hist = Array.isArray(record.history) ? record.history : null;
+  if (!hist || hist.length === 0) {
+    const restricted = record.event === 'restricted';
+    return { allowed: restricted ? record.narrowed_purpose : record.purpose, restricted };
+  }
+  let narrowed = null;
+  let applies = false;
+  for (const h of hist) {
+    if (!h || h.event !== 'restricted') continue;
+    const ms = Date.parse(h.at);
+    if (!Number.isFinite(ms) || ms > atMs) continue;
+    applies = true;
+    narrowed = (typeof h.narrowedPurpose === 'string' && h.narrowedPurpose.length > 0)
+      ? h.narrowedPurpose
+      : record.narrowed_purpose;
+  }
+  if (!applies) return { allowed: record.purpose, restricted: false };
+  return { allowed: narrowed, restricted: true };
+}
+
+/**
+ * Fail-closed terminal cutoff for one terminal event: the history entry is
+ * authoritative, so a tampered top-level marker moved later cannot reopen an
+ * interim window. The earliest timestamp wins (either marker denies).
+ */
+function terminalCutoffMs(record, event) {
+  const field = event === 'revoked' ? record.revoked_at : record.valid_until;
+  let cutoff = null;
+  if (typeof field === 'string') {
+    const ms = Date.parse(field);
+    if (Number.isFinite(ms)) cutoff = ms;
+  }
+  if (Array.isArray(record.history)) {
+    for (const h of record.history) {
+      if (!h || h.event !== event || typeof h.at !== 'string') continue;
+      const ms = Date.parse(h.at);
+      if (Number.isFinite(ms)) cutoff = cutoff === null ? ms : Math.min(cutoff, ms);
+    }
+  }
+  return cutoff;
 }
 
 /**
@@ -179,26 +233,31 @@ function evaluateUse(record, use = {}) {
     return deny('scope_domain_mismatch');
   }
 
-  // Revocation ends the purpose: uses at/after revoked_at are rejected.
-  // Pre-revocation uses stay auditable as permitted-then (effective-use
-  // invalidation is decided by the downstream checks, not here).
-  if (record.event === 'revoked' && !record.revoked_at) return deny('revoked');
-  if (record.revoked_at && atMs >= Date.parse(record.revoked_at)) {
+  // Revocation ends the purpose: uses at/after the cutoff are rejected.
+  // The cutoff is history-authoritative (earliest of revoked_at and the
+  // revocation history entry), so a tampered revoked_at moved later cannot
+  // reopen an interim window. Pre-revocation uses stay auditable as
+  // permitted-then (effective-use invalidation is decided downstream).
+  const revokeMs = terminalCutoffMs(record, 'revoked');
+  if (record.event === 'revoked' && revokeMs === null) return deny('revoked');
+  if (revokeMs !== null && atMs >= revokeMs) {
     return deny('revoked');
   }
   // Expiry ends the purpose symmetrically; a bare expired event with no
   // valid_until fails closed.
-  if (record.event === 'expired' && !record.valid_until) return deny('expired');
+  const expiryMs = terminalCutoffMs(record, 'expired');
+  if (record.event === 'expired' && expiryMs === null) return deny('expired');
 
-  // Expiry: uses past valid_until are rejected.
-  if (record.valid_until && atMs > Date.parse(record.valid_until)) {
+  // Expiry: uses past the cutoff are rejected.
+  if (expiryMs !== null && atMs > expiryMs) {
     return deny('expired');
   }
 
-  // Purpose check: restricted records only serve the narrowed purpose.
-  const allowedPurpose = record.event === 'restricted' ? record.narrowed_purpose : record.purpose;
-  if (use.purpose !== allowedPurpose) {
-    return deny(record.event === 'restricted' ? 'restricted_purpose_mismatch' : 'purpose_mismatch');
+  // Purpose check: a restriction in force at the use instant narrows the
+  // allowed purpose; earlier uses keep the granted purpose.
+  const state = purposeStateAt(record, atMs);
+  if (use.purpose !== state.allowed) {
+    return deny(state.restricted ? 'restricted_purpose_mismatch' : 'purpose_mismatch');
   }
   if (atMs < Date.parse(record.recorded_at)) return deny('use_before_recorded');
 
@@ -231,11 +290,13 @@ function preTerminalRecord(record) {
  * (terminal event with no timestamp) fails closed.
  */
 function terminalAtDerivation(record, derivedMs) {
-  if (record.revoked_at) return derivedMs >= Date.parse(record.revoked_at);
+  const revokeMs = terminalCutoffMs(record, 'revoked');
+  if (revokeMs !== null) return derivedMs >= revokeMs;
   if (record.event === 'revoked') return true;
-  if (record.event === 'expired' && !record.valid_until) return true;
-  if (record.event === 'expired' && record.valid_until) {
-    return derivedMs > Date.parse(record.valid_until);
+  if (record.event === 'expired') {
+    const expiryMs = terminalCutoffMs(record, 'expired');
+    if (expiryMs === null) return true;
+    return derivedMs > expiryMs;
   }
   return false;
 }
@@ -256,14 +317,20 @@ function evaluateDerivedUse(record, derived = {}, opts = {}) {
   const at = toIso(opts.at === undefined ? Date.now() : opts.at);
   if (!at) return ineffective('invalid_at');
 
+  // Binding is fail closed: a derived entry must carry its own
+  // subject/tenant/domain — nothing is defaulted from the record, so an
+  // unbound entry can never manufacture a match.
+  if (derived.subject === undefined || derived.tenant === undefined || derived.domain === undefined) {
+    return ineffective('missing_binding', false);
+  }
   // Then-state: evaluate the derivation against the true pre-terminal record
   // (purpose + binding actually verified via evaluateUse), gated on the
   // derivation predating the terminal event.
   const binding = {
     purpose: derived.purpose,
-    subject: derived.subject !== undefined ? derived.subject : record.subject,
-    tenant: derived.tenant !== undefined ? derived.tenant : record.scope_tenant,
-    domain: derived.domain !== undefined ? derived.domain : record.scope_domain,
+    subject: derived.subject,
+    tenant: derived.tenant,
+    domain: derived.domain,
   };
   const thenCheck = evaluateUse(preTerminalRecord(record), { ...binding, at: derivedAt });
   const validAtDerivation = thenCheck.decision === 'permit'
@@ -287,11 +354,18 @@ function evaluateBundle(entries = [], opts = {}) {
     return { decision: 'deny', reason: 'empty_bundle', authorityGranted: false };
   }
   const details = entries.map((e, i) => {
+    // Fail closed like evaluateDerivedUse: bundle entries must carry their
+    // own bindings; nothing is defaulted from the record.
+    if (!e || e.subject === undefined || e.tenant === undefined || e.domain === undefined) {
+      return {
+        index: i, decision: 'deny', reason: 'missing_binding', authorityGranted: false,
+      };
+    }
     const d = evaluateUse(e.record, {
       purpose: e.purpose,
-      subject: e.subject !== undefined ? e.subject : e.record?.subject,
-      tenant: e.tenant !== undefined ? e.tenant : e.record?.scope_tenant,
-      domain: e.domain !== undefined ? e.domain : e.record?.scope_domain,
+      subject: e.subject,
+      tenant: e.tenant,
+      domain: e.domain,
       at,
     });
     return { index: i, ...d };
@@ -353,6 +427,32 @@ function verifyAudit(record) {
       if (seenTerminal) return { ok: false, error: 'event_after_terminal' };
     }
     if (h.event === 'revoked' || h.event === 'expired') seenTerminal = true;
+  }
+  // Terminal-marker binding (checked after the chain walk so existing
+  // monotonicity/terminal-order errors keep their precedence): top-level
+  // markers must equal the terminal history entry, so a tampered
+  // revoked_at/valid_until cannot pass audit.
+  if (record.event === 'revoked') {
+    if (typeof record.revoked_at !== 'string' || !toIso(record.revoked_at)) {
+      return { ok: false, error: 'revoked_at_missing' };
+    }
+    const revEntry = record.history.filter((h) => h.event === 'revoked').pop();
+    if (!revEntry) return { ok: false, error: 'revoked_at_without_history' };
+    if (Date.parse(record.revoked_at) !== Date.parse(revEntry.at)) {
+      return { ok: false, error: 'revoked_at_mismatch' };
+    }
+  } else if (record.revoked_at !== null && record.revoked_at !== undefined) {
+    return { ok: false, error: 'revoked_at_without_revocation' };
+  }
+  if (record.event === 'expired') {
+    if (typeof record.valid_until !== 'string' || !toIso(record.valid_until)) {
+      return { ok: false, error: 'valid_until_missing' };
+    }
+    const expEntry = record.history.filter((h) => h.event === 'expired').pop();
+    if (!expEntry) return { ok: false, error: 'expired_without_history' };
+    if (Date.parse(record.valid_until) > Date.parse(expEntry.at)) {
+      return { ok: false, error: 'valid_until_mismatch' };
+    }
   }
   if (String(record.history.length) !== String(record.ledger_version)) {
     return { ok: false, error: 'version_mismatch' };

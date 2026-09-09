@@ -114,14 +114,16 @@ describe('consent-ledger CONS-REV conformance', () => {
   it('CONS-REV-001: revoked source invalidates derived uses, audit preserved', () => {
     const g = grant();
     const before = evaluateDerivedUse(g, {
-      target: 'derived_memory', purpose: PURPOSE, tenant: TENANT, derivedAt: T_HISTORICAL,
+      target: 'derived_memory', purpose: PURPOSE, subject: SUBJECT, tenant: TENANT,
+      domain: DOMAIN, derivedAt: T_HISTORICAL,
     }, { at: T_HISTORICAL });
     assert.equal(before.effective, true);
 
     const rev = revokedRecord();
     for (const target of DOWNSTREAM_TARGETS) {
       const d = evaluateDerivedUse(rev, {
-        target, purpose: PURPOSE, tenant: TENANT, derivedAt: T_HISTORICAL,
+        target, purpose: PURPOSE, subject: SUBJECT, tenant: TENANT,
+        domain: DOMAIN, derivedAt: T_HISTORICAL,
       }, { at: T_USE });
       assert.equal(d.effective, false, `target ${target} still effective after revocation`);
     }
@@ -134,7 +136,8 @@ describe('consent-ledger CONS-REV conformance', () => {
   it('CONS-REV-001b: invalidateDownstream marks every item ineffective, keeps audit', () => {
     const rev = revokedRecord();
     const items = DOWNSTREAM_TARGETS.map((target) => ({
-      target, purpose: PURPOSE, tenant: TENANT, derivedAt: T_HISTORICAL,
+      target, purpose: PURPOSE, subject: SUBJECT, tenant: TENANT,
+      domain: DOMAIN, derivedAt: T_HISTORICAL,
     }));
     const out = invalidateDownstream(rev, items, { at: T_USE });
     assert.equal(out.results.length, DOWNSTREAM_TARGETS.length);
@@ -146,13 +149,14 @@ describe('consent-ledger CONS-REV conformance', () => {
   it('CONS-REV-002: ingestion denied, bundles invalidated, future processing blocked', () => {
     const rev = revokedRecord();
     const ingestion = evaluateDerivedUse(rev, {
-      target: 'ingestion', purpose: PURPOSE, tenant: TENANT, derivedAt: T_USE,
+      target: 'ingestion', purpose: PURPOSE, subject: SUBJECT, tenant: TENANT,
+      domain: DOMAIN, derivedAt: T_USE,
     }, { at: T_USE });
     assert.equal(ingestion.effective, false);
 
     const bundle = evaluateBundle([
-      { record: grant(), purpose: PURPOSE, tenant: TENANT },
-      { record: rev, purpose: PURPOSE, tenant: TENANT },
+      { record: grant(), purpose: PURPOSE, subject: SUBJECT, tenant: TENANT, domain: DOMAIN },
+      { record: rev, purpose: PURPOSE, subject: SUBJECT, tenant: TENANT, domain: DOMAIN },
     ], { at: T_USE });
     assert.equal(bundle.decision, 'deny');
 
@@ -162,7 +166,8 @@ describe('consent-ledger CONS-REV conformance', () => {
     assert.equal(future.decision, 'deny');
 
     const futureDerived = evaluateDerivedUse(rev, {
-      target: 'future_processing', purpose: PURPOSE, tenant: TENANT, derivedAt: T_USE,
+      target: 'future_processing', purpose: PURPOSE, subject: SUBJECT, tenant: TENANT,
+      domain: DOMAIN, derivedAt: T_USE,
     }, { at: T_USE });
     assert.equal(futureDerived.effective, false);
   });
@@ -200,7 +205,8 @@ describe('consent-ledger security self-check', () => {
     assert.equal(d.decision, 'deny');
     assert.match(d.reason, /tenant/);
     const derived = evaluateDerivedUse(grant(), {
-      target: 'context_bundle', purpose: PURPOSE, tenant: OTHER_TENANT, derivedAt: T_HISTORICAL,
+      target: 'context_bundle', purpose: PURPOSE, subject: SUBJECT, tenant: OTHER_TENANT,
+      domain: DOMAIN, derivedAt: T_HISTORICAL,
     }, { at: T_HISTORICAL });
     assert.equal(derived.effective, false);
   });
@@ -221,7 +227,8 @@ describe('consent-ledger security self-check', () => {
     assert.equal(historical.decision, 'permit');
     // ... but effective downstream use after revocation is invalid.
     const eff = evaluateDerivedUse(rev, {
-      target: 'derived_memory', purpose: PURPOSE, tenant: TENANT, derivedAt: T_HISTORICAL,
+      target: 'derived_memory', purpose: PURPOSE, subject: SUBJECT, tenant: TENANT,
+      domain: DOMAIN, derivedAt: T_HISTORICAL,
     }, { at: T_USE });
     assert.equal(eff.effective, false);
     assert.equal(eff.validAtDerivation, true);
@@ -308,11 +315,13 @@ describe('consent-ledger SOB fixes (fail-closed TDD)', () => {
     const r = applyEvent(grant(), 'expired', { at: T_VALID_UNTIL });
     assert.equal(r.ok, true);
     const wrongPurpose = evaluateDerivedUse(r.record, {
-      target: 'derived_memory', purpose: 'other-purpose', derivedAt: T_HISTORICAL,
+      target: 'derived_memory', purpose: 'other-purpose', subject: SUBJECT, tenant: TENANT,
+      domain: DOMAIN, derivedAt: T_HISTORICAL,
     }, { at: T_HISTORICAL });
     assert.equal(wrongPurpose.validAtDerivation, false);
     const rightPurpose = evaluateDerivedUse(r.record, {
-      target: 'derived_memory', purpose: PURPOSE, derivedAt: T_HISTORICAL,
+      target: 'derived_memory', purpose: PURPOSE, subject: SUBJECT, tenant: TENANT,
+      domain: DOMAIN, derivedAt: T_HISTORICAL,
     }, { at: T_HISTORICAL });
     assert.equal(rightPurpose.validAtDerivation, true);
   });
@@ -320,12 +329,14 @@ describe('consent-ledger SOB fixes (fail-closed TDD)', () => {
   it('SOB-02b: revoked-then-state keeps restriction narrowing (broad purpose invalid at derivation)', () => {
     const rev = restrictedRevokedRecord();
     const broad = evaluateDerivedUse(rev, {
-      target: 'derived_memory', purpose: PURPOSE, derivedAt: T_DERIVED,
+      target: 'derived_memory', purpose: PURPOSE, subject: SUBJECT, tenant: TENANT,
+      domain: DOMAIN, derivedAt: T_DERIVED,
     }, { at: T_USE });
     assert.equal(broad.effective, false);
     assert.equal(broad.validAtDerivation, false);
     const narrow = evaluateDerivedUse(rev, {
-      target: 'derived_memory', purpose: 'billing-only', derivedAt: T_DERIVED,
+      target: 'derived_memory', purpose: 'billing-only', subject: SUBJECT, tenant: TENANT,
+      domain: DOMAIN, derivedAt: T_DERIVED,
     }, { at: T_USE });
     assert.equal(narrow.effective, false); // post-revocation now-state still invalid
     assert.equal(narrow.validAtDerivation, true); // ... but it was permitted-then
@@ -357,5 +368,118 @@ describe('consent-ledger SOB fixes (fail-closed TDD)', () => {
     assert.match(v.error, /terminal/);
     // Legal chains still verify.
     assert.equal(verifyAudit(restrictedRevokedRecord()).ok, true);
+  });
+});
+
+describe('consent-ledger P1 review fixes (fail-closed TDD)', () => {
+  const T_MAR_USE = '2026-03-01T00:00:00.000Z'; // pre-restriction use
+  const T_JUN_RESTRICT = '2026-06-01T00:00:00.000Z'; // general -> billing
+  const T_JUL_USE = '2026-07-01T00:00:00.000Z'; // post-restriction use
+  const T_SEP_REVOKE = '2026-09-01T00:00:00.000Z';
+  const T_INTERIM = '2026-04-01T00:00:00.000Z'; // between Mar revoke and Jun tamper
+  const T_LATE = '2027-06-01T00:00:00.000Z'; // between real and tampered expiry
+  const GENERAL = 'general';
+  const BILLING = 'billing';
+
+  function generalGrant() {
+    return grant({ purpose: GENERAL });
+  }
+
+  function restrictedRecord() {
+    const r = applyEvent(generalGrant(), 'restricted', { at: T_JUN_RESTRICT, narrowedPurpose: BILLING });
+    assert.equal(r.ok, true, `setup restrict failed: ${r.error}`);
+    return r.record;
+  }
+
+  function fullBind(purpose, at) {
+    return {
+      purpose, subject: SUBJECT, tenant: TENANT, domain: DOMAIN, at,
+    };
+  }
+
+  function fullDerived(purpose, derivedAt) {
+    return {
+      target: 'derived_memory', purpose, subject: SUBJECT, tenant: TENANT, domain: DOMAIN, derivedAt,
+    };
+  }
+
+  it('P1-1: restriction applies prospectively — pre-restriction uses keep the granted purpose', () => {
+    const rec = restrictedRecord();
+    const marchGeneral = evaluateUse(rec, fullBind(GENERAL, T_MAR_USE));
+    assert.equal(marchGeneral.decision, 'permit');
+    const marchBilling = evaluateUse(rec, fullBind(BILLING, T_MAR_USE));
+    assert.equal(marchBilling.decision, 'deny');
+    // Post-restriction behavior is unchanged.
+    assert.equal(evaluateUse(rec, fullBind(BILLING, T_JUL_USE)).decision, 'permit');
+    assert.equal(evaluateUse(rec, fullBind(GENERAL, T_JUL_USE)).decision, 'deny');
+  });
+
+  it('P1-1b: validAtDerivation reconstructs purpose at the derivation instant', () => {
+    const r1 = applyEvent(generalGrant(), 'restricted', { at: T_JUN_RESTRICT, narrowedPurpose: BILLING });
+    assert.equal(r1.ok, true);
+    const r2 = applyEvent(r1.record, 'revoked', { at: T_SEP_REVOKE });
+    assert.equal(r2.ok, true);
+    const preBroad = evaluateDerivedUse(r2.record, fullDerived(GENERAL, T_MAR_USE), { at: T_EXPIRED });
+    assert.equal(preBroad.effective, false); // post-revocation now-state still invalid
+    assert.equal(preBroad.validAtDerivation, true); // ... but broad was permitted-then
+    const postBroad = evaluateDerivedUse(r2.record, fullDerived(GENERAL, T_JUL_USE), { at: T_EXPIRED });
+    assert.equal(postBroad.validAtDerivation, false);
+  });
+
+  it('P1-2: derived entries missing subject/tenant/domain are ineffective (fail closed)', () => {
+    const g = generalGrant();
+    for (const drop of ['subject', 'tenant', 'domain']) {
+      const entry = fullDerived(GENERAL, T_HISTORICAL);
+      delete entry[drop];
+      const d = evaluateDerivedUse(g, entry, { at: T_HISTORICAL });
+      assert.equal(d.effective, false, `missing ${drop} still effective`);
+      assert.equal(d.validAtDerivation, false);
+      assert.equal(d.authorityGranted, false);
+    }
+    const allMissing = evaluateDerivedUse(g, {
+      target: 'derived_memory', purpose: GENERAL, derivedAt: T_HISTORICAL,
+    }, { at: T_HISTORICAL });
+    assert.equal(allMissing.effective, false);
+    assert.equal(allMissing.validAtDerivation, false);
+  });
+
+  it('P1-2b: bundle entries missing bindings are denied (fail closed)', () => {
+    const g = generalGrant();
+    const b = evaluateBundle([{ record: g, purpose: GENERAL, tenant: TENANT }], { at: T_HISTORICAL });
+    assert.equal(b.decision, 'deny');
+    assert.match(b.reason, /bundle_blocked/);
+    assert.equal(b.authorityGranted, false);
+  });
+
+  it('P1-3: verifyAudit binds revoked_at to the revocation history entry', () => {
+    const tampered = JSON.parse(JSON.stringify(revokedRecord()));
+    tampered.revoked_at = T_USE; // move revocation later than the history entry
+    const v = verifyAudit(tampered);
+    assert.equal(v.ok, false);
+    assert.match(v.error, /revok/);
+    assert.equal(verifyAudit(revokedRecord()).ok, true); // untampered chain still verifies
+  });
+
+  it('P1-3b: interim uses between real and tampered revocation are denied', () => {
+    const tampered = JSON.parse(JSON.stringify(revokedRecord()));
+    tampered.revoked_at = T_USE;
+    const interim = evaluateUse(tampered, fullBind(PURPOSE, T_INTERIM));
+    assert.equal(interim.decision, 'deny');
+    assert.match(interim.reason, /revok/);
+    // Genuinely pre-revocation use stays permitted-then.
+    const historical = evaluateUse(tampered, fullBind(PURPOSE, T_HISTORICAL));
+    assert.equal(historical.decision, 'permit');
+  });
+
+  it('P1-3c: verifyAudit enforces expired/valid_until consistency', () => {
+    const r = applyEvent(grant(), 'expired', { at: T_VALID_UNTIL });
+    assert.equal(r.ok, true);
+    assert.equal(verifyAudit(r.record).ok, true);
+    const tampered = JSON.parse(JSON.stringify(r.record));
+    tampered.valid_until = T_EXPIRED; // move expiry later than the history entry
+    assert.equal(verifyAudit(tampered).ok, false);
+    const interim = evaluateUse(tampered, fullBind(PURPOSE, T_LATE));
+    assert.equal(interim.decision, 'deny');
+    assert.match(interim.reason, /expir/);
   });
 });
