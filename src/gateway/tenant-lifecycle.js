@@ -129,6 +129,147 @@ function cleanupOrphanedTenants(now) {
     .filter(Boolean);
 }
 
+// TEN — tenant-lifecycle/0.1 admission + transition gating.
+//
+// Pure logic: no side effects, no shared state. Every decision is derived
+// from the single contract record passed in, so acknowledgements recorded
+// for one tenant can never satisfy another tenant's terminal completion
+// (no cross-tenant coordination leakage). Lifecycle state gates admission
+// only; it confers no authority. Terminal completion (complete_export /
+// complete_deletion, exporting→active, deleting→deleted) requires every
+// required owner's acknowledgement of the matching kind; retention acks
+// stay distinct and never satisfy export/deletion completion.
+
+const TEN_SCHEMA = 'tenant-lifecycle/0.1';
+
+const TEN_STATES = ['active', 'suspended', 'exporting', 'deleting', 'deleted'];
+
+const TEN_ACTIONS = ['none', 'grant', 'ingestion', 'execution', 'complete_export', 'complete_deletion'];
+
+const TEN_ACK_KINDS = ['export', 'deletion', 'retention'];
+
+// Fail-closed shape gate: only exact 0.1 records reach 0.1 semantics.
+function tenIsOwnerList(v) {
+  return Array.isArray(v) && v.length > 0
+    && v.every((o) => typeof o === 'string' && o.length > 0);
+}
+
+function tenAcksShapeValid(acks) {
+  if (!Array.isArray(acks)) return false;
+  return acks.every((a) => a && typeof a === 'object'
+    && typeof a.owner === 'string' && a.owner.length > 0
+    && TEN_ACK_KINDS.includes(a.ack));
+}
+
+function tenIsIso(v) {
+  return typeof v === 'string' && Number.isFinite(Date.parse(v));
+}
+
+// Fail-closed shape gate: only exact 0.1 records reach 0.1 semantics.
+// Audit identity travels with the decision — a record missing its
+// lifecycle/tenant identity, lineage, or timestamps is not evaluable.
+function tenRecordShapeValid(record) {
+  if (!record || typeof record !== 'object') return false;
+  if (typeof record.lifecycle_id !== 'string' || record.lifecycle_id.length === 0) return false;
+  if (typeof record.tenant_id !== 'string' || record.tenant_id.length === 0) return false;
+  if (record.previous_state !== null && !TEN_STATES.includes(record.previous_state)) return false;
+  if (!tenIsIso(record.recorded_at)) return false;
+  const action = record.attempted_action;
+  if (!action || typeof action !== 'object' || !tenIsIso(action.at)) return false;
+  return tenIsOwnerList(record.required_owners)
+    && tenAcksShapeValid(record.owner_acknowledgements);
+}
+
+// Legal outbound transitions. deleting has no path back to active — a
+// DELETING tenant reaches deleted only, and only with all owner acks.
+// deleted is terminal: no outbound transitions at all.
+const TEN_TRANSITIONS = {
+  active: ['suspended', 'exporting', 'deleting'],
+  suspended: ['active', 'exporting', 'deleting'],
+  exporting: ['active', 'deleting'],
+  deleting: ['deleted'],
+  deleted: [],
+};
+
+/**
+ * True when every required owner has an ack of the given kind.
+ * Exact-match on owner strings; duplicates never cover another owner.
+ * Empty/missing required_owners fails closed.
+ */
+function tenAllOwnersAck(requiredOwners, acks, ackKind) {
+  if (!Array.isArray(requiredOwners) || requiredOwners.length === 0) return false;
+  if (!Array.isArray(acks)) return false;
+  const have = new Set();
+  for (const a of acks) {
+    if (a && typeof a.owner === 'string' && a.ack === ackKind) have.add(a.owner);
+  }
+  return requiredOwners.every((o) => have.has(o));
+}
+
+/**
+ * Decide whether an attempted action is admitted for a tenant-lifecycle/0.1 record.
+ * @param {object} record contract record (state, required_owners, owner_acknowledgements, attempted_action)
+ * @returns {{admitted: boolean, reason: string}}
+ */
+function decideTenantAction(record) {
+  const deny = (reason) => ({ admitted: false, reason });
+  if (!record || typeof record !== 'object') return deny('missing_record');
+  if (record.schema !== TEN_SCHEMA) return deny('invalid_schema');
+  const { state, required_owners, owner_acknowledgements, attempted_action } = record;
+  if (!TEN_STATES.includes(state)) return deny('unknown_state');
+  const kind = attempted_action && attempted_action.kind;
+  if (!TEN_ACTIONS.includes(kind)) return deny('unknown_action');
+  if (!tenRecordShapeValid(record)) return deny('invalid_schema');
+  if (kind === 'none') return { admitted: true, reason: 'no_action' };
+  if (state === 'deleted') return deny('tenant_deleted');
+  if (kind === 'complete_deletion') {
+    if (state !== 'deleting') return deny('not_in_deletion');
+    return tenAllOwnersAck(required_owners, owner_acknowledgements, 'deletion')
+      ? { admitted: true, reason: 'all_deletion_acks_recorded' }
+      : deny('missing_owner_acks');
+  }
+  if (kind === 'complete_export') {
+    if (state !== 'exporting') return deny('not_in_export');
+    return tenAllOwnersAck(required_owners, owner_acknowledgements, 'export')
+      ? { admitted: true, reason: 'all_export_acks_recorded' }
+      : deny('missing_owner_acks');
+  }
+  if (state === 'deleting') return deny('tenant_deleting');
+  if (state === 'suspended' && kind === 'execution') return deny('tenant_suspended');
+  if (state === 'exporting' && kind === 'ingestion') return deny('tenant_exporting');
+  return { admitted: true, reason: `${kind}_admitted` };
+}
+
+/**
+ * Decide whether a lifecycle state transition is allowed.
+ * Acks are read from the same record — never from shared/global state.
+ * @param {object} record contract record (state, required_owners, owner_acknowledgements)
+ * @param {string} toState target state
+ * @returns {{allowed: boolean, reason: string}}
+ */
+function canTransitionTenant(record, toState) {
+  const deny = (reason) => ({ allowed: false, reason });
+  if (!record || typeof record !== 'object') return deny('missing_record');
+  if (record.schema !== TEN_SCHEMA) return deny('invalid_schema');
+  const from = record.state;
+  if (!TEN_STATES.includes(from)) return deny('unknown_state');
+  if (!TEN_STATES.includes(toState)) return deny('unknown_target_state');
+  if (!tenRecordShapeValid(record)) return deny('invalid_schema');
+  if (toState === from) return { allowed: true, reason: 'no_op' };
+  if (!(TEN_TRANSITIONS[from] || []).includes(toState)) return deny('illegal_transition');
+  if (from === 'exporting' && toState === 'active') {
+    return tenAllOwnersAck(record.required_owners, record.owner_acknowledgements, 'export')
+      ? { allowed: true, reason: 'export_complete' }
+      : deny('missing_owner_acks');
+  }
+  if (from === 'deleting' && toState === 'deleted') {
+    return tenAllOwnersAck(record.required_owners, record.owner_acknowledgements, 'deletion')
+      ? { allowed: true, reason: 'deletion_complete' }
+      : deny('missing_owner_acks');
+  }
+  return { allowed: true, reason: 'transition_allowed' };
+}
+
 module.exports = {
   shouldAutoDisable,
   markAutoDisabled,
@@ -136,4 +277,9 @@ module.exports = {
   diskPctThreshold,
   durationMs,
   cleanupAgeMs,
+  decideTenantAction,
+  canTransitionTenant,
+  TEN_STATES,
+  TEN_ACTIONS,
+  TEN_TRANSITIONS,
 };
