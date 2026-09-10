@@ -885,3 +885,13 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 279 | `chat_branch` | mounts/151-chat-llm-branch.js (chat: branch) |
 | 280 | `proposal_leases` | mounts/153-proposal-leases.js (proposal: leases) |
 | 281 | `sse_ticket_issued` | mounts/11-events-ticket.js (SSE ticket mint) |
+| 282 | `tenant_lifecycle_read` | mounts/161-tenant-lifecycle-transitions.js (TG85: {by, tenant, state} — operator read a tenant lifecycle record) |
+| 283 | `tenant_lifecycle_read_denied` | mounts/161-tenant-lifecycle-transitions.js (TG85: {bot} — non-operator attempted lifecycle record read) |
+| 284 | `tenant_lifecycle_opened` | mounts/161-tenant-lifecycle-transitions.js (TG85: {by, tenant} — operator opened a tenant lifecycle record in active state) |
+| 285 | `tenant_lifecycle_open_failed` | mounts/161-tenant-lifecycle-transitions.js (TG85: {by, tenant, reason} — lifecycle open rejected: invalid owners or record exists) |
+| 286 | `tenant_lifecycle_open_denied` | mounts/161-tenant-lifecycle-transitions.js (TG85: {bot} — non-operator attempted lifecycle record open) |
+| 287 | `tenant_lifecycle_transitioned` | mounts/161-tenant-lifecycle-transitions.js (TG85: {by, tenant, state} — operator moved a tenant through a TEN-0.1 transition allowed by canTransitionTenant) |
+| 288 | `tenant_lifecycle_transition_denied` | mounts/161-tenant-lifecycle-transitions.js (TG85: {by, tenant, reason} — non-operator attempt or a TEN-0.1 transition refused by canTransitionTenant; nothing persisted) |
+| 289 | `tenant_lifecycle_acked` | mounts/161-tenant-lifecycle-transitions.js (TG85: {by, tenant, owner, ack} — operator recorded an owner acknowledgement of a validated kind) |
+| 290 | `tenant_lifecycle_ack_failed` | mounts/161-tenant-lifecycle-transitions.js (TG85: {by, tenant, reason} — acknowledgement rejected: bad kind, unknown owner, or missing record) |
+| 291 | `tenant_lifecycle_ack_denied` | mounts/161-tenant-lifecycle-transitions.js (TG85: {bot} — non-operator attempted acknowledgement record) |
