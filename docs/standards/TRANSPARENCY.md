@@ -885,3 +885,7 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 279 | `chat_branch` | mounts/151-chat-llm-branch.js (chat: branch) |
 | 280 | `proposal_leases` | mounts/153-proposal-leases.js (proposal: leases) |
 | 281 | `sse_ticket_issued` | mounts/11-events-ticket.js (SSE ticket mint) |
+| 282 | `egress_admitted` | gateway/governed-egress.js (egress: admitted) |
+| 283 | `egress_failed` | gateway/governed-egress.js (egress: failed dispatch) |
+| 284 | `egress_redirect_refused` | gateway/governed-egress.js (egress: redirect refused) |
+| 285 | `egress_dispatched` | gateway/governed-egress.js (egress: dispatched) |

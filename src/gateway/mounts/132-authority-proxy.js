@@ -28,6 +28,20 @@ const KINDS = ['leases', 'missions', 'admissions', 'outcomes', 'evidence'];
 // gateway grows those endpoints.
 const HTTP_KINDS = new Set(['leases', 'missions', 'admissions']);
 
+function resolvePython() {
+  if (process.env.AIE_PYTHON) return process.env.AIE_PYTHON;
+  const { execSync } = require('child_process');
+  for (const candidate of ['python3', 'python']) {
+    try {
+      execSync(`${candidate} --version`, { stdio: 'ignore' });
+      return candidate;
+    } catch {
+      // try next candidate
+    }
+  }
+  return 'python3';
+}
+
 function _cfg() {
   const runtimePath = process.env.AIE_RUNTIME_PATH ||
     path.join(__dirname, '..', '..', '..', '..', 'aie');  // mounts/gateway/src → repo → sibling
@@ -36,7 +50,7 @@ function _cfg() {
     httpToken: process.env.AIE_HTTP_TOKEN || '',
     bridge: path.join(runtimePath, 'scripts', 'aie_authority_bridge.py'),
     stateFile: process.env.AIE_STATE_FILE || path.join(process.cwd(), 'data', 'aie-state.db'),
-    python: process.env.AIE_PYTHON || 'python',
+    python: process.env.AIE_PYTHON || resolvePython(),
   };
 }
 
@@ -293,3 +307,4 @@ module.exports = function mount(gw) {
 };
 
 module.exports.KINDS = KINDS;
+module.exports.resolvePython = resolvePython;
