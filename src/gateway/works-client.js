@@ -15,6 +15,11 @@
 // execution graph receives a safe, read-only `true` node so the control-plane
 // record is valid without inventing external side effects.
 //
+// When an upstream identity exists, the client also derives a stable Work ID
+// from the canonical payload and sends an idempotency key. Retries with the
+// same identity and payload therefore converge on one Work; changed payloads
+// use a different ID and are rejected by WORKS' idempotency gate.
+//
 // Fail-closed: if WORKS_API_URL is unset, createWork returns { ok:false, reason:'disabled' }
 // instead of throwing — proposals still approve, but carry no WORKS correlation (they get
 // the synthetic mission id from missions.js). Callers treat ok:false as "not durably executed".
@@ -66,6 +71,41 @@ function defaultGraph() {
   };
 }
 
+// Canonical JSON for identity derivation. Object keys are sorted and undefined
+// fields are omitted, so equivalent payloads produce the same Work identity.
+function stableJson(value) {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) return '[' + value.map(stableJson).join(',') + ']';
+  if (value && typeof value === 'object') {
+    return '{' + Object.keys(value)
+      .filter((key) => value[key] !== undefined)
+      .sort()
+      .map((key) => JSON.stringify(key) + ':' + stableJson(value[key]))
+      .join(',') + '}';
+  }
+  if (value === undefined) return 'null';
+  return JSON.stringify(value);
+}
+
+function sha256(value) {
+  return crypto.createHash('sha256').update(value, 'utf8').digest('hex');
+}
+
+function deriveWorkIdentity(correlationId, body) {
+  if (typeof correlationId !== 'string' || correlationId.length === 0) return null;
+  const payload = stableJson({
+    correlation_id: correlationId,
+    objective: body.objective,
+    graph: body.graph,
+    source: body.source,
+    queue: body.queue,
+  });
+  return {
+    id: 'wrk_' + sha256(payload).slice(0, 32),
+    idempotency_key: 'tg_' + sha256(correlationId).slice(0, 32),
+  };
+}
+
 /**
  * Create a Work in the WORKS control plane.
  * @param {{
@@ -86,13 +126,16 @@ async function createWork(spec = {}) {
   }
   const url = `${baseUrl.replace(/\/$/, '')}/v1/works`;
   const graph = spec.graph || defaultGraph();
+  const correlationId = spec.correlation_id || spec.mission_id || undefined;
   const body = {
     objective: normalizeObjective(spec.objective, spec.success_criteria),
     graph,
-    correlation_id: spec.correlation_id || spec.mission_id || undefined,
+    correlation_id: correlationId,
     source: spec.source || undefined,
     queue: spec.queue !== false, // default: straight to QUEUED so workers can pick it up
   };
+  const identity = deriveWorkIdentity(correlationId, body);
+  if (identity) Object.assign(body, identity);
 
   const headers = { 'content-type': 'application/json' };
   if (token) headers.authorization = `Bearer ${token}`;
@@ -122,4 +165,11 @@ async function createWork(spec = {}) {
   return { ok: true, work_id: workId };
 }
 
-module.exports = { createWork, _cfg, normalizeObjective, defaultGraph };
+module.exports = {
+  createWork,
+  _cfg,
+  normalizeObjective,
+  defaultGraph,
+  stableJson,
+  deriveWorkIdentity,
+};
