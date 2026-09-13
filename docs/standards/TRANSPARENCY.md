@@ -407,6 +407,7 @@ plugins.js) across all files under `src/gateway/`.
 | 73 | `adapter_handle_inspected` | mounts/70-adapters.js (operator inspected handle metadata; no handle id or key) |
 | 74 | `adapter_handle_issued` | mounts/70-adapters.js (opaque handle issuance metadata; no handle id, Vault key, or plaintext) |
 | 75 | `adapter_handle_revoked` | mounts/70-adapters.js (operator revoked handle; no handle id or secret material) |
+| 76 | `adapter_handle_rejected` | mounts/70-adapters.js (handle lifecycle refusal code only; no handle id, body, or secret material) |
 
 | 71 | `telegram_notify_rejected` | mounts/71-telegram.js (D2: non-operator attempt; reason + bot name only) |
 | 72 | `observation_scanned` | llm-loop.js (E3: per loop turn, tool + hits + chars — never the text) |
