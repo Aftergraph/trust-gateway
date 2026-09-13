@@ -120,9 +120,20 @@ class AdapterScopedHandleStore {
     const adapterId = String(request.adapterId || '').trim();
     if (!isValidTenantId(tenant) || !adapterId) throw fail('adapter_credential_scope_mismatch');
     const scope = adapterScope(adapterId);
+    const canonicalPrefix = 'adapters/' + normalizeIdentifier(adapterId) + '/credentials/';
     if (!meta || String(meta.tenant || '').trim().toLowerCase() !== tenant ||
         !Array.isArray(meta.scopeRefs) || !meta.scopeRefs.includes(scope)) {
       throw fail('adapter_credential_scope_mismatch');
+    }
+    // CredentialHandleStore.validate exposes secretKey only as metadata. If a
+    // compatible handle store provides it, bind it to this adapter's
+    // canonical Vault namespace before any secret resolution is attempted.
+    if (meta.secretKey !== undefined) {
+      const secretKey = String(meta.secretKey);
+      const secretName = secretKey.slice(canonicalPrefix.length);
+      if (!secretKey.startsWith(canonicalPrefix) || !SAFE_IDENTIFIER.test(secretName)) {
+        throw fail('adapter_credential_scope_mismatch');
+      }
     }
     return meta;
   }

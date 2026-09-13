@@ -395,12 +395,20 @@ plugins.js) across all files under `src/gateway/`.
 | 67 | `adapter_credentials_forbidden` | mounts/70-adapters.js (non-operator credential write attempt) |
 | 68 | `adapter_credentials_set` | mounts/70-adapters.js (Vault lifecycle success metadata only; never the value) |
 | 69 | `adapter_credentials_rejected` | mounts/70-adapters.js (Vault lifecycle refusal code only) |
+| 70 | `adapter_management_forbidden` | mounts/70-adapters.js (worker attempted adapter register/update/delete without operator role or `adapter.manage`; no body/config stored) |
 | 65 | `deploy_artifact` | mounts/75-deploy.js (wave C: rendered service/launcher downloads) |
 | 66 | `openai_request` | mounts/85-openai.js (counts only: model, bot, msgCount, charsIn/Out, streaming — no message content) |
 | 67 | `trust_scan` | mounts/91-trust.js (D4: metadata ONLY — chars, hits, rule names; scanned text is NEVER stored or logged) |
 | 68 | `provider_live_access_denied` | mounts/92-providers-live.js (D5: worker attempted access to live probe) |
 | 69 | `provider_live_probed` | mounts/92-providers-live.js (D5: operator successfully probed providers) |
 | 70 | `telegram_notify` | mounts/71-telegram.js (D2: chat_id + chars + outcome only — never text, never token) |
+| 71 | `adapter_handle_forbidden` | mounts/70-adapters.js (non-operator handle lifecycle attempt; no handle id or body) |
+| 72 | `adapter_handle_blocked` | mounts/70-adapters.js (handle lifecycle unavailable; no secret material) |
+| 73 | `adapter_handle_inspected` | mounts/70-adapters.js (operator inspected handle metadata; no handle id or key) |
+| 74 | `adapter_handle_issued` | mounts/70-adapters.js (opaque handle issuance metadata; no handle id, Vault key, or plaintext) |
+| 75 | `adapter_handle_revoked` | mounts/70-adapters.js (operator revoked handle; no handle id or secret material) |
+| 76 | `adapter_handle_rejected` | mounts/70-adapters.js (handle lifecycle refusal code only; no handle id, body, or secret material) |
+
 | 71 | `telegram_notify_rejected` | mounts/71-telegram.js (D2: non-operator attempt; reason + bot name only) |
 | 72 | `observation_scanned` | llm-loop.js (E3: per loop turn, tool + hits + chars — never the text) |
 | 73 | `approval_impact_snapshot` | approvals.js (F2: at creation, {approvalId, risk, confidence} — no args) |
