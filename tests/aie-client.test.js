@@ -8,7 +8,8 @@ const { execFileSync } = require('node:child_process');
 const CLIENT = path.resolve(__dirname, '../src/gateway/aie-client.js');
 const AIE_DIR = process.env.AIE_RUNTIME_PATH || path.resolve(__dirname, '../../aie');
 const BRIDGE = path.join(AIE_DIR, 'scripts/aie_revalidate_bridge.py');
-const PY = process.env.AIE_PYTHON || 'python';
+const { resolvePython } = require('./helpers.js');
+const PY = resolvePython();
 function tempDir(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tg aie '));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));

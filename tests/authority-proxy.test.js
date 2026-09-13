@@ -35,7 +35,8 @@ function fetchJson(port, token, urlPath) {
 
 function makeEmptyState() {
   const AIE_DIR = process.env.AIE_RUNTIME_PATH || path.join(__dirname, '..', '..', 'aie');
-  const PY = process.env.AIE_PYTHON || 'python';
+  const { resolvePython } = require('./helpers.js');
+const PY = resolvePython();
   const db = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'tg-auth-empty-')), 'aie.db');
   const { execFileSync } = require('node:child_process');
   execFileSync(PY, ['-c',

@@ -23,7 +23,8 @@ const fs = require('node:fs');
 const os = require('node:os');
 
 const AIE_DIR = process.env.AIE_RUNTIME_PATH || path.join(__dirname, '..', '..', 'aie');
-const PY = process.env.AIE_PYTHON || 'python';
+const { resolvePython } = require('./helpers.js');
+const PY = resolvePython();
 const ENV = { ...process.env, PYTHONPATH: path.join(AIE_DIR, 'src') };
 
 // ── Contract file (from GOV frozen schemas) ───────────────────────────

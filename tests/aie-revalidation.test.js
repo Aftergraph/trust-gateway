@@ -11,7 +11,8 @@ const { canonical, sha256 } = require('../src/gateway/hash-chain');
 
 const ROOT = path.join(__dirname, '..');
 const AIE = process.env.AIE_RUNTIME_PATH || path.join(ROOT, '..', 'aie');
-const PY = process.env.AIE_PYTHON || 'python';
+const { resolvePython } = require('./helpers.js');
+const PY = resolvePython();
 const BRIDGE = path.join(AIE, 'scripts', 'aie_revalidate_bridge.py');
 const ORIGINAL_ENV = { AIE_RUNTIME_PATH: process.env.AIE_RUNTIME_PATH, AIE_STATE_FILE: process.env.AIE_STATE_FILE, TG_AIE_FAIL_OPEN: process.env.TG_AIE_FAIL_OPEN, TG_APPROVALS_DB: process.env.TG_APPROVALS_DB, TG_DB_FILE: process.env.TG_DB_FILE };
 test.after(() => {

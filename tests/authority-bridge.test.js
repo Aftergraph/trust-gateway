@@ -9,7 +9,8 @@ const path = require('node:path');
 
 const AIE_DIR = process.env.AIE_RUNTIME_PATH || path.join(__dirname, '..', '..', 'aie');
 const BRIDGE = path.join(AIE_DIR, 'scripts', 'aie_authority_bridge.py');
-const PY = process.env.AIE_PYTHON || 'python';
+const { resolvePython } = require('./helpers.js');
+const PY = resolvePython();
 
 function makeState() {
   const db = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'tg-auth-bridge-')), 'aie-state.db');

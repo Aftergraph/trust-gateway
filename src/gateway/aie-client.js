@@ -9,7 +9,7 @@
 // Environment:
 //   AIE_RUNTIME_PATH  path to the aie repo root (default ../../aie sibling checkout)
 //   AIE_STATE_FILE    PersistentState sqlite db (default <cwd>/data/aie-state.db)
-//   AIE_PYTHON        python interpreter (default 'python')
+//   AIE_PYTHON        python interpreter (default: python3, fallback python)
 //   TG_AIE_FAIL_OPEN  'true' -> documented escape hatch (tests/dev only)
 
 const { spawnSync } = require('child_process');
@@ -21,7 +21,20 @@ const AIE_RUNTIME_PATH = process.env.AIE_RUNTIME_PATH ||
 const AIE_STATE_FILE = process.env.AIE_STATE_FILE ||
   path.join(process.cwd(), 'data', 'aie-state.db');
 const AIE_BRIDGE = path.join(AIE_RUNTIME_PATH, 'scripts', 'aie_revalidate_bridge.py');
-const AIE_PYTHON = process.env.AIE_PYTHON || 'python';
+function resolvePython() {
+  if (process.env.AIE_PYTHON) return process.env.AIE_PYTHON;
+  const { execSync } = require('child_process');
+  for (const candidate of ['python3', 'python']) {
+    try {
+      execSync(`${candidate} --version`, { stdio: 'ignore' });
+      return candidate;
+    } catch {
+      // try next candidate
+    }
+  }
+  return 'python3';
+}
+const AIE_PYTHON = resolvePython();
 
 // Admission producers must persist this digest in the tg-action:v1 extension.
 // Reuse the gateway's canonical JSON so object-key order cannot change identity.
