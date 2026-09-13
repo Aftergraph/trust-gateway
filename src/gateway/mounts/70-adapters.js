@@ -16,6 +16,11 @@
 
 const { send } = require('../server');
 const { getAdapters } = require('../adapters-singleton');
+const {
+  buildWebhookProbeRequest,
+  buildHttpApiProbeRequest,
+  runGovernedAdapterProbe,
+} = require('../governed-adapter-probe');
 
 const MAX_BODY = 64 * 1024;
 
@@ -49,18 +54,184 @@ function auditTarget(def) {
   return host || null;
 }
 
+function canManageCredentials(bot) {
+  if (!bot) return false;
+  if (bot.role === 'operator' || bot.role === 'owner') return true;
+  const caps = Array.isArray(bot.capabilities) ? bot.capabilities : [];
+  return caps.includes('adapter.credentials.write') || caps.includes('*');
+}
+
+function canManageAdapters(bot) {
+  if (!bot) return false;
+  if (bot.role === 'operator' || bot.role === 'owner') return true;
+  const caps = Array.isArray(bot.capabilities) ? bot.capabilities : [];
+  return caps.includes('adapter.manage') || caps.includes('*');
+}
+
+function safeErrorCode(error, fallback) {
+  const code = String(error?.code || '');
+  return /^[a-z0-9_]+$/.test(code) ? code : fallback;
+}
+
 module.exports = {
   name: 'v2-adapters',
   method: '*',
   // 'kinds' is owned by 99-adapter-kinds (G9 data-driven registry) — the
   // id segment here must not swallow it.
-  path: /^\/v2\/adapters(\/(?!kinds(?:\/|$))[\w-]+)?(\/test|\/secret)?$/,
+  path: /^\/v2\/adapters(\/(?!kinds(?:\/|$))[\w-]+)?(\/test|\/secret|\/handle(?:\/[\w-]+)?(?:\/revoke)?)?$/,
   auth: 'bearer',
   handle: async (gw, req, res, ctx) => {
     const reg = getAdapters(gw);
     const m = ctx.params.matches || [];
     const id = m[1] ? m[1].slice(1) : null; // strip leading slash
-    const action = m[2] ? m[2].slice(1) : null; // 'test' | 'secret' | null
+    const actionPath = m[2] ? m[2].slice(1) : '';
+    const actionParts = actionPath ? actionPath.split('/') : [];
+    const action = actionParts[0] || null; // 'test' | 'secret' | 'handle' | null
+    const handleId = action === 'handle' ? (actionParts[1] || null) : null;
+    const handleAction = action === 'handle' ? (actionParts[2] || null) : null;
+
+    // ── POST|GET /v2/adapters/:id/handle ───────────────────────────────────
+    // Handle control-plane operations are intentionally separate from probing:
+    // the opaque handle is issued/revoked by the tenant-scoped lifecycle, while
+    // authority and approval are still enforced later by GovernedEgressBroker.
+    if (action === 'handle') {
+      const def = reg.get(id);
+      if (!def) return send(res, 404, { error: 'not_found' });
+
+      if (!canManageCredentials(ctx.bot)) {
+        gw._audit({
+          type: 'adapter_handle_forbidden',
+          id,
+          tenant: ctx.tenantId || null,
+          bot: ctx.bot?.name || null,
+          reason: 'operator_required',
+        });
+        return send(res, 403, { error: 'operator_required' });
+      }
+      if (!gw.adapterCredentialLifecycle ||
+          typeof gw.adapterCredentialLifecycle.issueHandle !== 'function' ||
+          typeof gw.adapterCredentialLifecycle.inspectHandle !== 'function' ||
+          typeof gw.adapterCredentialLifecycle.revokeHandle !== 'function') {
+        gw._audit({
+          type: 'adapter_handle_blocked',
+          id,
+          tenant: ctx.tenantId || null,
+          bot: ctx.bot?.name || null,
+          reason: 'governed_credentials_required',
+        });
+        return send(res, 409, { error: 'governed_credentials_required' });
+      }
+
+      if (req.method === 'GET' && handleId && !handleAction) {
+        try {
+          const inspected = gw.adapterCredentialLifecycle.inspectHandle({
+            handleId,
+            tenant: ctx.tenantId,
+            adapterId: id,
+          });
+          const { secret, secretKey, ...publicHandle } = inspected || {};
+          gw._audit({
+            type: 'adapter_handle_inspected',
+            id,
+            tenant: ctx.tenantId || null,
+            bot: ctx.bot?.name || null,
+          });
+          return send(res, 200, { handle: publicHandle });
+        } catch (e) {
+          const error = safeErrorCode(e, 'adapter_handle_rejected');
+          gw._audit({
+            type: 'adapter_handle_rejected',
+            id,
+            tenant: ctx.tenantId || null,
+            bot: ctx.bot?.name || null,
+            error,
+          });
+          return send(res, 404, { error });
+        }
+      }
+
+      if (req.method === 'POST' && !handleId && !handleAction) {
+        let body;
+        try { body = await readJson(req); } catch (e) {
+          return send(res, e.message === 'body_too_large' ? 413 : 400, { error: e.message === 'body_too_large' ? 'body_too_large' : 'invalid_json' });
+        }
+        const allowed = new Set([
+          'secretName', 'principalId', 'missionId', 'authorityRef',
+          'credentialClass', 'allowedDestinations', 'allowedMethods',
+          'allowedPathPrefixes', 'scopeRefs', 'expiresAt',
+        ]);
+        if (!body || typeof body !== 'object' || Array.isArray(body) ||
+            Object.keys(body).some((key) => !allowed.has(key))) {
+          return send(res, 400, { error: 'invalid_body' });
+        }
+        try {
+          const issued = gw.adapterCredentialLifecycle.issueHandle({
+            ...body,
+            tenant: ctx.tenantId,
+            adapterId: id,
+            purpose: 'adapter_probe',
+          });
+          const { secret, secretKey, ...publicHandle } = issued || {};
+          gw._audit({
+            type: 'adapter_handle_issued',
+            id,
+            tenant: ctx.tenantId || null,
+            bot: ctx.bot?.name || null,
+            secretName: publicHandle.secretName || null,
+          });
+          return send(res, 201, { handle: publicHandle });
+        } catch (e) {
+          const error = safeErrorCode(e, 'adapter_handle_rejected');
+          gw._audit({
+            type: 'adapter_handle_rejected',
+            id,
+            tenant: ctx.tenantId || null,
+            bot: ctx.bot?.name || null,
+            error,
+          });
+          return send(res, 400, { error });
+        }
+      }
+
+      if (req.method === 'POST' && handleId && handleAction === 'revoke') {
+        let body;
+        try { body = await readJson(req); } catch (e) {
+          return send(res, e.message === 'body_too_large' ? 413 : 400, { error: e.message === 'body_too_large' ? 'body_too_large' : 'invalid_json' });
+        }
+        if (!body || typeof body !== 'object' || Array.isArray(body) ||
+            Object.keys(body).some((key) => key !== 'reason')) {
+          return send(res, 400, { error: 'invalid_body' });
+        }
+        try {
+          const revoked = gw.adapterCredentialLifecycle.revokeHandle({
+            handleId,
+            tenant: ctx.tenantId,
+            adapterId: id,
+            reason: body.reason,
+          });
+          const { secret, secretKey, ...publicHandle } = revoked || {};
+          gw._audit({
+            type: 'adapter_handle_revoked',
+            id,
+            tenant: ctx.tenantId || null,
+            bot: ctx.bot?.name || null,
+          });
+          return send(res, 200, { handle: publicHandle });
+        } catch (e) {
+          const error = safeErrorCode(e, 'adapter_handle_rejected');
+          gw._audit({
+            type: 'adapter_handle_rejected',
+            id,
+            tenant: ctx.tenantId || null,
+            bot: ctx.bot?.name || null,
+            error,
+          });
+          return send(res, 404, { error });
+        }
+      }
+
+      return send(res, 405, { error: 'method_not_allowed' });
+    }
 
     // ── GET ────────────────────────────────────────────────────────────────
     if (req.method === 'GET') {
@@ -83,16 +254,76 @@ module.exports = {
       if (!def) return send(res, 404, { error: 'not_found' });
 
       // The legacy registry probe is deliberately unreachable from HTTP.
-      // A governed route must supply trusted tenant, mission, authority,
-      // approval, credential-handle and broker context before network I/O.
-      gw._audit({
-        type: 'adapter_test_blocked',
-        id,
-        tenant: ctx.tenantId || null,
-        bot: ctx.bot?.name || null,
-        reason: 'governed_egress_required',
-      });
-      return send(res, 409, { error: 'governed_egress_required' });
+      // An adapter route is live only when the embedding control plane injects
+      // both a trusted context resolver and an adapter-bound broker.
+      if (typeof gw.adapterContextResolver !== 'function' ||
+          !gw.governedEgressBroker || gw.governedEgressBroker.requireAdapterBinding !== true ||
+          typeof gw.governedEgressBroker.admit !== 'function' ||
+          typeof gw.governedEgressBroker.dispatch !== 'function') {
+        gw._audit({
+          type: 'adapter_test_blocked',
+          id,
+          tenant: ctx.tenantId || null,
+          bot: ctx.bot?.name || null,
+          reason: 'governed_egress_required',
+        });
+        return send(res, 409, { error: 'governed_egress_required' });
+      }
+
+      let body;
+      try { body = await readJson(req); } catch (e) {
+        return send(res, e.message === 'body_too_large' ? 413 : 400, { error: e.message === 'body_too_large' ? 'body_too_large' : 'invalid_json' });
+      }
+      if (!body || typeof body !== 'object' || Array.isArray(body) ||
+          Object.keys(body).some((key) => key !== 'credentialHandle') ||
+          typeof body.credentialHandle !== 'string' || body.credentialHandle.trim() === '') {
+        return send(res, 400, { error: 'invalid_body' });
+      }
+
+      try {
+        // The resolver is the only source for principal/mission/authority
+        // context. Tenant and adapter identity are overwritten from the
+        // authenticated route, never accepted from the body or resolver.
+        const resolved = await gw.adapterContextResolver({
+          req,
+          ctx,
+          adapter: def,
+          adapterId: id,
+          credentialHandle: body.credentialHandle,
+        });
+        const context = {
+          ...(resolved || {}),
+          tenantId: ctx.tenantId,
+          adapterId: id,
+          purpose: 'adapter_probe',
+          credentialHandle: body.credentialHandle,
+        };
+        const request = def.kind === 'webhook'
+          ? buildWebhookProbeRequest(def, context)
+          : def.kind === 'http-api'
+            ? buildHttpApiProbeRequest(def, context)
+            : (() => { throw Object.assign(new Error('adapter_probe_unsupported'), { code: 'adapter_probe_unsupported' }); })();
+        const result = await runGovernedAdapterProbe({ broker: gw.governedEgressBroker, request });
+        const status = Number(result?.status || 0);
+        gw._audit({
+          type: 'adapter_test_governed',
+          id,
+          tenant: ctx.tenantId || null,
+          bot: ctx.bot?.name || null,
+          status,
+        });
+        return send(res, 200, { adapterId: id, ok: status >= 200 && status < 300, status });
+      } catch (e) {
+        const error = safeErrorCode(e, 'governed_egress_rejected');
+        gw._audit({
+          type: 'adapter_test_rejected',
+          id,
+          tenant: ctx.tenantId || null,
+          bot: ctx.bot?.name || null,
+          error,
+        });
+        return send(res, 409, { error });
+      }
     }
 
     // ── POST /v2/adapters/:id/secret ────────────────────────────────────────
@@ -101,17 +332,82 @@ module.exports = {
       const def = reg.get(id);
       if (!def) return send(res, 404, { error: 'not_found' });
 
-      // Hash-only adapter secrets are not governed runtime credentials.
-      // Reject the old path until Vault-to-opaque-handle lifecycle wiring.
+      // Credential writes are operator/capability controlled and go only to
+      // the tenant-scoped Vault lifecycle. Workers cannot cause body parsing.
+      if (!canManageCredentials(ctx.bot)) {
+        gw._audit({
+          type: 'adapter_credentials_forbidden',
+          id,
+          tenant: ctx.tenantId || null,
+          bot: ctx.bot?.name || null,
+          reason: 'operator_required',
+        });
+        return send(res, 403, { error: 'operator_required' });
+      }
+      if (!gw.adapterCredentialLifecycle || typeof gw.adapterCredentialLifecycle.setSecret !== 'function') {
+        gw._audit({
+          type: 'adapter_credentials_blocked',
+          id,
+          tenant: ctx.tenantId || null,
+          bot: ctx.bot?.name || null,
+          reason: 'governed_credentials_required',
+        });
+        return send(res, 409, { error: 'governed_credentials_required' });
+      }
+
+      let body;
+      try { body = await readJson(req); } catch (e) {
+        return send(res, e.message === 'body_too_large' ? 413 : 400, { error: e.message === 'body_too_large' ? 'body_too_large' : 'invalid_json' });
+      }
+      if (!body || typeof body !== 'object' || Array.isArray(body)) return send(res, 400, { error: 'invalid_body' });
+      try {
+        const out = gw.adapterCredentialLifecycle.setSecret({
+          tenant: ctx.tenantId,
+          adapterId: id,
+          secretName: body.secretName ?? body.name,
+          value: body.value,
+        });
+        gw._audit({
+          type: 'adapter_credentials_set',
+          id,
+          tenant: ctx.tenantId || null,
+          bot: ctx.bot?.name || null,
+          secretName: out?.secretName || null,
+        });
+        return send(res, 201, {
+          credential: {
+            adapterId: out?.adapterId || id,
+            secretName: out?.secretName || String(body.secretName ?? body.name ?? ''),
+          },
+        });
+      } catch (e) {
+        const error = safeErrorCode(e, 'adapter_credentials_rejected');
+        gw._audit({
+          type: 'adapter_credentials_rejected',
+          id,
+          tenant: ctx.tenantId || null,
+          bot: ctx.bot?.name || null,
+          error,
+        });
+        return send(res, 400, { error });
+      }
+    }
+    // Adapter registry mutations are control-plane operations. Workers may
+    // probe through the governed route, but may not register, reconfigure, or
+    // delete an adapter unless explicitly granted adapter.manage.
+    const isManagementMutation = (!id && req.method === 'POST') ||
+      (id && !action && (req.method === 'PATCH' || req.method === 'DELETE'));
+    if (isManagementMutation && !canManageAdapters(ctx.bot)) {
       gw._audit({
-        type: 'adapter_credentials_blocked',
-        id,
+        type: 'adapter_management_forbidden',
+        id: id || null,
         tenant: ctx.tenantId || null,
         bot: ctx.bot?.name || null,
-        reason: 'governed_credentials_required',
+        reason: 'operator_required',
       });
-      return send(res, 409, { error: 'governed_credentials_required' });
+      return send(res, 403, { error: 'operator_required' });
     }
+
     // ── POST /v2/adapters (register) ───────────────────────────────────────
     if (!id) {
       if (req.method !== 'POST') return send(res, 405, { error: 'method_not_allowed' });
