@@ -889,3 +889,4 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 283 | `egress_failed` | gateway/governed-egress.js (egress: failed dispatch) |
 | 284 | `egress_redirect_refused` | gateway/governed-egress.js (egress: redirect refused) |
 | 285 | `egress_dispatched` | gateway/governed-egress.js (egress: dispatched) |
+| 286 | `proposal_works_failed` | mounts/23-missions.js (W0.3: configured WORKS submission failed; proposal remains submitted and no synthetic mission is minted) |
