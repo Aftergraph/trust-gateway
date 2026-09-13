@@ -70,6 +70,16 @@ function requestDigest(request) {
   return crypto.createHash('sha256').update(JSON.stringify(requestIdentity(request))).digest('hex');
 }
 
+// Credential injection may add the broker-authorized secret header, but it
+// must not change the admitted execution envelope. Headers are intentionally
+// excluded here; destination, method, path, query, body digest and governance
+// identity remain immutable after admission.
+function executionEnvelopeDigest(request) {
+  const identity = requestIdentity(request);
+  identity.http.headers = {};
+  return crypto.createHash('sha256').update(JSON.stringify(identity)).digest('hex');
+}
+
 function normalizeLookupRows(rows) {
   if (!Array.isArray(rows) || rows.length === 0) throw fail('destination_unresolved');
   const addresses = [...new Set(rows.map((row) => typeof row === 'string' ? row : row?.address).filter(Boolean))].sort();
@@ -255,6 +265,17 @@ class GovernedEgressBroker {
 
     const injected = this.credentialInjector({ secret: resolved.secret, request });
     if (!injected || typeof injected !== 'object') throw fail('credential_injection_failed');
+    if (executionEnvelopeDigest(injected) !== executionEnvelopeDigest(request)) {
+      this.audit({
+        type: 'egress_failed',
+        admissionId: admission.admissionId,
+        requestId: admission.requestId,
+        correlationId: admission.correlationId,
+        error: 'request_mutated_during_credential_injection',
+        ts: Number(this.now()),
+      });
+      throw fail('request_mutated_during_credential_injection');
+    }
 
     let result;
     try {

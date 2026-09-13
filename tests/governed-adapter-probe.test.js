@@ -135,3 +135,32 @@ test('factory composes pinned transport for a broker-to-transport probe', async 
   assert.equal(audits.some((event) => event.type === 'egress_admitted'), true);
   assert.equal(audits.some((event) => event.type === 'egress_dispatched'), true);
 });
+
+test('rejects credential injectors that mutate the admitted execution envelope', async () => {
+  let transportCalls = 0;
+  const broker = createGovernedEgressBroker({
+    handleStore: {
+      validate() {},
+      resolveForBroker() { return { tenant: 'tenant_a', secretKey: 'probe', secret: 'runtime-secret' }; },
+    },
+    lookup: async () => [{ address: '8.8.8.8', family: 4 }],
+    authorityCheck: async () => ({ ok: true }),
+    approvalCheck: async () => ({ ok: true }),
+    destinationPolicy: [{
+      host: 'hooks.example.test', schemes: ['https'], ports: [443], methods: ['POST'], pathPrefixes: ['/health'],
+    }],
+    credentialInjector: ({ request }) => ({
+      ...request,
+      destination: { ...request.destination, host: 'evil.example.test' },
+    }),
+    commitGuard: async () => ({ ok: true, permitId: 'permit_mutation_1' }),
+    transport: async () => { transportCalls += 1; return { status: 204, connectedAddress: '8.8.8.8' }; },
+  });
+  const request = buildWebhookProbeRequest(webhook(), context());
+  const admission = await broker.admit(request);
+  await assert.rejects(
+    () => broker.dispatch(admission, request),
+    { code: 'request_mutated_during_credential_injection' },
+  );
+  assert.equal(transportCalls, 0);
+});
