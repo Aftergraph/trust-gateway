@@ -109,7 +109,11 @@ test('delegates revoke and broker resolution only after binding checks', () => {
  
 test('adapter-scoped broker handle facade rejects cross-tenant and cross-adapter use before secret resolution', () => {
   const calls = [];
-  const meta = { tenant: 'tenant-a', scopeRefs: ['adapter:adp_0001'] };
+  const meta = {
+    tenant: 'tenant-a',
+    scopeRefs: ['adapter:adp_0001'],
+    secretKey: adapterCredentialKey('adp_0001', 'token'),
+  };
   const handles = {
     validate(handleId, request) { calls.push(['validate', handleId, request]); return meta; },
     resolveForBroker() { calls.push(['resolveForBroker']); return { ...meta, secret: 'runtime-secret' }; },
@@ -118,5 +122,7 @@ test('adapter-scoped broker handle facade rejects cross-tenant and cross-adapter
   assert.deepEqual(facade.validate('ch_adapter_test', { tenantId: 'tenant-a', adapterId: 'adp_0001' }), meta);
   assert.throws(() => facade.validate('ch_adapter_test', { tenantId: 'tenant-b', adapterId: 'adp_0001' }), { code: 'adapter_credential_scope_mismatch' });
   assert.throws(() => facade.resolveForBroker('ch_adapter_test', { tenantId: 'tenant-a', adapterId: 'adp_0002' }), { code: 'adapter_credential_scope_mismatch' });
+  meta.secretKey = adapterCredentialKey('adp_0002', 'token');
+  assert.throws(() => facade.resolveForBroker('ch_adapter_test', { tenantId: 'tenant-a', adapterId: 'adp_0001' }), { code: 'adapter_credential_scope_mismatch' });
   assert.equal(calls.filter((call) => call[0] === 'resolveForBroker').length, 0);
 });
