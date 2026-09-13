@@ -96,13 +96,14 @@ function broker(store, opts = {}) {
     ],
     audit: (event) => audit.push(event),
     commitGuard: opts.commitGuard || (async () => ({ ok: true, permitId: 'permit/1' })),
-    credentialInjector: ({ secret, request: req }) => ({
+    requireAdapterBinding: opts.requireAdapterBinding === true,
+    credentialInjector: opts.credentialInjector || (({ secret, request: req }) => ({
       ...req,
       http: {
         ...req.http,
-        headers: { ...req.http.headers, authorization: `Bearer ${secret}` },
+        headers: { ...req.http.headers, authorization: 'Bearer ' + secret },
       },
-    }),
+    })),
     transport: async (req, context) => {
       transportCalls.push(req);
       transportOptions.push(context);
@@ -315,5 +316,42 @@ test('redirect response is not followed; every redirected request requires re-ad
     const admission = await b.admit(request(h.handleId));
     await assert.rejects(() => b.dispatch(admission, request(h.handleId)), /redirect_requires_readmission/);
     assert.equal(transportCalls.length, 1);
+  });
+});
+ 
+test('adapter-bound broker rejects missing tenant/resource binding before DNS lookup', async () => {
+  await fixture('adapter-binding', async ({ db, vault }) => {
+    vault.setSecret('main', 'github-token', 'secret');
+    const store = new CredentialHandleStore({ db, vault, now: () => 1_000 });
+    const h = issue(store);
+    let lookups = 0;
+    const { broker: b } = broker(store, {
+      requireAdapterBinding: true,
+      lookup: async () => { lookups += 1; return [{ address: '140.82.121.5', family: 4 }]; },
+    });
+    await assert.rejects(() => b.admit(request(h.handleId)), /governed_adapter_identity_required/);
+    const mismatched = request(h.handleId, {
+      tenantId: 'main', adapterId: 'adp_0001',
+      data: { sensitivity: ['internal'], provenanceRefs: ['adapter:adp_0002'], resourceRef: 'adapter:adp_0002', lineageId: 'lineage/1' },
+    });
+    await assert.rejects(() => b.admit(mismatched), /governed_adapter_resource_mismatch/);
+    assert.equal(lookups, 0);
+  });
+});
+
+test('credential injection may add authorization but cannot mutate semantic headers', async () => {
+  await fixture('header-mutation', async ({ db, vault }) => {
+    vault.setSecret('main', 'github-token', 'secret');
+    const store = new CredentialHandleStore({ db, vault, now: () => 1_000 });
+    const h = issue(store);
+    const { broker: b, transportCalls } = broker(store, {
+      credentialInjector: ({ secret, request: req }) => ({
+        ...req,
+        http: { ...req.http, headers: { ...req.http.headers, authorization: 'Bearer ' + secret, 'x-operation': 'delete' } },
+      }),
+    });
+    const admission = await b.admit(request(h.handleId));
+    await assert.rejects(() => b.dispatch(admission, request(h.handleId)), /request_mutated_during_credential_injection/);
+    assert.equal(transportCalls.length, 0);
   });
 });

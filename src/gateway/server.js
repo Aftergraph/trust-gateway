@@ -72,6 +72,10 @@ class Gateway extends EventEmitter {
     fnMounts = null,      // array of function-style mount modules to wire (testing)
     mounts = null,        // array of object-style mount modules to register (testing)
     telemetryFile,        // G12: telemetry ring file (default data/telemetry.json; null = memory-only)
+    governedEgressBroker = null, // injected governed adapter egress boundary
+    adapterCredentialLifecycle = null, // injected tenant-scoped Vault credential lifecycle
+    adapterContextResolver = null, // injected trusted mission/authority context resolver
+    adapterRuntime = null, // composed adapter runtime; explicit dependencies remain supported
   } = {}) {
     super();
     this.bots = bots;
@@ -91,6 +95,14 @@ class Gateway extends EventEmitter {
     this.memory = getMemoryStore(this);
     // G12 (§20.4): telemetry ring — observability, NOT the audit chain.
     this.telemetry = new TelemetryRing({ file: telemetryFile !== undefined ? telemetryFile : DEFAULT_TELEMETRY_FILE, now });
+    // Adapter routes remain inert unless governed dependencies are explicitly
+    // supplied by the embedding control plane. A composed runtime is the
+    // preferred atomic seam; individual fields remain for compatibility and
+    // tests that inject one boundary at a time.
+    const composedAdapterRuntime = adapterRuntime && typeof adapterRuntime === 'object' ? adapterRuntime : {};
+    this.governedEgressBroker = governedEgressBroker ?? composedAdapterRuntime.governedEgressBroker ?? null;
+    this.adapterCredentialLifecycle = adapterCredentialLifecycle ?? composedAdapterRuntime.adapterCredentialLifecycle ?? null;
+    this.adapterContextResolver = adapterContextResolver ?? composedAdapterRuntime.adapterContextResolver ?? null;
     this.budgets = budgets ?? null; // v2 Slice 2: opt-in; null => feature off => zero behavior change
     this.now = now;
     this.mounts = mountFiles ? loadMounts() : (Array.isArray(mounts) ? mounts.slice() : []);
@@ -434,6 +446,9 @@ class Gateway extends EventEmitter {
         const rr = this._enforceRouteLimit(effBot, req.method, pathname);
         if (rr) return send(res, 429, rr);
       }
+      // Tenant resolution must see the authenticated bot so operator-only
+      // X-Tenant selection is honored; non-operators still fall through.
+      req.bot = bot;
       const { resolveTenant } = require('./tenant-resolve');
       const { tenant } = resolveTenant(req, this);
       ctx.bot = bot;
