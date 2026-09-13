@@ -186,6 +186,18 @@ test('refuses transmitted bytes that do not match the admitted body digest', asy
     { code: 'request_body_digest_mismatch' },
   );
   assert.equal(fake.state.calls, 0);
+
+  await assert.rejects(
+    () => transport(request({
+      http: { ...request().http, bodyDigest: undefined },
+    }), {
+      resolvedAddresses: ['203.0.113.9'],
+      permitId: 'permit/transport-digest-missing',
+      requireAddressPinning: true,
+    }),
+    { code: 'request_body_digest_required' },
+  );
+  assert.equal(fake.state.calls, 0);
 });
 
 test('pins lookup and refuses a response from an address outside admission', async () => {
@@ -208,6 +220,24 @@ test('pins lookup and refuses a response from an address outside admission', asy
     lookupResult = args;
   });
   assert.deepEqual(lookupResult, [null, '203.0.113.9', 4]);
+});
+
+test('uses the HTTPS module with logical hostname SNI and the same address pin', async () => {
+  const fake = fakeHttpModule('203.0.113.9');
+  const transport = createPinnedTransport({ httpsModule: fake.module });
+  const result = await transport(request({
+    destination: { scheme: 'https', host: 'api.example', port: 443 },
+  }), {
+    resolvedAddresses: ['203.0.113.9'],
+    permitId: 'permit/transport-https',
+    requireAddressPinning: true,
+  });
+
+  assert.equal(result.status, 200);
+  assert.equal(fake.state.options.protocol, 'https:');
+  assert.equal(fake.state.options.hostname, 'api.example');
+  assert.equal(fake.state.options.servername, 'api.example');
+  assert.equal(fake.state.options.agent, false);
 });
 
 test('does not follow redirects and refuses reserved caller-controlled transport headers', async () => {
