@@ -2,6 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const http = require('node:http');
 const { EventEmitter } = require('node:events');
 
@@ -26,6 +27,7 @@ function request(overrides = {}) {
         'x-client': 'transport-test',
       },
       body: '{"run":true}',
+      bodyDigest: 'sha256:' + crypto.createHash('sha256').update('{"run":true}').digest('hex'),
     },
     ...overrides,
   };
