@@ -106,14 +106,14 @@ test('probe runner delegates only admit then dispatch', async () => {
 });
 
 test('factory composes pinned transport for a broker-to-transport probe', async () => {
-  const fake = fakeHttpModule('203.0.113.10');
+  const fake = fakeHttpModule('8.8.8.8');
   const audits = [];
   const broker = createGovernedEgressBroker({
     handleStore: {
       validate() {},
       resolveForBroker() { return { tenant: 'tenant_a', secretKey: 'probe', secret: '' }; },
     },
-    lookup: async () => [{ address: '203.0.113.10', family: 4 }],
+    lookup: async () => [{ address: '8.8.8.8', family: 4 }],
     authorityCheck: async () => ({ ok: true, version: 'a1' }),
     approvalCheck: async () => ({ ok: true, expiresAt: Date.now() + 60_000 }),
     destinationPolicy: [{
@@ -128,7 +128,7 @@ test('factory composes pinned transport for a broker-to-transport probe', async 
     broker, request: buildWebhookProbeRequest(webhook(), context()),
   });
   assert.equal(result.status, 204);
-  assert.equal(result.connectedAddress, '203.0.113.10');
+  assert.equal(result.connectedAddress, '8.8.8.8');
   assert.equal(fake.state.calls, 1);
   assert.equal(fake.state.options.hostname, 'hooks.example.test');
   assert.equal(fake.state.options.servername, 'hooks.example.test');
