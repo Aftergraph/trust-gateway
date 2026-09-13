@@ -47,7 +47,18 @@ function loadGovernanceModule(env, override) {
   }
 }
 
+function alignDatabaseFile(env) {
+  // bin/gateway.js historically exposes DB_FILE while the shared stores use
+  // TG_DB_FILE. When production binding is enabled, make both layers use the
+  // same file before the first store access.
+  if (env !== process.env || env.TG_DB_FILE || !env.DB_FILE) return;
+  env.TG_DB_FILE = env.DB_FILE;
+  dbmod.closeDb();
+  dbmod.resetDb();
+}
+
 function buildStorage(env, overrides = {}) {
+  alignDatabaseFile(env);
   if (overrides.vault && overrides.handles && overrides.tenantStore) {
     return {
       vault: overrides.vault,
