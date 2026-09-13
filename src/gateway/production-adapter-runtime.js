@@ -43,7 +43,7 @@ function loadGovernanceModule(env, override) {
   }
 }
 
-function alignDatabaseFile(env) {
+function alignDatabaseFile(env, dbmod) {
   // bin/gateway.js historically exposes DB_FILE while the shared stores use
   // TG_DB_FILE. When production binding is enabled, make both layers use the
   // same file before the first store access.
@@ -60,7 +60,7 @@ function buildStorage(env, overrides = {}) {
   const { SecretsVault } = require('./secrets-vault');
   const { CredentialHandleStore } = require('./credential-handles');
   const dbmod = require('./db');
-  alignDatabaseFile(env);
+  alignDatabaseFile(env, dbmod);
   if (overrides.vault && overrides.handles && overrides.tenantStore) {
     return {
       vault: overrides.vault,
