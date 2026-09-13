@@ -11,7 +11,8 @@ function fail(code) {
 // adapter cannot interpret a different path after admission.
 function canonicalPath(rawPath) {
   const raw = String(rawPath ?? '');
-  if (!raw.startsWith('/') || raw.includes('\u0000')) throw fail('path_invalid');
+  if (!raw.startsWith('/')) throw fail('path_invalid');
+  if (/[\u0000-\u001f\u007f]/.test(raw)) throw fail('path_control_character');
   // Reject encoded separators and dot-segments before decoding: otherwise
   // normalization could silently turn an encoded traversal into a permitted
   // path with different downstream interpretation.
