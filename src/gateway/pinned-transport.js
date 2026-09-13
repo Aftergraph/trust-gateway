@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('node:crypto');
 const nodeHttp = require('node:http');
 const nodeHttps = require('node:https');
 const net = require('node:net');
@@ -143,7 +144,10 @@ function normalizeHeaders(headers) {
 }
 
 function normalizeBody(http, maxRequestBytes) {
-  if (http?.body == null) return null;
+  if (http?.body == null) {
+    if (http?.bodyDigest != null) throw fail('request_body_digest_mismatch');
+    return null;
+  }
 
   let body;
   if (typeof http.body === 'string') {
@@ -157,6 +161,13 @@ function normalizeBody(http, maxRequestBytes) {
   }
 
   if (body.length > maxRequestBytes) throw fail('request_body_too_large');
+
+  const expectedDigest = String(http.bodyDigest || '').toLowerCase();
+  if (!/^sha256:[0-9a-f]{64}$/.test(expectedDigest)) {
+    throw fail('request_body_digest_required');
+  }
+  const actualDigest = 'sha256:' + crypto.createHash('sha256').update(body).digest('hex');
+  if (actualDigest !== expectedDigest) throw fail('request_body_digest_mismatch');
   return body;
 }
 
