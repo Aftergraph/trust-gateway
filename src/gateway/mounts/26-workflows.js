@@ -80,7 +80,10 @@ module.exports = {
         const w = store._must(wfId);
         const workBody = store.toWorksWork(w);
         const out = await worksClient.createWork({
-          objective: workBody.objective, mission_id: `workflow_${wfId}`, queue: true,
+          objective: workBody.objective,
+graph: workBody.graph,
+source: workBody.source,
+correlation_id: workBody.correlation_id, mission_id: `workflow_${wfId}`, queue: true,
         });
         if (out.ok) store.markRun(wfId, out.work_id);
         swept.push({ workflow_id: wfId, works_ok: out.ok, work_id: out.work_id || null });
@@ -121,7 +124,10 @@ module.exports = {
           if (w.status !== 'active') return send(res, 409, { error: 'not_active', status: w.status });
           const workBody = store.toWorksWork(w);
           const out = await worksClient.createWork({
-            objective: workBody.objective, mission_id: `workflow_${id}`, queue: true,
+            objective: workBody.objective,
+graph: workBody.graph,
+source: workBody.source,
+correlation_id: workBody.correlation_id, mission_id: `workflow_${id}`, queue: true,
           });
           if (!out.ok) return send(res, 502, { error: 'works_submission_failed', detail: out.reason });
           store.markRun(id, out.work_id);
@@ -138,7 +144,10 @@ module.exports = {
             const w = store._must(wfId);
             const workBody = store.toWorksWork(w);
             const out = await worksClient.createWork({
-              objective: workBody.objective, mission_id: `workflow_${wfId}`, queue: true,
+              objective: workBody.objective,
+graph: workBody.graph,
+source: workBody.source,
+correlation_id: workBody.correlation_id, mission_id: `workflow_${wfId}`, queue: true,
             });
             if (out.ok) store.markRun(wfId, out.work_id);
             swept.push({ workflow_id: wfId, works_ok: out.ok, work_id: out.work_id || null });
@@ -156,6 +165,9 @@ module.exports = {
           const workBody = store.toWorksWork(w);
           const out = await worksClient.createWork({
             objective: workBody.objective,
+graph: workBody.graph,
+source: workBody.source,
+correlation_id: workBody.correlation_id,
             mission_id: `workflow_${id}`,
             queue: body.queue !== false,
           });
