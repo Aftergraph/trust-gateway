@@ -6,7 +6,7 @@ const assert = require('node:assert/strict');
 const { AdapterCredentialLifecycle, adapterCredentialKey } = require('../src/gateway/adapter-credentials');
 
 function tenantStore(overrides = {}) {
-  return { get(id) { return overrides[id] || { id, disabled: false }; } };
+  return { get(id) { return overrides[id] || (id === 'tenant_a' || id === 'tenant_b' ? { id, disabled: false } : null); } };
 }
 
 function vault(initial = {}) {
