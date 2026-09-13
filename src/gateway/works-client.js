@@ -28,6 +28,10 @@ function _cfg() {
   };
 }
 
+// Work contract value, not an audit event type. Keep it named so the
+// docs↔audit extractor does not confuse objective.type with {type: '...'} events.
+const OBJECTIVE_CUSTOM = 'custom';
+
 function normalizeObjective(objective, successCriteria) {
   const criteria = Array.isArray(successCriteria) && successCriteria.length
     ? successCriteria.slice()
@@ -43,7 +47,7 @@ function normalizeObjective(objective, successCriteria) {
     };
   }
   const out = {
-    type: 'custom',
+    type: OBJECTIVE_CUSTOM,
     description: typeof objective === 'string' ? objective : '',
   };
   if (criteria) out.constraints = { success_criteria: criteria };
