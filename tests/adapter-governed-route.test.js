@@ -272,6 +272,14 @@ test('adapter handle control plane is operator-gated, tenant-bound, and secret-f
     expiresAt: Date.now() + 60000,
   };
   try {
+    const unknown = await request(base, '/v2/adapters/adp_9999/handle', {
+      method: 'POST',
+      body: issueBody,
+    });
+    assert.equal(unknown.status, 404);
+    assert.deepEqual(JSON.parse(unknown.text), { error: 'not_found' });
+    assert.equal(calls.length, 0);
+
     const denied = await request(base, '/v2/adapters/' + adapter.id + '/handle', {
       method: 'POST',
       token: 'tok-worker',

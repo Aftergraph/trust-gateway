@@ -95,6 +95,9 @@ module.exports = {
     // the opaque handle is issued/revoked by the tenant-scoped lifecycle, while
     // authority and approval are still enforced later by GovernedEgressBroker.
     if (action === 'handle') {
+      const def = reg.get(id);
+      if (!def) return send(res, 404, { error: 'not_found' });
+
       if (!canManageCredentials(ctx.bot)) {
         gw._audit({
           type: 'adapter_handle_forbidden',
