@@ -58,3 +58,9 @@ Required boundaries:
 
 This binding contract does not claim AIES conformance by itself. The governance
 module and its evidence must be reviewed before enabling the flag in production.
+
+## Verification posture
+
+This contract is verified against the exact branch head by CI and the
+cross-repository integration gate before merge. It does not enable runtime
+activation or substitute for review of the deployed governance module.
