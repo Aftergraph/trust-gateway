@@ -442,6 +442,9 @@ class Gateway extends EventEmitter {
         const rr = this._enforceRouteLimit(effBot, req.method, pathname);
         if (rr) return send(res, 429, rr);
       }
+      // Tenant resolution must see the authenticated bot so operator-only
+      // X-Tenant selection is honored; non-operators still fall through.
+      req.bot = bot;
       const { resolveTenant } = require('./tenant-resolve');
       const { tenant } = resolveTenant(req, this);
       ctx.bot = bot;

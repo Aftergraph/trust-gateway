@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { AdapterCredentialLifecycle, adapterCredentialKey } = require('../src/gateway/adapter-credentials');
+const { AdapterCredentialLifecycle, AdapterScopedHandleStore, adapterCredentialKey } = require('../src/gateway/adapter-credentials');
 
 function tenantStore(overrides = {}) {
   return { get(id) { return overrides[id] || (id === 'tenant-a' || id === 'tenant-b' ? { id, disabled: false } : null); } };
@@ -104,4 +104,19 @@ test('delegates revoke and broker resolution only after binding checks', () => {
   assert.equal(resolved.secret, 'runtime-only');
   assert.equal(h.calls.filter((call) => call[0] === 'revoke').length, 1);
   assert.equal(h.calls.filter((call) => call[0] === 'resolveForBroker').length, 1);
+});
+
+ 
+test('adapter-scoped broker handle facade rejects cross-tenant and cross-adapter use before secret resolution', () => {
+  const calls = [];
+  const meta = { tenant: 'tenant-a', scopeRefs: ['adapter:adp_0001'] };
+  const handles = {
+    validate(handleId, request) { calls.push(['validate', handleId, request]); return meta; },
+    resolveForBroker() { calls.push(['resolveForBroker']); return { ...meta, secret: 'runtime-secret' }; },
+  };
+  const facade = new AdapterScopedHandleStore({ handles });
+  assert.deepEqual(facade.validate('ch_adapter_test', { tenantId: 'tenant-a', adapterId: 'adp_0001' }), meta);
+  assert.throws(() => facade.validate('ch_adapter_test', { tenantId: 'tenant-b', adapterId: 'adp_0001' }), { code: 'adapter_credential_scope_mismatch' });
+  assert.throws(() => facade.resolveForBroker('ch_adapter_test', { tenantId: 'tenant-a', adapterId: 'adp_0002' }), { code: 'adapter_credential_scope_mismatch' });
+  assert.equal(calls.filter((call) => call[0] === 'resolveForBroker').length, 0);
 });
