@@ -388,8 +388,8 @@ plugins.js) across all files under `src/gateway/`.
 | 60 | `adapter_registered` | mounts/70-adapters.js (wave C integration adapters) |
 | 61 | `adapter_updated` | mounts/70-adapters.js |
 | 62 | `adapter_deleted` | mounts/70-adapters.js |
-| 63 | `adapter_tested` | mounts/70-adapters.js (payload: id+kind+result only — no URL, no secret value) |
-| 64 | `adapter_secret_set` | mounts/70-adapters.js (payload: id+name+length only — value is NEVER stored or logged) |
+| 63 | `adapter_test_blocked` | mounts/70-adapters.js (fail-closed until governed tenant/mission/authority/approval/handle/broker context exists) |
+| 64 | `adapter_credentials_blocked` | mounts/70-adapters.js (legacy hash-only secret path refused until governed Vault/opaque-handle lifecycle is wired) |
 | 65 | `deploy_artifact` | mounts/75-deploy.js (wave C: rendered service/launcher downloads) |
 | 66 | `openai_request` | mounts/85-openai.js (counts only: model, bot, msgCount, charsIn/Out, streaming — no message content) |
 | 67 | `trust_scan` | mounts/91-trust.js (D4: metadata ONLY — chars, hits, rule names; scanned text is NEVER stored or logged) |
