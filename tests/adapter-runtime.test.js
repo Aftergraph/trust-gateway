@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { createAdapterRuntime } = require('../src/gateway/adapter-runtime');
+const { Gateway } = require('../src/gateway/server');
 
 function dependencies(overrides = {}) {
   return {
@@ -36,4 +37,13 @@ test('runtime factory fails closed when policy or governance dependencies are ab
   assert.throws(() => createAdapterRuntime(dependencies({ approvalCheck: null })), { code: 'adapter_runtime_approval_check_required' });
   assert.throws(() => createAdapterRuntime(dependencies({ commitGuard: null })), { code: 'adapter_runtime_commit_guard_required' });
   assert.throws(() => createAdapterRuntime(dependencies({ adapterContextResolver: null })), { code: 'adapter_runtime_context_resolver_required' });
+});
+
+
+test('Gateway accepts the composed adapter runtime as one explicit injection seam', () => {
+  const runtime = createAdapterRuntime(dependencies());
+  const gw = new Gateway({ mountFiles: false, telemetryFile: null, adapterRuntime: runtime });
+  assert.equal(gw.governedEgressBroker, runtime.governedEgressBroker);
+  assert.equal(gw.adapterCredentialLifecycle, runtime.adapterCredentialLifecycle);
+  assert.equal(gw.adapterContextResolver, runtime.adapterContextResolver);
 });

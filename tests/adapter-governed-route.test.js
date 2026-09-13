@@ -7,10 +7,23 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
+const adapterTestDbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'adapter-governed-db-'));
+const adapterTestDbFile = path.join(adapterTestDbDir, 'gateway.db');
+const previousAdapterTestDbFile = process.env.TG_DB_FILE;
+process.env.TG_DB_FILE = adapterTestDbFile;
+
 const { Gateway } = require('../src/gateway/server');
 const { getAdapters } = require('../src/gateway/adapters-singleton');
+const { closeDb } = require('../src/gateway/db');
 
 function bearer(token) { return 'Bea' + 'rer ' + token; }
+
+test.after(() => {
+  closeDb();
+  if (previousAdapterTestDbFile === undefined) delete process.env.TG_DB_FILE;
+  else process.env.TG_DB_FILE = previousAdapterTestDbFile;
+  fs.rmSync(adapterTestDbDir, { recursive: true, force: true });
+});
 
 async function request(base, pathname, options = {}) {
   const headers = { authorization: bearer(options.token || 'tok-operator') };
