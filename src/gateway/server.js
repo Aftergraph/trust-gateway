@@ -72,6 +72,9 @@ class Gateway extends EventEmitter {
     fnMounts = null,      // array of function-style mount modules to wire (testing)
     mounts = null,        // array of object-style mount modules to register (testing)
     telemetryFile,        // G12: telemetry ring file (default data/telemetry.json; null = memory-only)
+    governedEgressBroker = null, // injected governed adapter egress boundary
+    adapterCredentialLifecycle = null, // injected tenant-scoped Vault credential lifecycle
+    adapterContextResolver = null, // injected trusted mission/authority context resolver
   } = {}) {
     super();
     this.bots = bots;
@@ -91,6 +94,11 @@ class Gateway extends EventEmitter {
     this.memory = getMemoryStore(this);
     // G12 (§20.4): telemetry ring — observability, NOT the audit chain.
     this.telemetry = new TelemetryRing({ file: telemetryFile !== undefined ? telemetryFile : DEFAULT_TELEMETRY_FILE, now });
+    // Adapter routes remain inert unless governed dependencies are explicitly
+    // supplied by the embedding control plane.
+    this.governedEgressBroker = governedEgressBroker;
+    this.adapterCredentialLifecycle = adapterCredentialLifecycle;
+    this.adapterContextResolver = adapterContextResolver;
     this.budgets = budgets ?? null; // v2 Slice 2: opt-in; null => feature off => zero behavior change
     this.now = now;
     this.mounts = mountFiles ? loadMounts() : (Array.isArray(mounts) ? mounts.slice() : []);

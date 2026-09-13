@@ -388,8 +388,13 @@ plugins.js) across all files under `src/gateway/`.
 | 60 | `adapter_registered` | mounts/70-adapters.js (wave C integration adapters) |
 | 61 | `adapter_updated` | mounts/70-adapters.js |
 | 62 | `adapter_deleted` | mounts/70-adapters.js |
-| 63 | `adapter_test_blocked` | mounts/70-adapters.js (fail-closed until governed tenant/mission/authority/approval/handle/broker context exists) |
-| 64 | `adapter_credentials_blocked` | mounts/70-adapters.js (legacy hash-only secret path refused until governed Vault/opaque-handle lifecycle is wired) |
+| 63 | `adapter_test_blocked` | mounts/70-adapters.js (no trusted context resolver or adapter-bound broker; legacy direct probe is never used) |
+| 64 | `adapter_credentials_blocked` | mounts/70-adapters.js (no injected Vault lifecycle; legacy hash-only secret path is never used) |
+| 65 | `adapter_test_governed` | mounts/70-adapters.js (successful governed probe metadata only: adapter, tenant, bot, status) |
+| 66 | `adapter_test_rejected` | mounts/70-adapters.js (governed probe refusal code only; no request body or secret) |
+| 67 | `adapter_credentials_forbidden` | mounts/70-adapters.js (non-operator credential write attempt) |
+| 68 | `adapter_credentials_set` | mounts/70-adapters.js (Vault lifecycle success metadata only; never the value) |
+| 69 | `adapter_credentials_rejected` | mounts/70-adapters.js (Vault lifecycle refusal code only) |
 | 65 | `deploy_artifact` | mounts/75-deploy.js (wave C: rendered service/launcher downloads) |
 | 66 | `openai_request` | mounts/85-openai.js (counts only: model, bot, msgCount, charsIn/Out, streaming — no message content) |
 | 67 | `trust_scan` | mounts/91-trust.js (D4: metadata ONLY — chars, hits, rule names; scanned text is NEVER stored or logged) |

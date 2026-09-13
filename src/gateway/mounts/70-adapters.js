@@ -16,6 +16,11 @@
 
 const { send } = require('../server');
 const { getAdapters } = require('../adapters-singleton');
+const {
+  buildWebhookProbeRequest,
+  buildHttpApiProbeRequest,
+  runGovernedAdapterProbe,
+} = require('../governed-adapter-probe');
 
 const MAX_BODY = 64 * 1024;
 
@@ -47,6 +52,18 @@ function auditTarget(def) {
   let host = null;
   try { host = new URL(String(raw)).host; } catch { host = null; }
   return host || null;
+}
+
+function canManageCredentials(bot) {
+  if (!bot) return false;
+  if (bot.role === 'operator' || bot.role === 'owner') return true;
+  const caps = Array.isArray(bot.capabilities) ? bot.capabilities : [];
+  return caps.includes('adapter.credentials.write') || caps.includes('*');
+}
+
+function safeErrorCode(error, fallback) {
+  const code = String(error?.code || '');
+  return /^[a-z0-9_]+$/.test(code) ? code : fallback;
 }
 
 module.exports = {
@@ -81,18 +98,79 @@ module.exports = {
       if (req.method !== 'POST') return send(res, 405, { error: 'method_not_allowed' });
       const def = reg.get(id);
       if (!def) return send(res, 404, { error: 'not_found' });
+      if (def.enabled === false) return send(res, 409, { error: 'adapter_disabled' });
 
       // The legacy registry probe is deliberately unreachable from HTTP.
-      // A governed route must supply trusted tenant, mission, authority,
-      // approval, credential-handle and broker context before network I/O.
-      gw._audit({
-        type: 'adapter_test_blocked',
-        id,
-        tenant: ctx.tenantId || null,
-        bot: ctx.bot?.name || null,
-        reason: 'governed_egress_required',
-      });
-      return send(res, 409, { error: 'governed_egress_required' });
+      // An adapter route is live only when the embedding control plane injects
+      // both a trusted context resolver and an adapter-bound broker.
+      if (typeof gw.adapterContextResolver !== 'function' ||
+          !gw.governedEgressBroker || gw.governedEgressBroker.requireAdapterBinding !== true ||
+          typeof gw.governedEgressBroker.admit !== 'function' ||
+          typeof gw.governedEgressBroker.dispatch !== 'function') {
+        gw._audit({
+          type: 'adapter_test_blocked',
+          id,
+          tenant: ctx.tenantId || null,
+          bot: ctx.bot?.name || null,
+          reason: 'governed_egress_required',
+        });
+        return send(res, 409, { error: 'governed_egress_required' });
+      }
+
+      let body;
+      try { body = await readJson(req); } catch (e) {
+        return send(res, e.message === 'body_too_large' ? 413 : 400, { error: e.message === 'body_too_large' ? 'body_too_large' : 'invalid_json' });
+      }
+      if (!body || typeof body !== 'object' || Array.isArray(body) ||
+          Object.keys(body).some((key) => key !== 'credentialHandle') ||
+          typeof body.credentialHandle !== 'string' || body.credentialHandle.trim() === '') {
+        return send(res, 400, { error: 'invalid_body' });
+      }
+
+      try {
+        // The resolver is the only source for principal/mission/authority
+        // context. Tenant and adapter identity are overwritten from the
+        // authenticated route, never accepted from the body or resolver.
+        const resolved = await gw.adapterContextResolver({
+          req,
+          ctx,
+          adapter: def,
+          adapterId: id,
+          credentialHandle: body.credentialHandle,
+        });
+        const context = {
+          ...(resolved || {}),
+          tenantId: ctx.tenantId,
+          adapterId: id,
+          purpose: 'adapter_probe',
+          credentialHandle: body.credentialHandle,
+        };
+        const request = def.kind === 'webhook'
+          ? buildWebhookProbeRequest(def, context)
+          : def.kind === 'http-api'
+            ? buildHttpApiProbeRequest(def, context)
+            : (() => { throw Object.assign(new Error('adapter_probe_unsupported'), { code: 'adapter_probe_unsupported' }); })();
+        const result = await runGovernedAdapterProbe({ broker: gw.governedEgressBroker, request });
+        const status = Number(result?.status || 0);
+        gw._audit({
+          type: 'adapter_test_governed',
+          id,
+          tenant: ctx.tenantId || null,
+          bot: ctx.bot?.name || null,
+          status,
+        });
+        return send(res, 200, { adapterId: id, ok: status >= 200 && status < 300, status });
+      } catch (e) {
+        const error = safeErrorCode(e, 'governed_egress_rejected');
+        gw._audit({
+          type: 'adapter_test_rejected',
+          id,
+          tenant: ctx.tenantId || null,
+          bot: ctx.bot?.name || null,
+          error,
+        });
+        return send(res, 409, { error });
+      }
     }
 
     // ── POST /v2/adapters/:id/secret ────────────────────────────────────────
@@ -101,16 +179,65 @@ module.exports = {
       const def = reg.get(id);
       if (!def) return send(res, 404, { error: 'not_found' });
 
-      // Hash-only adapter secrets are not governed runtime credentials.
-      // Reject the old path until Vault-to-opaque-handle lifecycle wiring.
-      gw._audit({
-        type: 'adapter_credentials_blocked',
-        id,
-        tenant: ctx.tenantId || null,
-        bot: ctx.bot?.name || null,
-        reason: 'governed_credentials_required',
-      });
-      return send(res, 409, { error: 'governed_credentials_required' });
+      // Credential writes are operator/capability controlled and go only to
+      // the tenant-scoped Vault lifecycle. Workers cannot cause body parsing.
+      if (!canManageCredentials(ctx.bot)) {
+        gw._audit({
+          type: 'adapter_credentials_forbidden',
+          id,
+          tenant: ctx.tenantId || null,
+          bot: ctx.bot?.name || null,
+          reason: 'operator_required',
+        });
+        return send(res, 403, { error: 'operator_required' });
+      }
+      if (!gw.adapterCredentialLifecycle || typeof gw.adapterCredentialLifecycle.setSecret !== 'function') {
+        gw._audit({
+          type: 'adapter_credentials_blocked',
+          id,
+          tenant: ctx.tenantId || null,
+          bot: ctx.bot?.name || null,
+          reason: 'governed_credentials_required',
+        });
+        return send(res, 409, { error: 'governed_credentials_required' });
+      }
+
+      let body;
+      try { body = await readJson(req); } catch (e) {
+        return send(res, e.message === 'body_too_large' ? 413 : 400, { error: e.message === 'body_too_large' ? 'body_too_large' : 'invalid_json' });
+      }
+      if (!body || typeof body !== 'object' || Array.isArray(body)) return send(res, 400, { error: 'invalid_body' });
+      try {
+        const out = gw.adapterCredentialLifecycle.setSecret({
+          tenant: ctx.tenantId,
+          adapterId: id,
+          secretName: body.secretName ?? body.name,
+          value: body.value,
+        });
+        gw._audit({
+          type: 'adapter_credentials_set',
+          id,
+          tenant: ctx.tenantId || null,
+          bot: ctx.bot?.name || null,
+          secretName: out?.secretName || null,
+        });
+        return send(res, 201, {
+          credential: {
+            adapterId: out?.adapterId || id,
+            secretName: out?.secretName || String(body.secretName ?? body.name ?? ''),
+          },
+        });
+      } catch (e) {
+        const error = safeErrorCode(e, 'adapter_credentials_rejected');
+        gw._audit({
+          type: 'adapter_credentials_rejected',
+          id,
+          tenant: ctx.tenantId || null,
+          bot: ctx.bot?.name || null,
+          error,
+        });
+        return send(res, 400, { error });
+      }
     }
     // ── POST /v2/adapters (register) ───────────────────────────────────────
     if (!id) {
