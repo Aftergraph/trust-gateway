@@ -3,6 +3,7 @@
 const crypto = require('node:crypto');
 const dns = require('node:dns');
 const { isPrivateAddress } = require('./webtools');
+const { pathWithinPrefix } = require('./path-policy');
 
 function fail(code, details) {
   const err = new Error(code);
@@ -37,6 +38,8 @@ function requestIdentity(request = {}) {
   const http = request.http || {};
   const data = request.data || {};
   return canonical({
+    requestId: request.requestId || null,
+    correlationId: request.correlationId || null,
     principalId: request.principalId || null,
     missionId: request.missionId || null,
     authorityRef: request.authorityRef || null,
@@ -93,7 +96,7 @@ function matchDestinationPolicy(request, policy) {
     if (!Array.isArray(rule.schemes) || !rule.schemes.map((v) => String(v).toLowerCase()).includes(scheme)) return false;
     if (!Array.isArray(rule.ports) || !rule.ports.map(Number).includes(port)) return false;
     if (!Array.isArray(rule.methods) || !rule.methods.map((v) => String(v).toUpperCase()).includes(method)) return false;
-    if (!Array.isArray(rule.pathPrefixes) || !rule.pathPrefixes.some((prefix) => reqPath.startsWith(String(prefix)))) return false;
+    if (!Array.isArray(rule.pathPrefixes) || !rule.pathPrefixes.some((prefix) => pathWithinPrefix(reqPath, String(prefix)))) return false;
     return true;
   });
 }
@@ -121,6 +124,7 @@ class GovernedEgressBroker {
     audit = () => {},
     credentialInjector,
     transport,
+    commitGuard = async () => ({ ok: false, reason: 'commit_guard_missing' }),
   } = {}) {
     if (!handleStore) throw fail('handle_store_required');
     if (typeof credentialInjector !== 'function') throw fail('credential_injector_required');
@@ -134,6 +138,7 @@ class GovernedEgressBroker {
     this.audit = audit;
     this.credentialInjector = credentialInjector;
     this.transport = transport;
+    this.commitGuard = commitGuard;
   }
 
   async _resolvePublic(host) {
@@ -211,12 +216,52 @@ class GovernedEgressBroker {
     if (!arraysEqual(secondAddresses, admittedAddresses)) throw fail('destination_resolution_changed');
     await this._checkMutableState(request);
 
+    // A final mutable-state check alone is subject to TOCTOU. The commit
+    // guard must atomically reserve the effect/lease that the connector will
+    // consume at transport commit time.
+    let commitPermit;
+    try {
+      commitPermit = await this.commitGuard({
+        request,
+        admission,
+        resolvedAddresses: admittedAddresses,
+        requestDigest: digest,
+      });
+    } catch (err) {
+      this.audit({
+        type: 'egress_failed',
+        admissionId: admission.admissionId,
+        requestId: admission.requestId,
+        correlationId: admission.correlationId,
+        error: String(err?.code || err?.message || 'commit_guard_error'),
+        ts: Number(this.now()),
+      });
+      throw err;
+    }
+    if (!commitPermit || commitPermit.ok !== true ||
+        typeof commitPermit.permitId !== 'string' ||
+        commitPermit.permitId.trim() === '') {
+      this.audit({
+        type: 'egress_failed',
+        admissionId: admission.admissionId,
+        requestId: admission.requestId,
+        correlationId: admission.correlationId,
+        error: 'commit_guard_refused',
+        ts: Number(this.now()),
+      });
+      throw fail('commit_guard_refused');
+    }
+
     const injected = this.credentialInjector({ secret: resolved.secret, request });
     if (!injected || typeof injected !== 'object') throw fail('credential_injection_failed');
 
     let result;
     try {
-      result = await this.transport(injected, { resolvedAddresses: admittedAddresses });
+      result = await this.transport(injected, {
+        resolvedAddresses: admittedAddresses,
+        permitId: commitPermit.permitId,
+        requireAddressPinning: true,
+      });
     } catch (err) {
       this.audit({
         type: 'egress_failed',
@@ -227,6 +272,19 @@ class GovernedEgressBroker {
         ts: Number(this.now()),
       });
       throw err;
+    }
+
+    const connectedAddress = String(result?.connectedAddress || '');
+    if (!connectedAddress || !admittedAddresses.includes(connectedAddress)) {
+      this.audit({
+        type: 'egress_failed',
+        admissionId: admission.admissionId,
+        requestId: admission.requestId,
+        correlationId: admission.correlationId,
+        error: 'transport_address_not_pinned',
+        ts: Number(this.now()),
+      });
+      throw fail('transport_address_not_pinned');
     }
 
     const status = Number(result?.status || 0);
