@@ -59,7 +59,7 @@ test('stores an adapter secret in Vault without returning its value', () => {
 });
 
 test('refuses writes and issuance for unknown or disabled tenants', () => {
-  const disabled = tenantStore({ tenant-a: { id: 'tenant-a', disabled: true } });
+  const disabled = tenantStore({ 'tenant-a': { id: 'tenant-a', disabled: true } });
   const { lifecycle } = makeLifecycle(vault(), handles(), disabled);
   assert.throws(() => lifecycle.setSecret({ tenant: 'tenant-a', adapterId: 'adp_0001', secretName: 'token', value: 'x' }), { code: 'adapter_credential_tenant_unavailable' });
   assert.throws(() => lifecycle.issueHandle(input({ tenant: 'unknown' })), { code: 'adapter_credential_tenant_unavailable' });
