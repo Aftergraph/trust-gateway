@@ -1,5 +1,6 @@
 'use strict';
 
+const { createPinnedTransport } = require('./pinned-transport');
 const crypto = require('node:crypto');
 const dns = require('node:dns');
 const { isPrivateAddress } = require('./webtools');
@@ -314,8 +315,14 @@ class GovernedEgressBroker {
   }
 }
 
+function createGovernedEgressBroker({ transport, transportOptions, ...options } = {}) {
+  const selectedTransport = transport || createPinnedTransport(transportOptions);
+  return new GovernedEgressBroker({ ...options, transport: selectedTransport });
+}
+
 module.exports = {
   GovernedEgressBroker,
+  createGovernedEgressBroker,
   requestDigest,
   requestIdentity,
   matchDestinationPolicy,
