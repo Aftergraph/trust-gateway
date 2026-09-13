@@ -7,8 +7,8 @@
 //   GET    /v2/adapters/:id          → secret-free projection
 //   PATCH  /v2/adapters/:id          → update {name?, config?, enabled?}
 //   DELETE /v2/adapters/:id          → remove
-//   POST   /v2/adapters/:id/test     → probe → {result: ok|fail|blocked}
-//   POST   /v2/adapters/:id/secret   → {name, value} stored as hash only
+//   POST   /v2/adapters/:id/test     → governed probe or fail-closed 409
+//   POST   /v2/adapters/:id/secret   → governed credential flow or 409
 //
 // Every mutation and every probe is audited via gw._audit with hostnames
 // only — never a URL with credentials, never a secret value.
@@ -79,29 +79,39 @@ module.exports = {
     // ── POST /v2/adapters/:id/test ─────────────────────────────────────────
     if (action === 'test') {
       if (req.method !== 'POST') return send(res, 405, { error: 'method_not_allowed' });
-      const out = await reg.test(id); // never throws
       const def = reg.get(id);
-      // audit: id, kind, result only — never the URL (secrets in query strings)
-      gw._audit({ type: 'adapter_tested', id, kind: out.kind, result: out.result });
-      void auditTarget(def);
-      return send(res, 200, out);
+      if (!def) return send(res, 404, { error: 'not_found' });
+
+      // The legacy registry probe is deliberately unreachable from HTTP.
+      // A governed route must supply trusted tenant, mission, authority,
+      // approval, credential-handle and broker context before network I/O.
+      gw._audit({
+        type: 'adapter_test_blocked',
+        id,
+        tenant: ctx.tenantId || null,
+        bot: ctx.bot?.name || null,
+        reason: 'governed_egress_required',
+      });
+      return send(res, 409, { error: 'governed_egress_required' });
     }
 
-    // ── POST /v2/adapters/:id/secret {name, value} ─────────────────────────
+    // ── POST /v2/adapters/:id/secret ────────────────────────────────────────
     if (action === 'secret') {
       if (req.method !== 'POST') return send(res, 405, { error: 'method_not_allowed' });
-      let body;
-      try { body = await readJson(req); } catch (e) {
-        return send(res, e.message === 'body_too_large' ? 413 : 400, { error: e.message === 'body_too_large' ? 'body_too_large' : 'invalid_json' });
-      }
-      const { name, value } = body || {};
-      const out = reg.setSecret(id, name, value);
-      if (!out.ok) return send(res, out.error === 'not_found' ? 404 : 400, { error: out.error });
-      // audit carries the name + length only — the value never enters the chain
-      gw._audit({ type: 'adapter_secret_set', id, name: out.name, length: out.length });
-      return send(res, 200, { ok: true, name: out.name, length: out.length });
-    }
+      const def = reg.get(id);
+      if (!def) return send(res, 404, { error: 'not_found' });
 
+      // Hash-only adapter secrets are not governed runtime credentials.
+      // Reject the old path until Vault-to-opaque-handle lifecycle wiring.
+      gw._audit({
+        type: 'adapter_credentials_blocked',
+        id,
+        tenant: ctx.tenantId || null,
+        bot: ctx.bot?.name || null,
+        reason: 'governed_credentials_required',
+      });
+      return send(res, 409, { error: 'governed_credentials_required' });
+    }
     // ── POST /v2/adapters (register) ───────────────────────────────────────
     if (!id) {
       if (req.method !== 'POST') return send(res, 405, { error: 'method_not_allowed' });
