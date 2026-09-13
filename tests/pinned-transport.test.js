@@ -171,6 +171,23 @@ test('bounds the response before exposing it to the caller', async () => {
   );
 });
 
+test('refuses transmitted bytes that do not match the admitted body digest', async () => {
+  const fake = fakeHttpModule('203.0.113.9');
+  const transport = createPinnedTransport({ httpModule: fake.module });
+
+  await assert.rejects(
+    () => transport(request({
+      http: { ...request().http, body: '{"run":false}' },
+    }), {
+      resolvedAddresses: ['203.0.113.9'],
+      permitId: 'permit/transport-digest',
+      requireAddressPinning: true,
+    }),
+    { code: 'request_body_digest_mismatch' },
+  );
+  assert.equal(fake.state.calls, 0);
+});
+
 test('pins lookup and refuses a response from an address outside admission', async () => {
   const fake = fakeHttpModule('203.0.113.8');
   const transport = createPinnedTransport({ httpModule: fake.module });
