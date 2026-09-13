@@ -54,13 +54,6 @@ function alignDatabaseFile(env, dbmod) {
 }
 
 function buildStorage(env, overrides = {}) {
-  // Keep SQLite and tenant/secret modules out of import-time test discovery.
-  // They are intentionally loaded only after explicit production activation.
-  const { TenantStore } = require('./tenants');
-  const { SecretsVault } = require('./secrets-vault');
-  const { CredentialHandleStore } = require('./credential-handles');
-  const dbmod = require('./db');
-  alignDatabaseFile(env, dbmod);
   if (overrides.vault && overrides.handles && overrides.tenantStore) {
     return {
       vault: overrides.vault,
@@ -68,6 +61,14 @@ function buildStorage(env, overrides = {}) {
       tenantStore: overrides.tenantStore,
     };
   }
+
+  // Keep SQLite and tenant/secret modules out of import-time test discovery.
+  // They are intentionally loaded only after explicit production activation.
+  const { TenantStore } = require('./tenants');
+  const { SecretsVault } = require('./secrets-vault');
+  const { CredentialHandleStore } = require('./credential-handles');
+  const dbmod = require('./db');
+  alignDatabaseFile(env, dbmod);
 
   const master = String(env?.TG_SECRETS_MASTER_KEY || '');
   if (!master) throw fail('adapter_runtime_master_key_required');
