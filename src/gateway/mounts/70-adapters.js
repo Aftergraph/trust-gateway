@@ -61,6 +61,13 @@ function canManageCredentials(bot) {
   return caps.includes('adapter.credentials.write') || caps.includes('*');
 }
 
+function canManageAdapters(bot) {
+  if (!bot) return false;
+  if (bot.role === 'operator' || bot.role === 'owner') return true;
+  const caps = Array.isArray(bot.capabilities) ? bot.capabilities : [];
+  return caps.includes('adapter.manage') || caps.includes('*');
+}
+
 function safeErrorCode(error, fallback) {
   const code = String(error?.code || '');
   return /^[a-z0-9_]+$/.test(code) ? code : fallback;
@@ -238,6 +245,22 @@ module.exports = {
         return send(res, 400, { error });
       }
     }
+    // Adapter registry mutations are control-plane operations. Workers may
+    // probe through the governed route, but may not register, reconfigure, or
+    // delete an adapter unless explicitly granted adapter.manage.
+    const isManagementMutation = (!id && req.method === 'POST') ||
+      (id && !action && (req.method === 'PATCH' || req.method === 'DELETE'));
+    if (isManagementMutation && !canManageAdapters(ctx.bot)) {
+      gw._audit({
+        type: 'adapter_management_forbidden',
+        id: id || null,
+        tenant: ctx.tenantId || null,
+        bot: ctx.bot?.name || null,
+        reason: 'operator_required',
+      });
+      return send(res, 403, { error: 'operator_required' });
+    }
+
     // ── POST /v2/adapters (register) ───────────────────────────────────────
     if (!id) {
       if (req.method !== 'POST') return send(res, 405, { error: 'method_not_allowed' });

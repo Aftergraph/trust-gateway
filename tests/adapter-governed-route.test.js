@@ -156,3 +156,65 @@ test('wired adapter credential route requires operator and uses Vault lifecycle'
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+
+test('adapter management mutations require operator or adapter.manage capability', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'adapter-management-gate-'));
+  const gw = new Gateway({
+    mountFiles: false,
+    mounts: [require('../src/gateway/mounts/70-adapters')],
+    bots: {
+      operator: { token: 'tok-operator', role: 'operator', capabilities: ['*'] },
+      manager: { token: 'tok-manager', role: 'worker', capabilities: ['adapter.manage'] },
+      worker: { token: 'tok-worker', role: 'worker', capabilities: [] },
+    },
+    telemetryFile: null,
+  });
+  const registry = getAdapters(gw, { file: path.join(dir, 'adapters.json') });
+  const server = http.createServer((req, res) => gw.handle(req, res));
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const base = 'http://127.0.0.1:' + server.address().port;
+  try {
+    const deniedRegister = await request(base, '/v2/adapters', {
+      method: 'POST',
+      token: 'tok-worker',
+      body: { kind: 'webhook', name: 'denied', config: { url: 'https://hooks.example.test/health' } },
+    });
+    assert.equal(deniedRegister.status, 403);
+    assert.deepEqual(JSON.parse(deniedRegister.text), { error: 'operator_required' });
+    assert.equal(registry.list().length, 0);
+
+    const acceptedRegister = await request(base, '/v2/adapters', {
+      method: 'POST',
+      token: 'tok-manager',
+      body: { kind: 'webhook', name: 'managed', config: { url: 'https://hooks.example.test/health' } },
+    });
+    assert.equal(acceptedRegister.status, 201);
+    const adapter = JSON.parse(acceptedRegister.text).adapter;
+    assert.equal(adapter.name, 'managed');
+
+    const deniedPatch = await request(base, '/v2/adapters/' + adapter.id, {
+      method: 'PATCH',
+      token: 'tok-worker',
+      body: { name: 'worker-tampered' },
+    });
+    assert.equal(deniedPatch.status, 403);
+    assert.deepEqual(JSON.parse(deniedPatch.text), { error: 'operator_required' });
+    assert.equal(registry.get(adapter.id).name, 'managed');
+
+    const deniedDelete = await request(base, '/v2/adapters/' + adapter.id, {
+      method: 'DELETE',
+      token: 'tok-worker',
+    });
+    assert.equal(deniedDelete.status, 403);
+    assert.deepEqual(JSON.parse(deniedDelete.text), { error: 'operator_required' });
+    assert.ok(registry.get(adapter.id));
+
+    const denied = gw.chain.entries.filter((entry) => entry.payload.type === 'adapter_management_forbidden');
+    assert.equal(denied.length, 3);
+    assert.ok(denied.every((entry) => entry.payload.reason === 'operator_required'));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
