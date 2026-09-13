@@ -22,10 +22,16 @@ test('createWork fails closed when WORKS_API_URL unset (disabled)', async () => 
 
 test('createWork reaches a local mock control plane and returns the Work ID', async () => {
   const http = require('node:http');
+  let received = null;
   const server = http.createServer((req, res) => {
     if (req.url === '/v1/works' && req.method === 'POST') {
-      res.writeHead(201, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ id: 'work_123' }));
+      const chunks = [];
+      req.on('data', (chunk) => chunks.push(chunk));
+      req.on('end', () => {
+        received = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        res.writeHead(201, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ id: 'work_123' }));
+      });
       return;
     }
     res.writeHead(404); res.end();
@@ -39,6 +45,11 @@ test('createWork reaches a local mock control plane and returns the Work ID', as
   await new Promise((r) => server.close(r));
   assert.equal(out.ok, true);
   assert.equal(out.work_id, 'work_123');
+  assert.equal(received.objective.type, 'custom');
+  assert.equal(received.objective.description, 'deploy');
+  assert.equal(received.graph.nodes.mission.run, 'true');
+  assert.equal(received.correlation_id, 'proposal_x');
+  assert.equal(received.queue, true);
 });
 
 test('createWork degrades gracefully on unreachable control plane', async () => {
