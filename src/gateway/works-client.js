@@ -1,4 +1,5 @@
 'use strict';
+const crypto = require('node:crypto');
 // W0.3 — WORKS control-plane client (TG side of the mission chain).
 //
 // Creates a WORKS Work via POST /v1/works on the works-api control plane and
