@@ -78,6 +78,7 @@ function request(handleId, overrides = {}) {
 function broker(store, opts = {}) {
   const audit = [];
   const transportCalls = [];
+  const transportOptions = [];
   const b = new GovernedEgressBroker({
     handleStore: store,
     now: opts.now || (() => 1_000),
@@ -94,6 +95,7 @@ function broker(store, opts = {}) {
       },
     ],
     audit: (event) => audit.push(event),
+    commitGuard: opts.commitGuard || (async () => ({ ok: true, permitId: 'permit/1' })),
     credentialInjector: ({ secret, request: req }) => ({
       ...req,
       http: {
@@ -101,13 +103,14 @@ function broker(store, opts = {}) {
         headers: { ...req.http.headers, authorization: `Bearer ${secret}` },
       },
     }),
-    transport: async (req) => {
+    transport: async (req, context) => {
       transportCalls.push(req);
-      if (opts.transport) return opts.transport(req);
-      return { status: 201, headers: {}, body: { ok: true } };
+      transportOptions.push(context);
+      if (opts.transport) return opts.transport(req, context);
+      return { status: 201, headers: {}, body: { ok: true }, connectedAddress: '140.82.121.5' };
     },
   });
-  return { broker: b, audit, transportCalls };
+  return { broker: b, audit, transportCalls, transportOptions };
 }
 
 test('credential handle is opaque, stored hashed, and never serializes the provider secret', () => {
@@ -183,6 +186,12 @@ test('request digest commits query values and semantics-bearing caller headers c
   const headerMutated = request('ch_x');
   headerMutated.http.headers = { ...headerMutated.http.headers, 'x-operation': 'delete' };
   assert.notEqual(requestDigest(a), requestDigest(headerMutated));
+
+  const requestIdMutated = request('ch_x', { requestId: 'er_2' });
+  assert.notEqual(requestDigest(a), requestDigest(requestIdMutated));
+
+  const correlationMutated = request('ch_x', { correlationId: 'corr_2' });
+  assert.notEqual(requestDigest(a), requestDigest(correlationMutated));
 });
 
 test('unknown destination and private/link-local resolution fail closed before transport', async () => {
@@ -258,12 +267,40 @@ test('raw secret is injected only inside broker transport and never returned or 
     const admission = await b.admit(request(h.handleId));
     const result = await b.dispatch(admission, request(h.handleId));
 
-    assert.deepEqual(result, { status: 201, headers: {}, body: { ok: true } });
+    assert.deepEqual(result, { status: 201, headers: {}, body: { ok: true }, connectedAddress: '140.82.121.5' });
     assert.equal(transportCalls.length, 1);
     assert.equal(transportCalls[0].http.headers.authorization, `Bearer ${secret}`);
     assert.ok(!JSON.stringify(admission).includes(secret));
     assert.ok(!JSON.stringify(result).includes(secret));
     assert.ok(!JSON.stringify(audit).includes(secret));
+  });
+});
+
+test('commit lease is mandatory and transport must report an admitted address', async () => {
+  await fixture('commit-boundary', async ({ db, vault }) => {
+    vault.setSecret('main', 'github-token', 'secret');
+    const store = new CredentialHandleStore({ db, vault, now: () => 1_000 });
+    const h = issue(store);
+
+    const refused = broker(store, {
+      commitGuard: async () => ({ ok: false, reason: 'revoked_at_commit' }),
+    });
+    const refusedAdmission = await refused.broker.admit(request(h.handleId));
+    await assert.rejects(
+      () => refused.broker.dispatch(refusedAdmission, request(h.handleId)),
+      /commit_guard_refused/,
+    );
+    assert.equal(refused.transportCalls.length, 0);
+
+    const unpinned = broker(store, {
+      transport: async () => ({ status: 201, headers: {}, body: { ok: true }, connectedAddress: '203.0.113.9' }),
+    });
+    const unpinnedAdmission = await unpinned.broker.admit(request(h.handleId));
+    await assert.rejects(
+      () => unpinned.broker.dispatch(unpinnedAdmission, request(h.handleId)),
+      /transport_address_not_pinned/,
+    );
+    assert.equal(unpinned.transportCalls.length, 1);
   });
 });
 
@@ -273,7 +310,7 @@ test('redirect response is not followed; every redirected request requires re-ad
     const store = new CredentialHandleStore({ db, vault, now: () => 1_000 });
     const h = issue(store);
     const { broker: b, transportCalls } = broker(store, {
-      transport: async () => ({ status: 307, headers: { location: '/repos/Aftergraph/example/other' }, body: null }),
+      transport: async () => ({ status: 307, headers: { location: '/repos/Aftergraph/example/other' }, body: null, connectedAddress: '140.82.121.5' }),
     });
     const admission = await b.admit(request(h.handleId));
     await assert.rejects(() => b.dispatch(admission, request(h.handleId)), /redirect_requires_readmission/);
