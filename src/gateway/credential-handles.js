@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const { pathWithinPrefix } = require('./path-policy');
 
 function fail(code) {
   const err = new Error(code);
@@ -152,7 +153,7 @@ class CredentialHandleStore {
     const requestPath = String(request.http?.path || '');
     if (!meta.allowedDestinations.includes(host)) throw fail('credential_handle_scope_mismatch');
     if (!meta.allowedMethods.includes(method)) throw fail('credential_handle_scope_mismatch');
-    if (!meta.allowedPathPrefixes.some((prefix) => requestPath.startsWith(prefix))) {
+    if (!meta.allowedPathPrefixes.some((prefix) => pathWithinPrefix(requestPath, prefix))) {
       throw fail('credential_handle_scope_mismatch');
     }
     return { ...meta, secretKey: row.secret_key };
