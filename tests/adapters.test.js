@@ -317,7 +317,7 @@ test('mount 401: /v2/adapters without bearer token is rejected', async () => {
   } finally { await ctx.close(); }
 });
 
-test('mount CRUD + test + secret over HTTP; chain audited; responses secret-free', async () => {
+test('mount CRUD + governed test/legacy secret gates over HTTP; chain audited; responses secret-free', async () => {
   const dir = tmpdir();
   const gw = makeGateway();
   const ctx = buildServer(gw);
@@ -347,38 +347,40 @@ test('mount CRUD + test + secret over HTTP; chain audited; responses secret-free
     assert.equal(lst.status, 200);
     assert.equal((await lst.json()).adapters.length, 1);
 
-    // set secret over HTTP
-    const sr = await req(url, `/v2/adapters/${adapter.id}/secret`, {
+    // Legacy secret storage is no longer a runtime credential path.
+    const sr = await req(url, '/v2/adapters/' + adapter.id + '/secret', {
       method: 'POST', body: { name: 'sig', value: SECRET_LITERAL },
     });
-    assert.equal(sr.status, 200);
-    assert.deepEqual((await sr.json()), { ok: true, name: 'sig', length: SECRET_LITERAL.length });
+    assert.equal(sr.status, 409);
+    assert.deepEqual(await sr.json(), { error: 'governed_credentials_required' });
     assert.ok(!sr.text.includes(SECRET_LITERAL), 'secret value never echoed in response');
 
-    // GET must strip values entirely
-    const g1 = await req(url, `/v2/adapters/${adapter.id}`);
+    // GET remains a secret-free projection and no legacy secret was stored.
+    const g1 = await req(url, '/v2/adapters/' + adapter.id);
     const g1b = await g1.json();
     assert.ok(!g1.text.includes(SECRET_LITERAL));
-    assert.deepEqual(Object.keys(g1b.adapter.secrets.sig).sort(), ['fingerprint', 'length']);
-    // registry file on disk: value absent
+    assert.deepEqual(g1b.adapter.secrets, {});
     const disk = fs.readFileSync(path.join(dir, 'adapters.json'), 'utf8');
     assert.ok(!disk.includes(SECRET_LITERAL));
 
-    // test endpoint (fetch would hit ops.example — block by stubbing the
-    // registry's fetch to avoid any real network)
-    reg._fetch = fetchMock(() => ({ status: 200 }));
-    const tr = await req(url, `/v2/adapters/${adapter.id}/test`, { method: 'POST', body: {} });
-    assert.equal(tr.status, 200);
-    assert.equal((await tr.json()).result, 'ok');
+    // Governed route is fail-closed until trusted mission/authority/approval/
+    // handle/broker context is wired. It must never call legacy fetch.
+    const calls = [];
+    reg._fetch = fetchMock(() => { calls.push(true); return { status: 200 }; });
+    const tr = await req(url, '/v2/adapters/' + adapter.id + '/test', { method: 'POST', body: {} });
+    assert.equal(tr.status, 409);
+    assert.deepEqual(await tr.json(), { error: 'governed_egress_required' });
+    assert.equal(calls.length, 0);
 
-    // PATCH enabled:false then test → blocked
-    await req(url, `/v2/adapters/${adapter.id}`, { method: 'PATCH', body: { enabled: false } });
-    const tr2 = await req(url, `/v2/adapters/${adapter.id}/test`, { method: 'POST', body: {} });
-    assert.equal((await tr2.json()).result, 'blocked');
+    // PATCH does not reopen the unsafe direct-fetch path.
+    await req(url, '/v2/adapters/' + adapter.id, { method: 'PATCH', body: { enabled: false } });
+    const tr2 = await req(url, '/v2/adapters/' + adapter.id + '/test', { method: 'POST', body: {} });
+    assert.equal(tr2.status, 409);
+    assert.deepEqual(await tr2.json(), { error: 'governed_egress_required' });
 
     // unknown id → 404
     assert.equal((await req(url, '/v2/adapters/adp_9999')).status, 404);
-    assert.equal((await req(url, '/v2/adapters/adp_9999/test', { method: 'POST', body: {} })).status, 200); // probe fails soft
+    assert.equal((await req(url, '/v2/adapters/adp_9999/test', { method: 'POST', body: {} })).status, 404); // unknown adapter fails closed
     assert.equal((await req(url, `/v2/adapters/adp_9999/secret`, { method: 'POST', body: { name: 'x', value: 'y' } })).status, 404);
     assert.equal((await req(url, '/v2/adapters/adp_9999', { method: 'DELETE' })).status, 404);
 
@@ -389,13 +391,14 @@ test('mount CRUD + test + secret over HTTP; chain audited; responses secret-free
 
     // audit chain: every decision present — and NO secret value anywhere in the chain
     const types = gw.chain.entries.map((e) => e.payload.type);
-    for (const t of ['adapter_registered', 'adapter_secret_set', 'adapter_tested', 'adapter_updated', 'adapter_deleted']) {
+    for (const t of ['adapter_registered', 'adapter_test_blocked', 'adapter_updated', 'adapter_deleted']) {
       assert.ok(types.includes(t), `audit ${t} present`);
     }
     const chainText = JSON.stringify(gw.chain.entries);
     assert.ok(!chainText.includes(SECRET_LITERAL), 'secret value absent from audit chain');
-    const tested = gw.chain.entries.find((e) => e.payload.type === 'adapter_tested');
-    assert.deepEqual(Object.keys(tested.payload).sort(), ['id', 'kind', 'result', 'type']);
+    const tested = gw.chain.entries.find((e) => e.payload.type === 'adapter_test_blocked');
+    assert.deepEqual(Object.keys(tested.payload).sort(), ['bot', 'id', 'reason', 'tenant', 'type']);
+    assert.equal(tested.payload.reason, 'governed_egress_required');
     const regd = gw.chain.entries.find((e) => e.payload.type === 'adapter_registered');
     const regdText = JSON.stringify(regd.payload);
     assert.ok(!regdText.includes('/hook'), 'audit carries no URL path');
