@@ -2,10 +2,6 @@
 
 const path = require('node:path');
 const { createAdapterRuntime } = require('./adapter-runtime');
-const { TenantStore } = require('./tenants');
-const { SecretsVault } = require('./secrets-vault');
-const { CredentialHandleStore } = require('./credential-handles');
-const dbmod = require('./db');
 const { revalidate } = require('./aie-client');
 
 function fail(code) {
@@ -58,6 +54,12 @@ function alignDatabaseFile(env) {
 }
 
 function buildStorage(env, overrides = {}) {
+  // Keep SQLite and tenant/secret modules out of import-time test discovery.
+  // They are intentionally loaded only after explicit production activation.
+  const { TenantStore } = require('./tenants');
+  const { SecretsVault } = require('./secrets-vault');
+  const { CredentialHandleStore } = require('./credential-handles');
+  const dbmod = require('./db');
   alignDatabaseFile(env);
   if (overrides.vault && overrides.handles && overrides.tenantStore) {
     return {
