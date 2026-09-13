@@ -44,12 +44,12 @@ function close(server) {
   });
 }
 
-function fakeHttpModule(remoteAddress) {
+function fakeHttpModule(remoteAddress, options = {}) {
   const state = { calls: 0, options: null, body: '' };
   const module = {
-    request(options, callback) {
+    request(requestOptions, callback) {
       state.calls += 1;
-      state.options = options;
+      state.options = requestOptions;
       const req = new EventEmitter();
       req.setTimeout = () => {};
       req.destroy = (err) => {
@@ -59,11 +59,12 @@ function fakeHttpModule(remoteAddress) {
         state.body = body ? body.toString() : '';
         process.nextTick(() => {
           const response = new EventEmitter();
-          response.statusCode = 200;
-          response.headers = {};
+          response.statusCode = options.statusCode ?? 200;
+          response.headers = options.headers || {};
           response.socket = { remoteAddress };
+          response.destroy = () => {};
           callback(response);
-          response.emit('data', Buffer.from('ok'));
+          response.emit('data', Buffer.from(options.body ?? 'ok'));
           response.emit('end');
         });
       };
@@ -109,7 +110,7 @@ test('requires commit permit, pinning context and admitted literal addresses bef
   assert.equal(calls, 0);
 });
 
-test('uses an admitted address for the socket while retaining the logical host and bounds the response', async () => {
+test('uses an admitted address for the socket while retaining the logical host', async () => {
   const observed = {};
   const server = http.createServer((req, res) => {
     observed.method = req.method;
@@ -151,6 +152,23 @@ test('uses an admitted address for the socket while retaining the logical host a
   }
 });
 
+test('bounds the response before exposing it to the caller', async () => {
+  const fake = fakeHttpModule('203.0.113.9', { body: '0123456789' });
+  const transport = createPinnedTransport({
+    httpModule: fake.module,
+    maxResponseBytes: 4,
+  });
+
+  await assert.rejects(
+    () => transport(request(), {
+      resolvedAddresses: ['203.0.113.9'],
+      permitId: 'permit/transport-size',
+      requireAddressPinning: true,
+    }),
+    { code: 'response_too_large' },
+  );
+});
+
 test('pins lookup and refuses a response from an address outside admission', async () => {
   const fake = fakeHttpModule('203.0.113.8');
   const transport = createPinnedTransport({ httpModule: fake.module });
@@ -174,14 +192,19 @@ test('pins lookup and refuses a response from an address outside admission', asy
 });
 
 test('does not follow redirects and refuses reserved caller-controlled transport headers', async () => {
-  const fake = fakeHttpModule('203.0.113.9');
+  const fake = fakeHttpModule('203.0.113.9', {
+    statusCode: 302,
+    headers: { location: 'https://other.example/next' },
+  });
   const transport = createPinnedTransport({ httpModule: fake.module });
   const result = await transport(request(), {
     resolvedAddresses: ['203.0.113.9'],
     permitId: 'permit/transport-3',
     requireAddressPinning: true,
   });
-  assert.equal(result.status, 200);
+  assert.equal(result.status, 302);
+  assert.equal(result.headers.location, 'https://other.example/next');
+  assert.equal(fake.state.calls, 1);
 
   for (const header of ['host', 'connection', 'content-length', 'transfer-encoding']) {
     await assert.rejects(
