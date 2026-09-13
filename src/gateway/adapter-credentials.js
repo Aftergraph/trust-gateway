@@ -153,3 +153,5 @@ class AdapterScopedHandleStore {
 }
 
 module.exports = { AdapterCredentialLifecycle, AdapterScopedHandleStore, adapterCredentialKey, adapterScope };
+
+// Branch refresh marker: scope and secret-handling behavior remain unchanged.
