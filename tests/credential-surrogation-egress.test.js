@@ -96,13 +96,14 @@ function broker(store, opts = {}) {
     ],
     audit: (event) => audit.push(event),
     commitGuard: opts.commitGuard || (async () => ({ ok: true, permitId: 'permit/1' })),
-    credentialInjector: ({ secret, request: req }) => ({
+    requireAdapterBinding: opts.requireAdapterBinding === true,
+    credentialInjector: opts.credentialInjector || (({ secret, request: req }) => ({
       ...req,
       http: {
         ...req.http,
-        headers: { ...req.http.headers, authorization: `Bearer ${secret}` },
+        headers: { ...req.http.headers, authorization: 'Bearer ' + secret },
       },
-    }),
+    })),
     transport: async (req, context) => {
       transportCalls.push(req);
       transportOptions.push(context);

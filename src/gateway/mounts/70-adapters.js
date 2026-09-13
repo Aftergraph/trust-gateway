@@ -98,7 +98,6 @@ module.exports = {
       if (req.method !== 'POST') return send(res, 405, { error: 'method_not_allowed' });
       const def = reg.get(id);
       if (!def) return send(res, 404, { error: 'not_found' });
-      if (def.enabled === false) return send(res, 409, { error: 'adapter_disabled' });
 
       // The legacy registry probe is deliberately unreachable from HTTP.
       // An adapter route is live only when the embedding control plane injects
