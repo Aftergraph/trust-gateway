@@ -99,7 +99,7 @@ class TelemetryRing {
     try {
       fs.mkdirSync(path.dirname(this.file), { recursive: true });
       const tmp = this.file + '.tmp';
-      fs.writeFileSync(tmp, JSON.stringify({ version: 1, events: this.events }, null, 2) + '\n');
+      fs.writeFileSync(tmp, JSON.stringify({ version: 1, events: this.events }) + '\n');
       fs.renameSync(tmp, this.file);
       try { fs.chmodSync(this.file, 0o600); } catch { /* best effort */ }
     } catch { /* best effort — telemetry must never break the request path */ }
