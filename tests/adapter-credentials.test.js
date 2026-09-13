@@ -40,7 +40,7 @@ function input(overrides = {}) {
   return { tenant: 'tenant_a', adapterId: 'adp_0001', secretName: 'token', principalId: 'principal_1', missionId: 'mission_1', authorityRef: 'authority_1', purpose: 'adapter_probe', credentialClass: 'api_token', allowedDestinations: ['api.example.test'], allowedMethods: ['GET'], allowedPathPrefixes: ['/v1'], scopeRefs: ['mission:mission_1'], expiresAt: 2000, ...overrides };
 }
 
-function lifecycle(v = vault({ 'tenant_a/adapters/adp_0001/credentials/token': 'runtime-secret-1' }), h = handles(), t = tenantStore()) {
+function makeLifecycle(v = vault({ 'tenant_a/adapters/adp_0001/credentials/token': 'runtime-secret-1' }), h = handles(), t = tenantStore()) {
   return { lifecycle: new AdapterCredentialLifecycle({ vault: v, handles: h, tenantStore: t }), vault: v, handles: h };
 }
 
@@ -51,7 +51,7 @@ test('canonical adapter credential keys are tenant-safe and secret-free', () => 
 });
 
 test('stores an adapter secret in Vault without returning its value', () => {
-  const { lifecycle, vault: v } = lifecycle(vault());
+  const { lifecycle, vault: v } = makeLifecycle(vault());
   const result = lifecycle.setSecret({ tenant: 'tenant_a', adapterId: 'adp_0001', secretName: 'Token', value: 'runtime-secret-1' });
   assert.deepEqual(result, { ok: true, tenant: 'tenant_a', adapterId: 'adp_0001', secretName: 'token' });
   assert.deepEqual(v.calls, [['setSecret', 'tenant_a', 'adapters/adp_0001/credentials/token']]);
@@ -60,14 +60,14 @@ test('stores an adapter secret in Vault without returning its value', () => {
 
 test('refuses writes and issuance for unknown or disabled tenants', () => {
   const disabled = tenantStore({ tenant_a: { id: 'tenant_a', disabled: true } });
-  const { lifecycle } = lifecycle(vault(), handles(), disabled);
+  const { lifecycle } = makeLifecycle(vault(), handles(), disabled);
   assert.throws(() => lifecycle.setSecret({ tenant: 'tenant_a', adapterId: 'adp_0001', secretName: 'token', value: 'x' }), { code: 'adapter_credential_tenant_unavailable' });
   assert.throws(() => lifecycle.issueHandle(input({ tenant: 'unknown' })), { code: 'adapter_credential_tenant_unavailable' });
 });
 
 test('issues an opaque adapter handle with a mandatory adapter scope', () => {
   const h = handles();
-  const { lifecycle } = lifecycle(undefined, h);
+  const { lifecycle } = makeLifecycle(undefined, h);
   const result = lifecycle.issueHandle(input());
   const issue = h.calls.find((call) => call[0] === 'issue')[1];
   assert.equal(result.handleId, 'ch_adapter_test');
@@ -81,14 +81,14 @@ test('issues an opaque adapter handle with a mandatory adapter scope', () => {
 });
 
 test('refuses issuance when the tenant-scoped Vault key is absent', () => {
-  const { lifecycle, handles: h } = lifecycle(vault(), handles());
+  const { lifecycle, handles: h } = makeLifecycle(vault(), handles());
   assert.throws(() => lifecycle.issueHandle(input()), { code: 'adapter_credential_secret_missing' });
   assert.equal(h.calls.some((call) => call[0] === 'issue'), false);
 });
 
 test('enforces tenant and adapter binding before inspect, revoke, or resolve', () => {
   const h = handles();
-  const { lifecycle } = lifecycle(undefined, h);
+  const { lifecycle } = makeLifecycle(undefined, h);
   assert.throws(() => lifecycle.inspectHandle({ handleId: 'ch_adapter_test', tenant: 'tenant_b', adapterId: 'adp_0001' }), { code: 'adapter_credential_scope_mismatch' });
   assert.throws(() => lifecycle.revokeHandle({ handleId: 'ch_adapter_test', tenant: 'tenant_a', adapterId: 'adp_0002' }), { code: 'adapter_credential_scope_mismatch' });
   assert.throws(() => lifecycle.resolveForBroker({ handleId: 'ch_adapter_test', tenant: 'tenant_b', adapterId: 'adp_0001', request: {} }), { code: 'adapter_credential_scope_mismatch' });
@@ -97,7 +97,7 @@ test('enforces tenant and adapter binding before inspect, revoke, or resolve', (
 
 test('delegates revoke and broker resolution only after binding checks', () => {
   const h = handles();
-  const { lifecycle } = lifecycle(undefined, h);
+  const { lifecycle } = makeLifecycle(undefined, h);
   const revoked = lifecycle.revokeHandle({ handleId: 'ch_adapter_test', tenant: 'tenant_a', adapterId: 'adp_0001', reason: 'operator_rotation' });
   assert.equal(revoked.revokedReason, 'operator_rotation');
   const resolved = lifecycle.resolveForBroker({ handleId: 'ch_adapter_test', tenant: 'tenant_a', adapterId: 'adp_0001', request: { tenant: 'tenant_a' } });
