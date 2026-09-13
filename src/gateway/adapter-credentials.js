@@ -107,4 +107,49 @@ class AdapterCredentialLifecycle {
   }
 }
 
-module.exports = { AdapterCredentialLifecycle, adapterCredentialKey, adapterScope };
+class AdapterScopedHandleStore {
+  constructor({ handles } = {}) {
+    if (!handles || typeof handles.validate !== 'function' || typeof handles.resolveForBroker !== 'function') {
+      throw fail('adapter_scoped_handle_store_required');
+    }
+    this.handles = handles;
+  }
+
+  _assertBinding(meta, request = {}) {
+    const tenant = String(request.tenantId ?? request.tenant ?? '').trim().toLowerCase();
+    const adapterId = String(request.adapterId || '').trim();
+    if (!isValidTenantId(tenant) || !adapterId) throw fail('adapter_credential_scope_mismatch');
+    const scope = adapterScope(adapterId);
+    const canonicalPrefix = 'adapters/' + normalizeIdentifier(adapterId) + '/credentials/';
+    if (!meta || String(meta.tenant || '').trim().toLowerCase() !== tenant ||
+        !Array.isArray(meta.scopeRefs) || !meta.scopeRefs.includes(scope)) {
+      throw fail('adapter_credential_scope_mismatch');
+    }
+    // CredentialHandleStore.validate exposes secretKey only as metadata. If a
+    // compatible handle store provides it, bind it to this adapter's
+    // canonical Vault namespace before any secret resolution is attempted.
+    if (meta.secretKey !== undefined) {
+      const secretKey = String(meta.secretKey);
+      const secretName = secretKey.slice(canonicalPrefix.length);
+      if (!secretKey.startsWith(canonicalPrefix) || !SAFE_IDENTIFIER.test(secretName)) {
+        throw fail('adapter_credential_scope_mismatch');
+      }
+    }
+    return meta;
+  }
+
+  validate(handleId, request = {}) {
+    const meta = this.handles.validate(handleId, request);
+    return this._assertBinding(meta, request);
+  }
+
+  resolveForBroker(handleId, request = {}) {
+    // Validate metadata and adapter scope before the underlying store is
+    // allowed to read the Vault secret.
+    this.validate(handleId, request);
+    const resolved = this.handles.resolveForBroker(handleId, request);
+    return this._assertBinding(resolved, request);
+  }
+}
+
+module.exports = { AdapterCredentialLifecycle, AdapterScopedHandleStore, adapterCredentialKey, adapterScope };

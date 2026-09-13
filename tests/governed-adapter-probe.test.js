@@ -15,6 +15,8 @@ function context(overrides = {}) {
   return {
     requestId: 'req_adapter_probe_1',
     correlationId: 'corr_adapter_probe_1',
+    tenantId: 'tenant-a',
+    adapterId: 'adp_0001',
     principalId: 'principal_1',
     missionId: 'mission_1',
     authorityRef: 'authority_1',
@@ -71,7 +73,7 @@ test('builds a secret-free webhook descriptor with a body digest', () => {
 });
 
 test('builds only header-auth HTTP API descriptors and rejects query auth', () => {
-  const request = buildHttpApiProbeRequest(httpApi(), context());
+  const request = buildHttpApiProbeRequest(httpApi(), context({ adapterId: 'adp_0002' }));
   assert.equal(request.destination.host, 'api.example.test');
   assert.equal(request.http.method, 'GET');
   assert.deepEqual(request.http.query, {});
@@ -87,10 +89,25 @@ test('requires complete governed context and rejects URL credentials', () => {
   assert.throws(() => buildWebhookProbeRequest(webhook(), { ...context(), missionId: '' }), {
     code: 'governed_adapter_context_required',
   });
+  assert.throws(() => buildWebhookProbeRequest(webhook(), { ...context(), tenantId: '' }), {
+    code: 'governed_adapter_context_required',
+  });
+  assert.throws(() => buildWebhookProbeRequest(webhook(), { ...context(), adapterId: 'adp_0002' }), {
+    code: 'governed_adapter_resource_mismatch',
+  });
   assert.throws(() => buildWebhookProbeRequest({
     ...webhook(), config: { url: 'https://user:pass@hooks.example.test/health' },
   }, context()), { code: 'adapter_target_invalid' });
 });
+
+test('binds the descriptor digest to tenant and adapter resource', () => {
+  const request = buildWebhookProbeRequest(webhook(), context());
+  assert.equal(request.tenantId, 'tenant-a');
+  assert.equal(request.adapterId, 'adp_0001');
+  assert.equal(request.data.resourceRef, 'adapter:adp_0001');
+  assert.equal(request.data.provenanceRefs[0], 'adapter:adp_0001');
+});
+
 
 test('probe runner delegates only admit then dispatch', async () => {
   const calls = [];

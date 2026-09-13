@@ -41,6 +41,8 @@ function requestIdentity(request = {}) {
   return canonical({
     requestId: request.requestId || null,
     correlationId: request.correlationId || null,
+    tenantId: request.tenantId || null,
+    adapterId: request.adapterId || null,
     principalId: request.principalId || null,
     missionId: request.missionId || null,
     authorityRef: request.authorityRef || null,
@@ -61,6 +63,7 @@ function requestIdentity(request = {}) {
     data: {
       sensitivity: canonical(data.sensitivity || []),
       provenanceRefs: canonical(data.provenanceRefs || []),
+      resourceRef: data.resourceRef || null,
       lineageId: data.lineageId || null,
     },
   });
@@ -74,10 +77,26 @@ function requestDigest(request) {
 // must not change the admitted execution envelope. Headers are intentionally
 // excluded here; destination, method, path, query, body digest and governance
 // identity remain immutable after admission.
-function executionEnvelopeDigest(request) {
+function executionEnvelopeDigest(request, mutableHeaderNames = ['authorization']) {
   const identity = requestIdentity(request);
-  identity.http.headers = {};
+  const headers = identity.http.headers || {};
+  for (const name of mutableHeaderNames) delete headers[String(name).toLowerCase()];
+  identity.http.headers = headers;
   return crypto.createHash('sha256').update(JSON.stringify(identity)).digest('hex');
+}
+
+function assertAdapterBinding(request) {
+  const tenantId = String(request?.tenantId || '').trim();
+  const adapterId = String(request?.adapterId || '').trim();
+  const credentialHandle = String(request?.credentialHandle || '').trim();
+  if (!tenantId || !adapterId) throw fail('governed_adapter_identity_required');
+  if (!credentialHandle) throw fail('credential_handle_required');
+  const resourceRef = 'adapter:' + adapterId;
+  if (request?.data?.resourceRef !== resourceRef ||
+      !Array.isArray(request?.data?.provenanceRefs) ||
+      !request.data.provenanceRefs.includes(resourceRef)) {
+    throw fail('governed_adapter_resource_mismatch');
+  }
 }
 
 function normalizeLookupRows(rows) {
@@ -136,6 +155,8 @@ class GovernedEgressBroker {
     credentialInjector,
     transport,
     commitGuard = async () => ({ ok: false, reason: 'commit_guard_missing' }),
+    requireAdapterBinding = false,
+    credentialHeaderNames = ['authorization'],
   } = {}) {
     if (!handleStore) throw fail('handle_store_required');
     if (typeof credentialInjector !== 'function') throw fail('credential_injector_required');
@@ -150,6 +171,8 @@ class GovernedEgressBroker {
     this.credentialInjector = credentialInjector;
     this.transport = transport;
     this.commitGuard = commitGuard;
+    this.requireAdapterBinding = requireAdapterBinding === true;
+    this.credentialHeaderNames = Array.isArray(credentialHeaderNames) ? credentialHeaderNames.slice() : ['authorization'];
   }
 
   async _resolvePublic(host) {
@@ -177,6 +200,7 @@ class GovernedEgressBroker {
   }
 
   async admit(request) {
+    if (this.requireAdapterBinding) assertAdapterBinding(request);
     this._matchPolicy(request);
     const addresses = await this._resolvePublic(String(request.destination?.host || ''));
     const { authority, approval } = await this._checkMutableState(request);
@@ -206,6 +230,7 @@ class GovernedEgressBroker {
   }
 
   async dispatch(admission, request) {
+    if (this.requireAdapterBinding) assertAdapterBinding(request);
     if (!admission || typeof admission.requestDigest !== 'string') throw fail('admission_invalid');
     const digest = requestDigest(request);
     if (digest !== admission.requestDigest) throw fail('request_mutated_after_admission');
@@ -265,7 +290,7 @@ class GovernedEgressBroker {
 
     const injected = this.credentialInjector({ secret: resolved.secret, request });
     if (!injected || typeof injected !== 'object') throw fail('credential_injection_failed');
-    if (executionEnvelopeDigest(injected) !== executionEnvelopeDigest(request)) {
+    if (executionEnvelopeDigest(injected, this.credentialHeaderNames) !== executionEnvelopeDigest(request, this.credentialHeaderNames)) {
       this.audit({
         type: 'egress_failed',
         admissionId: admission.admissionId,
