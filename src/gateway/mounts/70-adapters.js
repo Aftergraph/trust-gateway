@@ -78,13 +78,160 @@ module.exports = {
   method: '*',
   // 'kinds' is owned by 99-adapter-kinds (G9 data-driven registry) — the
   // id segment here must not swallow it.
-  path: /^\/v2\/adapters(\/(?!kinds(?:\/|$))[\w-]+)?(\/test|\/secret)?$/,
+  path: /^\/v2\/adapters(\/(?!kinds(?:\/|$))[\w-]+)?(\/test|\/secret|\/handle(?:\/[\w-]+)?(?:\/revoke)?)?$/,
   auth: 'bearer',
   handle: async (gw, req, res, ctx) => {
     const reg = getAdapters(gw);
     const m = ctx.params.matches || [];
     const id = m[1] ? m[1].slice(1) : null; // strip leading slash
-    const action = m[2] ? m[2].slice(1) : null; // 'test' | 'secret' | null
+    const actionPath = m[2] ? m[2].slice(1) : '';
+    const actionParts = actionPath ? actionPath.split('/') : [];
+    const action = actionParts[0] || null; // 'test' | 'secret' | 'handle' | null
+    const handleId = action === 'handle' ? (actionParts[1] || null) : null;
+    const handleAction = action === 'handle' ? (actionParts[2] || null) : null;
+
+    // ── POST|GET /v2/adapters/:id/handle ───────────────────────────────────
+    // Handle control-plane operations are intentionally separate from probing:
+    // the opaque handle is issued/revoked by the tenant-scoped lifecycle, while
+    // authority and approval are still enforced later by GovernedEgressBroker.
+    if (action === 'handle') {
+      const def = reg.get(id);
+      if (!def) return send(res, 404, { error: 'not_found' });
+
+      if (!canManageCredentials(ctx.bot)) {
+        gw._audit({
+          type: 'adapter_handle_forbidden',
+          id,
+          tenant: ctx.tenantId || null,
+          bot: ctx.bot?.name || null,
+          reason: 'operator_required',
+        });
+        return send(res, 403, { error: 'operator_required' });
+      }
+      if (!gw.adapterCredentialLifecycle ||
+          typeof gw.adapterCredentialLifecycle.issueHandle !== 'function' ||
+          typeof gw.adapterCredentialLifecycle.inspectHandle !== 'function' ||
+          typeof gw.adapterCredentialLifecycle.revokeHandle !== 'function') {
+        gw._audit({
+          type: 'adapter_handle_blocked',
+          id,
+          tenant: ctx.tenantId || null,
+          bot: ctx.bot?.name || null,
+          reason: 'governed_credentials_required',
+        });
+        return send(res, 409, { error: 'governed_credentials_required' });
+      }
+
+      if (req.method === 'GET' && handleId && !handleAction) {
+        try {
+          const inspected = gw.adapterCredentialLifecycle.inspectHandle({
+            handleId,
+            tenant: ctx.tenantId,
+            adapterId: id,
+          });
+          const { secret, secretKey, ...publicHandle } = inspected || {};
+          gw._audit({
+            type: 'adapter_handle_inspected',
+            id,
+            tenant: ctx.tenantId || null,
+            bot: ctx.bot?.name || null,
+          });
+          return send(res, 200, { handle: publicHandle });
+        } catch (e) {
+          const error = safeErrorCode(e, 'adapter_handle_rejected');
+          gw._audit({
+            type: 'adapter_handle_rejected',
+            id,
+            tenant: ctx.tenantId || null,
+            bot: ctx.bot?.name || null,
+            error,
+          });
+          return send(res, 404, { error });
+        }
+      }
+
+      if (req.method === 'POST' && !handleId && !handleAction) {
+        let body;
+        try { body = await readJson(req); } catch (e) {
+          return send(res, e.message === 'body_too_large' ? 413 : 400, { error: e.message === 'body_too_large' ? 'body_too_large' : 'invalid_json' });
+        }
+        const allowed = new Set([
+          'secretName', 'principalId', 'missionId', 'authorityRef',
+          'credentialClass', 'allowedDestinations', 'allowedMethods',
+          'allowedPathPrefixes', 'scopeRefs', 'expiresAt',
+        ]);
+        if (!body || typeof body !== 'object' || Array.isArray(body) ||
+            Object.keys(body).some((key) => !allowed.has(key))) {
+          return send(res, 400, { error: 'invalid_body' });
+        }
+        try {
+          const issued = gw.adapterCredentialLifecycle.issueHandle({
+            ...body,
+            tenant: ctx.tenantId,
+            adapterId: id,
+            purpose: 'adapter_probe',
+          });
+          const { secret, secretKey, ...publicHandle } = issued || {};
+          gw._audit({
+            type: 'adapter_handle_issued',
+            id,
+            tenant: ctx.tenantId || null,
+            bot: ctx.bot?.name || null,
+            secretName: publicHandle.secretName || null,
+          });
+          return send(res, 201, { handle: publicHandle });
+        } catch (e) {
+          const error = safeErrorCode(e, 'adapter_handle_rejected');
+          gw._audit({
+            type: 'adapter_handle_rejected',
+            id,
+            tenant: ctx.tenantId || null,
+            bot: ctx.bot?.name || null,
+            error,
+          });
+          return send(res, 400, { error });
+        }
+      }
+
+      if (req.method === 'POST' && handleId && handleAction === 'revoke') {
+        let body;
+        try { body = await readJson(req); } catch (e) {
+          return send(res, e.message === 'body_too_large' ? 413 : 400, { error: e.message === 'body_too_large' ? 'body_too_large' : 'invalid_json' });
+        }
+        if (!body || typeof body !== 'object' || Array.isArray(body) ||
+            Object.keys(body).some((key) => key !== 'reason')) {
+          return send(res, 400, { error: 'invalid_body' });
+        }
+        try {
+          const revoked = gw.adapterCredentialLifecycle.revokeHandle({
+            handleId,
+            tenant: ctx.tenantId,
+            adapterId: id,
+            reason: body.reason,
+          });
+          const { secret, secretKey, ...publicHandle } = revoked || {};
+          gw._audit({
+            type: 'adapter_handle_revoked',
+            id,
+            tenant: ctx.tenantId || null,
+            bot: ctx.bot?.name || null,
+          });
+          return send(res, 200, { handle: publicHandle });
+        } catch (e) {
+          const error = safeErrorCode(e, 'adapter_handle_rejected');
+          gw._audit({
+            type: 'adapter_handle_rejected',
+            id,
+            tenant: ctx.tenantId || null,
+            bot: ctx.bot?.name || null,
+            error,
+          });
+          return send(res, 404, { error });
+        }
+      }
+
+      return send(res, 405, { error: 'method_not_allowed' });
+    }
 
     // ── GET ────────────────────────────────────────────────────────────────
     if (req.method === 'GET') {

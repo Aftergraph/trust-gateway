@@ -12,6 +12,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const { Gateway } = require('../src/gateway/server');
+const { createProductionAdapterRuntime } = require('../src/gateway/production-adapter-runtime');
 const { makeDispatcher } = require('../src/gateway/dispatcher');
 
 function parseBots() {
@@ -47,6 +48,19 @@ const AUDIT_FILE = process.env.AUDIT_FILE || path.join(__dirname, '..', 'data', 
 const APPROVALS_FILE = process.env.APPROVALS_FILE || path.join(__dirname, '..', 'data', 'approvals.json');
 const DB_FILE = process.env.DB_FILE || path.join(__dirname, '..', 'data', 'gateway.db');
 const DISPATCH = process.argv.includes('--dispatch');
+const productionRuntimeEnabled = process.env.TG_ADAPTER_RUNTIME === '1';
+let gatewayRef = null;
+
+const adapterRuntime = productionRuntimeEnabled
+  ? createProductionAdapterRuntime({
+      audit: (event) => {
+        if (!gatewayRef) throw new Error('adapter_runtime_gateway_not_ready');
+        return gatewayRef._audit(event);
+      },
+    })
+  : null;
+// productionRuntimeWired:true only when the explicit runtime flag enables the
+// reviewed Frontier Assurance/AIE governance module; default deployments stay inert.
 
 // v2: SqlChain when DB_FILE exists (migrated); falls back to JSONL otherwise.
 let chain = null;
@@ -69,7 +83,10 @@ const gw = new Gateway({
   dispatch: DISPATCH
     ? makeDispatcher({ botsDir: process.env.BOTS_DIR || path.join(__dirname, '..', 'data', 'bots') })
     : null,
+  adapterRuntime,
 });
+gatewayRef = gw;
+if (productionRuntimeEnabled) console.log('▲ governed adapter runtime: productionRuntimeWired:true');
 // wave B executors — synthetic tools (harness build/run, worktree snapshots)
 if (DISPATCH) {
   const botsDir = process.env.BOTS_DIR || path.join(__dirname, '..', 'data', 'bots');

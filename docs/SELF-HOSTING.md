@@ -80,6 +80,7 @@ reads:
    | `STATIC_DIR` | `app/` | Operator console static assets. |
    | `BOTS_DIR` | `data/bots` | Root under which per-bot jailed dirs are created (dispatcher mode). |
    | `V2_SQL` | on | Set to `0` to force JSONL audit even when `DB_FILE` exists. |
+   | `TG_ADAPTER_RUNTIME` | unset | Set to `1` only after the reviewed Frontier Assurance/AIE governance module is deployed. Missing policy bindings refuse startup. |
 
 2. **`TG_`-prefixed names** — read by the ops scripts, not by `bin/gateway.js`:
 
@@ -93,6 +94,9 @@ reads:
    | `TG_ALERT_TOKEN` | `deploy/watchdog.sh` | Optional Bearer token for the webhook POST. |
    | `TG_DISK_MAX_PCT` | `deploy/watchdog.sh` | Disk-full threshold, default `90` (%). |
    | `TG_DATA_DIR` | `deploy/watchdog.sh`, backup tooling | Data dir, default `<repo>/data`. |
+   | `TG_ADAPTER_GOVERNANCE_MODULE` | adapter runtime | Loadable Node module exporting `createAdapterGovernance`; required when `TG_ADAPTER_RUNTIME=1`. |
+   | `TG_SECRETS_MASTER_KEY` | adapter runtime | Master key for the tenant-scoped encrypted Vault; required when built-in adapter stores are used. Never commit or log it. |
+   | `TG_ADAPTER_MAX_REQUEST_BYTES`, `TG_ADAPTER_MAX_RESPONSE_BYTES`, `TG_ADAPTER_TIMEOUT_MS` | adapter runtime | Optional positive limits for the pinned adapter transport. |
 
 Rotation: edit `data/gateway.env`, then `sudo systemctl restart tg-gateway`.
 Old tokens die with the restart; rejected attempts land in the audit chain.
