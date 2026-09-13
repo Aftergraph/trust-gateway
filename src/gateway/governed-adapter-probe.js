@@ -10,7 +10,7 @@ function fail(code) {
 
 function requireContext(context = {}) {
   for (const key of [
-    'requestId', 'correlationId', 'principalId', 'missionId',
+    'requestId', 'correlationId', 'tenantId', 'adapterId', 'principalId', 'missionId',
     'authorityRef', 'purpose', 'credentialHandle',
   ]) {
     if (typeof context[key] !== 'string' || context[key].trim() === '') {
@@ -46,9 +46,13 @@ function bodyDigest(body) {
 }
 
 function baseRequest(def, context, target, http) {
+  if (String(context.adapterId) !== String(def.id)) throw fail('governed_adapter_resource_mismatch');
+  const resourceRef = 'adapter:' + String(def.id || 'unknown');
   return {
     requestId: context.requestId,
     correlationId: context.correlationId,
+    tenantId: context.tenantId,
+    adapterId: context.adapterId,
     principalId: context.principalId,
     missionId: context.missionId,
     authorityRef: context.authorityRef,
@@ -58,7 +62,8 @@ function baseRequest(def, context, target, http) {
     http,
     data: {
       sensitivity: ['adapter_probe'],
-      provenanceRefs: ['adapter:' + String(def.id || 'unknown')],
+      provenanceRefs: [resourceRef],
+      resourceRef,
       lineageId: 'adapter-probe:' + String(def.id || 'unknown'),
     },
   };

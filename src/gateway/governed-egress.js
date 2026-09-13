@@ -41,6 +41,8 @@ function requestIdentity(request = {}) {
   return canonical({
     requestId: request.requestId || null,
     correlationId: request.correlationId || null,
+    tenantId: request.tenantId || null,
+    adapterId: request.adapterId || null,
     principalId: request.principalId || null,
     missionId: request.missionId || null,
     authorityRef: request.authorityRef || null,
@@ -61,6 +63,7 @@ function requestIdentity(request = {}) {
     data: {
       sensitivity: canonical(data.sensitivity || []),
       provenanceRefs: canonical(data.provenanceRefs || []),
+      resourceRef: data.resourceRef || null,
       lineageId: data.lineageId || null,
     },
   });
