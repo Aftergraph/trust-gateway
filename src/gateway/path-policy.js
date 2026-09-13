@@ -12,6 +12,10 @@ function fail(code) {
 function canonicalPath(rawPath) {
   const raw = String(rawPath ?? '');
   if (!raw.startsWith('/') || raw.includes('\u0000')) throw fail('path_invalid');
+  // Reject encoded separators and dot-segments before decoding: otherwise
+  // normalization could silently turn an encoded traversal into a permitted
+  // path with different downstream interpretation.
+  if (/%2f|%5c|%2e/i.test(raw)) throw fail('path_encoded_separator');
   let decoded;
   try {
     decoded = decodeURIComponent(raw);
