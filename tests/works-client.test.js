@@ -42,11 +42,11 @@ test('createWork reaches a local mock control plane and returns the Work ID', as
   const { createWork } = require('../src/gateway/works-client');
 
   const out = await createWork({ objective: 'deploy', mission_id: 'proposal_x' });
-  await new Promise((r) => server.close(r));
   assert.equal(out.ok, true);
   assert.equal(out.work_id, 'work_123');
   const retry = await createWork({ objective: 'deploy', mission_id: 'proposal_x' });
   assert.deepEqual(retry, out);
+  await new Promise((r) => server.close(r));
   assert.equal(received.length, 2);
   assert.equal(received[0].objective.type, 'custom');
   assert.equal(received[0].objective.description, 'deploy');
