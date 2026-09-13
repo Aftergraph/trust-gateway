@@ -22,13 +22,13 @@ test('createWork fails closed when WORKS_API_URL unset (disabled)', async () => 
 
 test('createWork reaches a local mock control plane and returns the Work ID', async () => {
   const http = require('node:http');
-  let received = null;
+  const received = [];
   const server = http.createServer((req, res) => {
     if (req.url === '/v1/works' && req.method === 'POST') {
       const chunks = [];
       req.on('data', (chunk) => chunks.push(chunk));
       req.on('end', () => {
-        received = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        received.push(JSON.parse(Buffer.concat(chunks).toString('utf8')));
         res.writeHead(201, { 'content-type': 'application/json' });
         res.end(JSON.stringify({ id: 'work_123' }));
       });
@@ -42,14 +42,21 @@ test('createWork reaches a local mock control plane and returns the Work ID', as
   const { createWork } = require('../src/gateway/works-client');
 
   const out = await createWork({ objective: 'deploy', mission_id: 'proposal_x' });
-  await new Promise((r) => server.close(r));
   assert.equal(out.ok, true);
   assert.equal(out.work_id, 'work_123');
-  assert.equal(received.objective.type, 'custom');
-  assert.equal(received.objective.description, 'deploy');
-  assert.equal(received.graph.nodes.mission.run, 'true');
-  assert.equal(received.correlation_id, 'proposal_x');
-  assert.equal(received.queue, true);
+  const retry = await createWork({ objective: 'deploy', mission_id: 'proposal_x' });
+  assert.deepEqual(retry, out);
+  await new Promise((r) => server.close(r));
+  assert.equal(received.length, 2);
+  assert.equal(received[0].objective.type, 'custom');
+  assert.equal(received[0].objective.description, 'deploy');
+  assert.equal(received[0].graph.nodes.mission.run, 'true');
+  assert.equal(received[0].correlation_id, 'proposal_x');
+  assert.equal(received[0].queue, true);
+  assert.match(received[0].id, /^wrk_[a-f0-9]{32}$/);
+  assert.match(received[0].idempotency_key, /^tg_[a-f0-9]{32}$/);
+  assert.equal(received[1].id, received[0].id);
+  assert.equal(received[1].idempotency_key, received[0].idempotency_key);
 });
 
 test('createWork degrades gracefully on unreachable control plane', async () => {

@@ -170,6 +170,16 @@ test('W0.3 live: TG proposal approve -> real WORKS Work with correlation', { ski
     assert.equal(wr.status, 200);
     const work = await wr.json();
     assert.equal(work.correlation_id, proposalId, 'W0.3: mission_id correlation round-trip');
+
+    // A retried approval must not create a second Work after the proposal is terminal.
+    const replay = await tgRequest('POST', `/v2/proposals/${proposalId}/approve`, { approver: 'atlas' });
+    assert.equal(replay.status, 409, JSON.stringify(replay.body));
+    const listed = await fetch(`${WORKS_BASE}/v1/works`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(listed.status, 200);
+    const listBody = await listed.json();
+    assert.equal(listBody.count, 1, 'idempotent approval leaves one Work');
   } finally {
     if (tgServer && tgServer.listening) {
       await new Promise((resolve) => tgServer.close(() => resolve()));
