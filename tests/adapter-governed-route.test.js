@@ -7,10 +7,23 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
+const adapterTestDbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'adapter-governed-db-'));
+const adapterTestDbFile = path.join(adapterTestDbDir, 'gateway.db');
+const previousAdapterTestDbFile = process.env.TG_DB_FILE;
+process.env.TG_DB_FILE = adapterTestDbFile;
+
 const { Gateway } = require('../src/gateway/server');
 const { getAdapters } = require('../src/gateway/adapters-singleton');
+const { closeDb } = require('../src/gateway/db');
 
 function bearer(token) { return 'Bea' + 'rer ' + token; }
+
+test.after(() => {
+  closeDb();
+  if (previousAdapterTestDbFile === undefined) delete process.env.TG_DB_FILE;
+  else process.env.TG_DB_FILE = previousAdapterTestDbFile;
+  fs.rmSync(adapterTestDbDir, { recursive: true, force: true });
+});
 
 async function request(base, pathname, options = {}) {
   const headers = { authorization: bearer(options.token || 'tok-operator') };
@@ -213,6 +226,122 @@ test('adapter management mutations require operator or adapter.manage capability
     const denied = gw.chain.entries.filter((entry) => entry.payload.type === 'adapter_management_forbidden');
     assert.equal(denied.length, 3);
     assert.ok(denied.every((entry) => entry.payload.reason === 'operator_required'));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+
+test('adapter handle control plane is operator-gated, tenant-bound, and secret-free', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'adapter-handle-control-'));
+  const calls = [];
+  const secret = 'handle-secret-never-echoed';
+  const gw = new Gateway({
+    mountFiles: false,
+    mounts: [require('../src/gateway/mounts/70-adapters')],
+    bots: {
+      operator: { token: 'tok-operator', role: 'operator', capabilities: ['*'] },
+      worker: { token: 'tok-worker', role: 'worker', capabilities: [] },
+    },
+    adapterCredentialLifecycle: {
+      issueHandle(input) {
+        calls.push(['issue', input]);
+        return {
+          handleId: 'ch_opaque_demo',
+          tenant: input.tenant,
+          adapterId: input.adapterId,
+          purpose: input.purpose,
+          secretName: input.secretName,
+          secret,
+        };
+      },
+      inspectHandle(input) {
+        calls.push(['inspect', input]);
+        return { handleId: input.handleId, tenant: input.tenant, adapterId: input.adapterId, secret };
+      },
+      revokeHandle(input) {
+        calls.push(['revoke', input]);
+        return { handleId: input.handleId, tenant: input.tenant, adapterId: input.adapterId, revokedAt: 1234, secret };
+      },
+    },
+    telemetryFile: null,
+  });
+  const registry = getAdapters(gw, { file: path.join(dir, 'adapters.json') });
+  const adapter = registry.register({ kind: 'webhook', name: 'handle hook', config: { url: 'https://hooks.example.test/health' } });
+  const server = http.createServer((req, res) => gw.handle(req, res));
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const base = 'http://127.0.0.1:' + server.address().port;
+  const issueBody = {
+    secretName: 'token',
+    principalId: 'principal_1',
+    missionId: 'mission_1',
+    authorityRef: 'authority_1',
+    credentialClass: 'api_token',
+    allowedDestinations: ['hooks.example.test'],
+    allowedMethods: ['POST'],
+    allowedPathPrefixes: ['/health'],
+    scopeRefs: ['mission:mission_1'],
+    expiresAt: Date.now() + 60000,
+  };
+  try {
+    const unknown = await request(base, '/v2/adapters/adp_9999/handle', {
+      method: 'POST',
+      body: issueBody,
+    });
+    assert.equal(unknown.status, 404);
+    assert.deepEqual(JSON.parse(unknown.text), { error: 'not_found' });
+    assert.equal(calls.length, 0);
+
+    const denied = await request(base, '/v2/adapters/' + adapter.id + '/handle', {
+      method: 'POST',
+      token: 'tok-worker',
+      body: issueBody,
+    });
+    assert.equal(denied.status, 403);
+    assert.deepEqual(JSON.parse(denied.text), { error: 'operator_required' });
+    assert.equal(calls.length, 0);
+
+    const spoof = await request(base, '/v2/adapters/' + adapter.id + '/handle', {
+      method: 'POST',
+      body: { ...issueBody, tenant: 'attacker-tenant' },
+    });
+    assert.equal(spoof.status, 400);
+    assert.equal(calls.length, 0);
+
+    const issued = await request(base, '/v2/adapters/' + adapter.id + '/handle', {
+      method: 'POST',
+      body: issueBody,
+    });
+    assert.equal(issued.status, 201);
+    const issuedJson = JSON.parse(issued.text);
+    assert.equal(issuedJson.handle.handleId, 'ch_opaque_demo');
+    assert.equal(issuedJson.handle.secret, undefined);
+    assert.ok(!issued.text.includes(secret));
+    assert.deepEqual(calls[0][1], { ...issueBody, tenant: 'main', adapterId: adapter.id, purpose: 'adapter_probe' });
+
+    const inspected = await request(base, '/v2/adapters/' + adapter.id + '/handle/ch_opaque_demo');
+    assert.equal(inspected.status, 200);
+    assert.equal(JSON.parse(inspected.text).handle.secret, undefined);
+    assert.ok(!inspected.text.includes(secret));
+
+    const revoked = await request(base, '/v2/adapters/' + adapter.id + '/handle/ch_opaque_demo/revoke', {
+      method: 'POST',
+      body: { reason: 'operator_rotation' },
+    });
+    assert.equal(revoked.status, 200);
+    assert.equal(JSON.parse(revoked.text).handle.secret, undefined);
+    assert.ok(!revoked.text.includes(secret));
+    assert.deepEqual(calls[calls.length - 1][1], {
+      handleId: 'ch_opaque_demo',
+      tenant: 'main',
+      adapterId: adapter.id,
+      reason: 'operator_rotation',
+    });
+    assert.ok(!JSON.stringify(gw.chain.entries).includes(secret));
+    assert.ok(gw.chain.entries.some((entry) => entry.payload.type === 'adapter_handle_issued'));
+    assert.ok(gw.chain.entries.some((entry) => entry.payload.type === 'adapter_handle_inspected'));
+    assert.ok(gw.chain.entries.some((entry) => entry.payload.type === 'adapter_handle_revoked'));
   } finally {
     await new Promise((resolve) => server.close(resolve));
     fs.rmSync(dir, { recursive: true, force: true });
