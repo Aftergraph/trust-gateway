@@ -326,8 +326,13 @@ function createPinnedTransport(options = {}) {
       throw fail('address_selection_invalid');
     }
 
-    const lookup = (_hostname, _lookupOptions, callback) => {
-      callback(null, selectedAddress, net.isIP(selectedAddress));
+    const lookup = (_hostname, lookupOptions, callback) => {
+      const family = net.isIP(selectedAddress);
+      if (lookupOptions?.all === true) {
+        callback(null, [{ address: selectedAddress, family }]);
+      } else {
+        callback(null, selectedAddress, family);
+      }
     };
     const requestOptions = {
       protocol: scheme + ':',
