@@ -23,6 +23,7 @@ if (/^[A-Za-z]:\\/.test(WORKS_DIR) || /^[A-Za-z]:\//.test(WORKS_DIR)) {
 const GO_CANDIDATES = [
   '/mnt/c/Users/empir/go/bin/go.exe',
   path.join(os.homedir(), 'go', 'bin', 'go.exe'),
+  'go',
 ];
 
 function findGo() {
@@ -84,10 +85,6 @@ test('W0.3 live: TG proposal approve -> real WORKS Work with correlation', { ski
     }
     assert.ok(healthy, 'works-api healthy');
     const WORKS_BASE = base;
-    const wr = await fetch(`${WORKS_BASE}/v1/works/${approved.converted_to_mission_id}`, {
-      headers: { authorization: `Bearer ${token}` },
-    });
-    assert.ok(healthy, 'works-api healthy');
 
     // ── enroll a worker-scope token to submit Works (operator-equivalent for the API) ──
     const enr = await fetch(`http://127.0.0.1:${port}/v1/workers/enroll`, {
@@ -119,6 +116,10 @@ test('W0.3 live: TG proposal approve -> real WORKS Work with correlation', { ski
     // ── approve: works-client should create a REAL Work and stamp its ID ──
     const approved = store.approve(p.id, 'atlas');
     assert.match(approved.converted_to_mission_id, /^wrk_/, 'durable WORKS Work ID as correlation');
+
+    const wr = await fetch(`${WORKS_BASE}/v1/works/${approved.converted_to_mission_id}`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
 
     // (work verification moved above to use WORKS_BASE)
     assert.equal(wr.status, 200);
