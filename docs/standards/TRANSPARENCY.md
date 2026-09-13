@@ -890,3 +890,13 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 284 | `egress_redirect_refused` | gateway/governed-egress.js (egress: redirect refused) |
 | 285 | `egress_dispatched` | gateway/governed-egress.js (egress: dispatched) |
 | 286 | `proposal_works_failed` | mounts/23-missions.js (W0.3: configured WORKS submission failed; proposal remains submitted and no synthetic mission is minted) |
+| 287 | `tenant_lifecycle_read` | mounts/161-tenant-lifecycle-transitions.js (TG85: {by, tenant, state} — operator read a tenant lifecycle record) |
+| 288 | `tenant_lifecycle_read_denied` | mounts/161-tenant-lifecycle-transitions.js (TG85: {bot} — non-operator attempted lifecycle record read) |
+| 289 | `tenant_lifecycle_opened` | mounts/161-tenant-lifecycle-transitions.js (TG85: {by, tenant} — operator opened a tenant lifecycle record in active state) |
+| 290 | `tenant_lifecycle_open_failed` | mounts/161-tenant-lifecycle-transitions.js (TG85: {by, tenant, reason} — lifecycle open rejected: invalid owners or record exists) |
+| 291 | `tenant_lifecycle_open_denied` | mounts/161-tenant-lifecycle-transitions.js (TG85: {bot} — non-operator attempted lifecycle record open) |
+| 292 | `tenant_lifecycle_transitioned` | mounts/161-tenant-lifecycle-transitions.js (TG85: {by, tenant, state} — operator moved a tenant through a TEN-0.1 transition allowed by canTransitionTenant) |
+| 293 | `tenant_lifecycle_transition_denied` | mounts/161-tenant-lifecycle-transitions.js (TG85: {by, tenant, reason} — non-operator attempt or a TEN-0.1 transition refused by canTransitionTenant; nothing persisted) |
+| 294 | `tenant_lifecycle_acked` | mounts/161-tenant-lifecycle-transitions.js (TG85: {by, tenant, owner, ack} — operator recorded an owner acknowledgement of a validated kind) |
+| 295 | `tenant_lifecycle_ack_failed` | mounts/161-tenant-lifecycle-transitions.js (TG85: {by, tenant, reason} — acknowledgement rejected: bad kind, unknown owner, or missing record) |
+| 296 | `tenant_lifecycle_ack_denied` | mounts/161-tenant-lifecycle-transitions.js (TG85: {bot} — non-operator attempted acknowledgement record) |
