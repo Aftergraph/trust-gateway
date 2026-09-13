@@ -395,7 +395,7 @@ plugins.js) across all files under `src/gateway/`.
 | 67 | `adapter_credentials_forbidden` | mounts/70-adapters.js (non-operator credential write attempt) |
 | 68 | `adapter_credentials_set` | mounts/70-adapters.js (Vault lifecycle success metadata only; never the value) |
 | 69 | `adapter_credentials_rejected` | mounts/70-adapters.js (Vault lifecycle refusal code only) |
-| 69a | `adapter_management_forbidden` | mounts/70-adapters.js (worker attempted adapter register/update/delete without operator role or `adapter.manage`; no body/config stored) |
+| 70 | `adapter_management_forbidden` | mounts/70-adapters.js (worker attempted adapter register/update/delete without operator role or `adapter.manage`; no body/config stored) |
 | 65 | `deploy_artifact` | mounts/75-deploy.js (wave C: rendered service/launcher downloads) |
 | 66 | `openai_request` | mounts/85-openai.js (counts only: model, bot, msgCount, charsIn/Out, streaming — no message content) |
 | 67 | `trust_scan` | mounts/91-trust.js (D4: metadata ONLY — chars, hits, rule names; scanned text is NEVER stored or logged) |
