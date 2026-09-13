@@ -86,20 +86,30 @@ module.exports = {
             gw._audit({ type: 'proposal_approve_forbidden', proposal_id: id, bot: ctx.bot.name });
             return send(res, 403, { error: 'operator_required' });
           }
-          // W0.3: prefer a real WORKS Work over a synthetic mission id. If the
-          // control plane is configured (WORKS_API_URL) and reachable, the Work ID
-          // becomes the durable correlation; otherwise missions.js synthetic id
-          // keeps the chain coherent (fail-open on correlation, fail-closed on auth).
-          let missionId = body.mission_id;
+          const proposal = store.get(id);
+          if (!proposal) return send(res, 404, { error: 'not_found' });
+          if (proposal.status !== 'submitted') {
+            return send(res, 409, { error: `proposal: cannot approve from status ${proposal.status}` });
+          }
+          // Once WORKS is configured, its Work record is the authority for
+          // proposals carrying a mission spec. A caller-supplied mission_id
+          // cannot bypass creation or manufacture a correlation.
+          const worksConfigured = Boolean(process.env.WORKS_API_URL);
+          let missionId = proposal.proposed_mission && worksConfigured ? null : body.mission_id;
           let works = null;
-          if (!missionId && store.proposals.get(id) && store.proposals.get(id).proposed_mission) {
-            const spec = store.proposals.get(id).proposed_mission;
+          if (!missionId && proposal.proposed_mission) {
+            const spec = proposal.proposed_mission;
             works = await worksCreateWork({
-              objective: spec.objective || store.proposals.get(id).objective,
+              objective: spec.objective || proposal.objective,
               success_criteria: spec.success_criteria,
               mission_id: id,
             });
             if (works.ok) missionId = works.work_id;
+            if (!works.ok && worksConfigured) {
+              const reason = String(works.reason || 'unknown').slice(0, 200);
+              gw._audit({ type: 'proposal_works_failed', proposal_id: id, reason });
+              return send(res, 502, { error: 'works_submission_failed', proposal_id: id, detail: reason });
+            }
           }
           const p = store.approve(id, ctx.bot.name, missionId);
           gw._audit({
@@ -110,8 +120,7 @@ module.exports = {
             works_ok: works ? works.ok : null,
           });
           return send(res, 200, { ok: true, proposal: p, works });
-        }
-        if (verb === 'reject') {
+        }        if (verb === 'reject') {
           if (!canApprove(ctx.bot)) {
             gw._audit({ type: 'proposal_reject_forbidden', proposal_id: id, bot: ctx.bot.name });
             return send(res, 403, { error: 'operator_required' });
