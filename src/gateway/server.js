@@ -8,6 +8,7 @@ const path = require('node:path');
 const { EventEmitter } = require('node:events');
 const { getSseTicketStore } = require('./events-ticket');
 const { HashChain } = require('./hash-chain');
+const { admissionDecisionIdForEntry } = require('./platform-event-ref');
 const { classify, decide } = require('./policy');
 const { computeImpact } = require('./impact');
 const { ApprovalStore } = require('./approvals');
@@ -619,7 +620,8 @@ class Gateway extends EventEmitter {
       // Never store secret values; store length only.
       argsLength: args === undefined || args === null ? 0 : JSON.stringify(args).length,
     };
-    this._audit(auditPayload);
+    const decisionEntry = this._audit(auditPayload);
+    const admissionDecisionId = admissionDecisionIdForEntry(decisionEntry);
 
     if (verdict.decision === 'deny') {
       return send(res, 403, { ...verdict, audited: true });
@@ -673,7 +675,7 @@ class Gateway extends EventEmitter {
     try {
       const result = await this._run(bot.name, tool, args);
       this._audit({ type: 'action_executed', bot: bot.name, tool, ok: true });
-      return send(res, 200, { decision: 'allow', result });
+      return send(res, 200, { decision: 'allow', admission_decision_id: admissionDecisionId, result });
     } catch (e) {
       this._audit({ type: 'action_executed', bot: bot.name, tool, ok: false, error: String(e && e.message) });
       return send(res, 502, { decision: 'allow', error: 'dispatch_failed' });

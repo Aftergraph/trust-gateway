@@ -88,6 +88,18 @@ function _eventId(entry) {
   return `evt_${digest.slice(0, 32)}`;
 }
 
+function admissionDecisionIdForEntry(entry) {
+  _assertNativeEntry(entry);
+  if (entry.payload.type !== 'action_decision') {
+    throw new TypeError('admission decision id requires an action_decision entry');
+  }
+  const digest = crypto
+    .createHash('sha256')
+    .update(`trust-gateway\0action_decision\0${entry.seq}\0${entry.hash}`, 'utf8')
+    .digest('hex');
+  return `pdr_${digest.slice(0, 32)}`;
+}
+
 function projectPlatformEventRef(entry, { subjectRef, correlation, tenantBinding } = {}) {
   _assertNativeEntry(entry);
   _assertCorrelation(correlation);
@@ -133,5 +145,6 @@ function projectPlatformEventRef(entry, { subjectRef, correlation, tenantBinding
 }
 
 module.exports = {
+  admissionDecisionIdForEntry,
   projectPlatformEventRef,
 };

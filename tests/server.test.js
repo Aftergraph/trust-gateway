@@ -61,6 +61,22 @@ test('read action: allowed + dispatched + audited', async () => {
   assert.ok(gw.chain.entries.some((e) => e.payload.type === 'action_executed'));
 });
 
+test('allowed action returns a canonical admission decision id bound to the sealed decision', async () => {
+  const crypto = require('node:crypto');
+  const gw = makeGateway();
+  const r = mockReqRes('POST', '/v1/actions', JSON.stringify({ tool: 'fs.read:notes/x.md' }), 'tok-forge');
+  await gw.handle(r.req, r.res);
+
+  assert.equal(r.getStatus(), 200);
+  const decisionEntry = gw.chain.entries.find((entry) => entry.payload.type === 'action_decision');
+  assert.ok(decisionEntry, 'sealed action_decision entry required');
+  const expected = 'pdr_' + crypto.createHash('sha256')
+    .update(`trust-gateway\0action_decision\0${decisionEntry.seq}\0${decisionEntry.hash}`, 'utf8')
+    .digest('hex').slice(0, 32);
+  assert.equal(r.getBody().admission_decision_id, expected);
+  assert.match(r.getBody().admission_decision_id, /^pdr_[a-f0-9]{32}$/);
+});
+
 test('write without capability → 202 needs_approval', async () => {
   const gw = makeGateway();
   const { req, res, getStatus, getBody } = mockReqRes('POST', '/v1/actions', JSON.stringify({ tool: 'fs.write:new.txt' }), 'tok-auditor');
