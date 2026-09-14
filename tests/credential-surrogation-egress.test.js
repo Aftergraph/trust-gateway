@@ -322,6 +322,46 @@ test('raw secret is injected only inside broker transport and never returned or 
   });
 });
 
+test('transport error exposing the secret is redacted from audit and the propagated error', async () => {
+  await fixture('transport-error-redaction', async ({ db, vault }) => {
+    const secret = 'ghp_LEAKED_BY_TRANSPORT';
+    vault.setSecret('main', 'github-token', secret);
+    const store = new CredentialHandleStore({ db, vault, now: () => 1_000 });
+    const h = issue(store);
+    const { broker: b, audit } = broker(store, {
+      // A verbose client echoes the injected authorization header in the
+      // failure message it throws. Before the fix this reached the audit
+      // log unscrubbed and was rethrown verbatim to the caller.
+      transport: async () => {
+        const err = new Error(`socket hang up sending Authorization: Bearer ${secret}`);
+        err.code = 'ECONNRESET';
+        throw err;
+      },
+    });
+    const admission = await b.admit(request(h.handleId));
+
+    let caught;
+    try {
+      await b.dispatch(admission, request(h.handleId));
+    } catch (err) {
+      caught = err;
+    }
+    assert.ok(caught, 'dispatch must reject when the transport throws');
+    // The secret must not survive into the durable audit log.
+    assert.ok(!JSON.stringify(audit).includes(secret), 'audit log leaked the transport secret');
+    // The secret must not survive into the error propagated to callers.
+    assert.ok(!String(caught?.message || '').includes(secret), 'thrown error message leaked the secret');
+    assert.ok(!String(caught?.code || '').includes(secret), 'thrown error code leaked the secret');
+    assert.ok(!String(caught?.details || '').includes(secret), 'thrown error details leaked the secret');
+    // The stable code is preserved so callers can still match on it.
+    assert.equal(caught.code, 'ECONNRESET');
+    // An egress_failed audit record exists with the redacted error.
+    const failed = audit.find((e) => e.type === 'egress_failed');
+    assert.ok(failed, 'egress_failed audit record emitted');
+    assert.ok(!String(failed.error).includes(secret), 'audit error field leaked the secret');
+  });
+});
+
 test('commit lease is mandatory and transport must report an admitted address', async () => {
   await fixture('commit-boundary', async ({ db, vault }) => {
     vault.setSecret('main', 'github-token', 'secret');
