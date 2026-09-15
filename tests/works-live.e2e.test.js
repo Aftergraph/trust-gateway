@@ -9,6 +9,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFileSync, spawn } = require('node:child_process');
 const http = require('node:http');
+const net = require('node:net');
 
 let WORKS_DIR = path.join(__dirname, '..', '..', 'works-execution');
 if (/^[A-Za-z]:\\/.test(WORKS_DIR) || /^[A-Za-z]:\//.test(WORKS_DIR)) {
@@ -46,6 +47,19 @@ function windowsHostIP() {
 
 function goAvailable() { return !!GO; }
 
+async function reserveFreePort() {
+  return await new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const addr = server.address();
+      const port = addr && typeof addr === 'object' ? addr.port : null;
+      server.close((err) => err ? reject(err) : resolve(port));
+    });
+  });
+}
+
+
 const hasGo = goAvailable();
 const hasWorks = fs.existsSync(path.join(WORKS_DIR, 'go.mod'));
 
@@ -62,7 +76,7 @@ test('W0.3 live: TG proposal approve -> real WORKS Work with correlation', { ski
   execFileSync(GO, ['build', '-o', apiBin, './cmd/works-api'], { cwd: WORKS_DIR, timeout: 300000 });
 
   // ── boot works-api on an ephemeral port with enroll secret ──
-  const port = 8800 + Math.floor(Math.random() * 100);
+  const port = await reserveFreePort();
   const dbFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'w03-')), 'works.db');
   const enrollSecret = 'w03-e2e-secret';
   const apiArgs = ['-addr', `127.0.0.1:${port}`, '-db', dbFile, '-enroll-secret', enrollSecret];
@@ -85,6 +99,9 @@ test('W0.3 live: TG proposal approve -> real WORKS Work with correlation', { ski
     let healthy = false;
     let base = '';
     for (let i = 0; i < 20 && !healthy; i++) {
+      if (api.exitCode !== null) {
+        throw new Error(`works-api exited before health check (code=${api.exitCode})`);
+      }
       for (const host of ['127.0.0.1', windowsHostIP()]) {
         try {
           const r = await fetch(`http://${host}:${port}/healthz`);
@@ -97,7 +114,7 @@ test('W0.3 live: TG proposal approve -> real WORKS Work with correlation', { ski
     const WORKS_BASE = base;
 
     // ── enroll a worker-scope token to submit Works (operator-equivalent for the API) ──
-    const enr = await fetch(`http://127.0.0.1:${port}/v1/workers/enroll`, {
+    const enr = await fetch(`${WORKS_BASE}/v1/workers/enroll`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ worker_id: 'wrkr_w03e2e', challenge: enrollSecret, scope: 'worker' }),
