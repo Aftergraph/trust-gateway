@@ -248,7 +248,7 @@ class PluginHub {
   _save() {
     fs.mkdirSync(this.dataDir, { recursive: true });
     const tmp = this.stateFile + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(this.state, null, 2) + '\n');
+    fs.writeFileSync(tmp, JSON.stringify(this.state) + '\n');
     try { fs.chmodSync(tmp, 0o600); } catch { /* best effort */ }
     fs.renameSync(tmp, this.stateFile);
     try { fs.chmodSync(this.stateFile, 0o600); } catch { /* best effort */ }

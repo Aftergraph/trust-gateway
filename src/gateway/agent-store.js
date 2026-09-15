@@ -149,7 +149,7 @@ class AgentStore {
     };
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     const tmp = this.file + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(payload, null, 2) + '\n');
+    fs.writeFileSync(tmp, JSON.stringify(payload) + '\n');
     fs.renameSync(tmp, this.file);
     try { fs.chmodSync(this.file, 0o600); } catch { /* best effort */ }
   }
