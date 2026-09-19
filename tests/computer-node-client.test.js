@@ -254,6 +254,40 @@ test('computer node client: provider errors are not converted into clean finding
   }
 });
 
+test('computer node client: refuses HTTP redirects instead of following node transport', async () => {
+  const redirectTarget = http.createServer((_req, res) => {
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ nodeId: 'should-not-be-reached', providers: [] }));
+  });
+  const targetBase = await listen(redirectTarget);
+
+  const redirector = http.createServer((_req, res) => {
+    res.statusCode = 302;
+    res.setHeader('location', targetBase + '/v1/manifest');
+    res.end();
+  });
+  const redirectBase = await listen(redirector);
+
+  process.env.TG_COMPUTER_NODE_URL = redirectBase;
+  process.env.TG_COMPUTER_NODE_TOKEN = TOKEN;
+  process.env.TG_COMPUTER_FILE = tmpFile('computer-redirect.json');
+
+  const gateway = makeGateway();
+  const gatewayServer = http.createServer((req, res) => gateway.handle(req, res));
+  const base = await listen(gatewayServer);
+  try {
+    const result = await call(base, 'GET', '/v2/computer/providers');
+    assert.equal(result.status, 503);
+    assert.equal(result.body.error, 'computer_node_unavailable');
+    assert.equal(result.body.reason, 'node_unavailable');
+  } finally {
+    clearNodeEnv();
+    await new Promise((resolve) => gatewayServer.close(resolve));
+    await new Promise((resolve) => redirector.close(resolve));
+    await new Promise((resolve) => redirectTarget.close(resolve));
+  }
+});
+
 test('computer node client: incomplete config fails closed without leaking configuration', async () => {
   process.env.TG_COMPUTER_NODE_URL = 'http://127.0.0.1:1';
   delete process.env.TG_COMPUTER_NODE_TOKEN;
