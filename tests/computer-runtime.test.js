@@ -161,6 +161,36 @@ test('computer v1: health inspection sanitizes findings and reports partial prov
   assert.deepEqual(out.errors, [{ providerId: 'cua', error: 'provider_failed' }]);
 });
 
+test('computer v1: times out stuck providers and marks malformed provider output as failure', async () => {
+  const registry = new ComputerProviderRegistry({ inspectionTimeoutMs: 20 });
+  registry.register({
+    id: 'stuck',
+    kind: 'custom',
+    version: '1',
+    nodeId: 'jonas-lenovo',
+    capabilities: ['computer.health.inspect'],
+  }, {
+    inspectHealth: async () => new Promise(() => {}),
+  });
+  registry.register({
+    id: 'malformed',
+    kind: 'custom',
+    version: '1',
+    nodeId: 'jonas-lenovo',
+    capabilities: ['computer.health.inspect'],
+  }, {
+    inspectHealth: async () => ({ findings: 'not-an-array' }),
+  });
+
+  const out = await registry.inspectHealth({ depth: 'standard' });
+  assert.equal(out.ok, false);
+  assert.equal(out.partial, true);
+  assert.deepEqual(out.errors, [
+    { providerId: 'stuck', error: 'provider_timeout' },
+    { providerId: 'malformed', error: 'provider_malformed_result' },
+  ]);
+});
+
 test('computer v1: no registered health provider fails closed as unavailable with no synthetic findings', async () => {
   const registry = new ComputerProviderRegistry();
   const out = await registry.inspectHealth({ depth: 'standard' });
@@ -197,6 +227,9 @@ test('HTTP computer v1: providers and health inspect are operator-only', async (
     const denied = await call(base, 'GET', '/v2/computer/providers', { token: 'tok-forge' });
     assert.equal(denied.status, 403);
     assert.equal(denied.body.error, 'operator_required');
+
+    const queryToken = await fetch(base + '/v2/computer/providers?token=tok-atlas');
+    assert.equal(queryToken.status, 401);
 
     const providers = await call(base, 'GET', '/v2/computer/providers');
     assert.equal(providers.status, 200);
