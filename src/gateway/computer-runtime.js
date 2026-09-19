@@ -153,8 +153,7 @@ class ComputerProviderRegistry {
       }
       try {
         const timeout = new Promise((_, reject) => {
-          const timer = setTimeout(() => reject(new Error('provider_timeout')), this.inspectionTimeoutMs);
-          if (typeof timer.unref === 'function') timer.unref();
+          setTimeout(() => reject(new Error('provider_timeout')), this.inspectionTimeoutMs);
         });
         const out = await Promise.race([
           provider.adapter.inspectHealth({ depth }),
