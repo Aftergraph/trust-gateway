@@ -219,7 +219,7 @@ below is missing one.
   Auth is handled in-handler.
 - **Audit events:** `computer_session_created`, `computer_frame`,
   `computer_frame_denied`, `computer_control_denied`, `computer_state_changed`,
-  `control_taken`, `control_released`, `auth_rejected`.
+  `computer_inspection`, `control_taken`, `control_released`, `auth_rejected`.
 - **Storage:** `data/computer.json` (atomic, 0600; `TG_COMPUTER_FILE` env override).
 - **Inspect:** `GET /v2/computer/:id` returns session + frames + chain
   verification for that session.
