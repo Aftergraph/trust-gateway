@@ -155,6 +155,17 @@ test('computer v0.2: observation and effects use distinct transport/authority ch
     assert.equal(withheldShell.body.error, 'capability_withheld_v02');
     assert.equal(seenActions.length, 1);
 
+    const withheldWrite = await call(base, 'POST', '/v2/computer/action', {
+      body: {
+        providerId: 'native-windows-control',
+        capability: 'computer.files.write',
+        input: { path: 'C:\\temp\\blocked.txt', content: 'NOPE' },
+      },
+    });
+    assert.equal(withheldWrite.status, 409);
+    assert.equal(withheldWrite.body.error, 'capability_withheld_v02');
+    assert.equal(seenActions.length, 1);
+
     const deniedWorker = await call(base, 'POST', '/v2/computer/action', {
       token: 'tok-forge',
       body: {
