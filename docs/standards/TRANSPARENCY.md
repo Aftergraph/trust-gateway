@@ -213,7 +213,10 @@ below is missing one.
 ### `computer.js` + mount `42-computer.js` — live computer sessions
 - **Endpoints:** `POST|GET /v2/computer`, `GET /v2/computer/:id`,
   `POST /v2/computer/:id/frames`, `POST /v2/computer/:id/control`
-  (operator-only), `GET /v2/computer/:id/stream` (SSE). Auth in-handler.
+  (operator-only), `GET /v2/computer/:id/stream` (SSE),
+  `GET /v2/computer/providers` (operator-only provider projection), and
+  `POST /v2/computer/inspect` (operator-only sanitized health inspection).
+  Auth is handled in-handler.
 - **Audit events:** `computer_session_created`, `computer_frame`,
   `computer_frame_denied`, `computer_control_denied`, `computer_state_changed`,
   `control_taken`, `control_released`, `auth_rejected`.
