@@ -26,6 +26,7 @@ const crypto = require('node:crypto');
 const { send, readBody, canApprove } = require('../server');
 const { getHub } = require('../events');
 const { ComputerStore, KINDS, getComputerStore } = require('../computer');
+const { DEPTHS, getComputerProviderRegistry } = require('../computer-runtime');
 
 function authBot(gw, req, url) {
   const h = req.headers['authorization'] || '';
@@ -105,6 +106,34 @@ async function route(gw, req, res, ctx, pathname) {
   const seg = pathname.split('/').filter(Boolean); // ['v2','computer',id?,sub?]
   const store = getComputerStore(gw);
   const method = req.method;
+  const providers = getComputerProviderRegistry(gw);
+
+  // ── canonical host/provider surface (Computer v1) ──
+  // Provider metadata and host inspection are operator-only because even
+  // read-only host topology can reveal sensitive machine information.
+  if (seg.length === 3 && seg[2] === 'providers' && method === 'GET') {
+    if (!canApprove(bot)) {
+      gw._audit({ type: 'computer_control_denied', bot: bot.name, action: 'providers', reason: 'operator_required' });
+      return send(res, 403, { error: 'operator_required' });
+    }
+    return send(res, 200, { providers: providers.list() });
+  }
+
+  if (seg.length === 3 && seg[2] === 'inspect' && method === 'POST') {
+    if (!canApprove(bot)) {
+      gw._audit({ type: 'computer_control_denied', bot: bot.name, action: 'inspect', reason: 'operator_required' });
+      return send(res, 403, { error: 'operator_required' });
+    }
+    let body;
+    try { body = await bodyJson(req); } catch (e) { return parseOr400(res, e); }
+    if ((body.scope ?? 'health') !== 'health')
+      return send(res, 400, { error: 'bad_scope', allowed: ['health'] });
+    const depth = body.depth ?? 'standard';
+    if (!DEPTHS.includes(depth))
+      return send(res, 400, { error: 'bad_depth', allowed: DEPTHS });
+    const out = await providers.inspectHealth({ depth });
+    return send(res, out.unavailable ? 503 : 200, out);
+  }
 
   // ── collection ──
   if (seg.length === 2 && method === 'POST') {
