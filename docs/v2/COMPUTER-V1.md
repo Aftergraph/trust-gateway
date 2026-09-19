@@ -126,11 +126,13 @@ names are implementation details.
 
 ## Runtime boundary
 
-Computer v1 intentionally stops at the provider ABI. A physical Computer Node may
-run DesktopCommanderMCP, Cua Driver, native Windows probes, or another provider
-and register adapters into the gateway runtime. Transport, device identity, and
-node heartbeat are separate runtime concerns and must not grant authority by
-themselves.
+Computer v1 keeps provider execution outside Trust Gateway. A physical Computer Node may
+run DesktopCommanderMCP, Cua Driver, native Windows probes, or another provider.
+Trust Gateway attaches an external node when `TG_COMPUTER_NODE_URL` and
+`TG_COMPUTER_NODE_TOKEN` are both configured. The token and URL remain private
+runtime configuration and never enter provider projections. Transport, device
+identity, and node heartbeat are separate runtime concerns and must not grant
+authority by themselves.
 
 Target data flow:
 
@@ -165,3 +167,14 @@ The implementation ships with tests for:
 
 Production readiness additionally requires a real Computer Node adapter and
 exact-head CI evidence.
+
+## Computer Node v1
+
+The first node implementation lives in `Aftergraph/runtime/packages/computer-node`.
+It exposes an authenticated loopback-first HTTP protocol:
+
+- `GET /v1/manifest`
+- `POST /v1/inspect`
+
+Its built-in `native-windows` provider performs read-only PowerShell/CIM health
+inspection. Arbitrary remote shell execution is intentionally not part of v1.
