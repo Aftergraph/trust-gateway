@@ -215,11 +215,14 @@ below is missing one.
   `POST /v2/computer/:id/frames`, `POST /v2/computer/:id/control`
   (operator-only), `GET /v2/computer/:id/stream` (SSE),
   `GET /v2/computer/providers` (operator-only provider projection), and
-  `POST /v2/computer/inspect` (operator-only sanitized health inspection).
-  Auth is handled in-handler.
+  `POST /v2/computer/inspect` (operator-only sanitized health inspection), and
+  `POST /v2/computer/action` (operator-only provider-neutral action admission;
+  effectful capabilities additionally require a live ComputerSession and the
+  separate node authority channel). Auth is handled in-handler.
 - **Audit events:** `computer_session_created`, `computer_frame`,
   `computer_frame_denied`, `computer_control_denied`, `computer_state_changed`,
-  `computer_inspection`, `control_taken`, `control_released`, `auth_rejected`.
+  `computer_inspection`, `computer_action`, `control_taken`, `control_released`,
+  `auth_rejected`.
 - **Storage:** `data/computer.json` (atomic, 0600; `TG_COMPUTER_FILE` env override).
 - **Inspect:** `GET /v2/computer/:id` returns session + frames + chain
   verification for that session.
