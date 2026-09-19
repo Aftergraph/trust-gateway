@@ -233,9 +233,10 @@ test('computer node client: provider errors are not converted into clean finding
       scope: 'health',
       depth: 'standard',
     });
-    assert.equal(health.status, 200);
+    assert.equal(health.status, 503);
     assert.equal(health.body.ok, false);
-    assert.equal(health.body.partial, true);
+    assert.equal(health.body.unavailable, true);
+    assert.equal(health.body.partial, false);
     assert.deepEqual(health.body.findings, []);
     assert.deepEqual(health.body.errors, [
       { providerId: 'native-windows', error: 'provider_failed' },
@@ -243,7 +244,8 @@ test('computer node client: provider errors are not converted into clean finding
 
     const audits = gateway.chain.entries.map((entry) => entry.payload)
       .filter((payload) => payload && payload.type === 'computer_inspection');
-    assert.equal(audits.at(-1).outcome, 'partial');
+    assert.equal(audits.at(-1).outcome, 'unavailable');
+    assert.equal(audits.at(-1).providerCount, 0);
     assert.equal(audits.at(-1).errorCount, 1);
   } finally {
     clearNodeEnv();
