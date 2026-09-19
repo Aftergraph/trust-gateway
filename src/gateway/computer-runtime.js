@@ -152,9 +152,10 @@ class ComputerProviderRegistry {
         errors.push({ providerId: provider.manifest.id, error: 'adapter_missing_inspect_health' });
         continue;
       }
+      let timer = null;
       try {
         const timeout = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('provider_timeout')), this.inspectionTimeoutMs);
+          timer = setTimeout(() => reject(new Error('provider_timeout')), this.inspectionTimeoutMs);
         });
         const out = await Promise.race([
           provider.adapter.inspectHealth({ depth }),
@@ -174,6 +175,8 @@ class ComputerProviderRegistry {
           providerId: provider.manifest.id,
           error: String(e && e.message) === 'provider_timeout' ? 'provider_timeout' : 'provider_failed',
         });
+      } finally {
+        if (timer !== null) clearTimeout(timer);
       }
     }
 
