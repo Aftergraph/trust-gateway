@@ -144,6 +144,17 @@ test('computer v0.2: observation and effects use distinct transport/authority ch
     assert.equal(seenActions.length, 1);
     assert.equal(seenActions[0].authority, null);
 
+    const withheldShell = await call(base, 'POST', '/v2/computer/action', {
+      body: {
+        providerId: 'native-windows-control',
+        capability: 'computer.shell.start',
+        input: {},
+      },
+    });
+    assert.equal(withheldShell.status, 409);
+    assert.equal(withheldShell.body.error, 'capability_withheld_v02');
+    assert.equal(seenActions.length, 1);
+
     const deniedWorker = await call(base, 'POST', '/v2/computer/action', {
       token: 'tok-forge',
       body: {
