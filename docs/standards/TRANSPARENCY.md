@@ -345,72 +345,73 @@ plugins.js) across all files under `src/gateway/`.
 | 14 | `computer_frame` | mounts/42-computer.js |
 | 15 | `computer_frame_denied` | mounts/42-computer.js |
 | 16 | `computer_session_created` | mounts/42-computer.js |
-| 17 | `computer_state_changed` | mounts/42-computer.js |
-| 18 | `control_released` | mounts/42-computer.js |
-| 19 | `control_taken` | mounts/42-computer.js |
-| 20 | `genesis` | hash-chain.js, sql-chain.js |
-| 21 | `goal_added` | continuity.js |
-| 22 | `goal_cleared` | continuity.js |
-| 23 | `goal_completed` | continuity.js |
-| 24 | `goal_loop_started` | continuity.js |
-| 25 | `goal_loop_stopped` | continuity.js |
-| 26 | `goal_paused` | continuity.js |
-| 27 | `goal_resumed` | continuity.js |
-| 28 | `goal_step_awaiting_approval` | continuity.js |
-| 29 | `goal_step_denied` | continuity.js |
-| 30 | `goal_stepped` | continuity.js |
-| 31 | `mcp_registered` | plugins.js |
-| 32 | `mcp_rejected` | plugins.js |
-| 33 | `mcp_unregistered` | plugins.js |
-| 34 | `plugin_disabled` | plugins.js |
-| 35 | `plugin_enabled` | plugins.js |
-| 36 | `plugin_installed` | plugins.js |
-| 37 | `plugin_rejected` | plugins.js |
-| 38 | `plugin_uninstalled` | plugins.js |
-| 39 | `plugins_forbidden` | mounts/35-plugins.js |
-| 40 | `profile_updated` | mounts/31-agents.js |
-| 41 | `provider_plan` | mounts/45-providers.js |
-| 42 | `provider_probe` | mounts/45-providers.js |
-| 43 | `room_created` | groups.js |
-| 44 | `room_deleted` | groups.js |
-| 45 | `room_handoff` | groups.js |
-| 46 | `room_limit_hit` | groups.js |
-| 47 | `room_message` | groups.js |
-| 48 | `secret_configured` | plugins.js |
-| 49 | `secret_removed` | plugins.js |
-| 50 | `selfrepair_diagnosed` | selfrepair.js |
-| 51 | `slash_run` | continuity.js |
-| 52 | `harness_build` | mounts/55-harness.js (wave B executors, merged after doc extraction) |
-| 53 | `harness_result` | mounts/55-harness.js |
-| 54 | `playground_run` | mounts/80-playground.js (wave C) |
-| 55 | `worktree_snapshot` | mounts/55-harness.js |
-| 56 | `worktree_remove` | mounts/55-harness.js |
-| 57 | `web_fetch` | mounts/65-web.js, src/gateway/webtools.js |
-| 58 | `voice_stt` | mounts/60-voice.js (wave C) |
-| 59 | `voice_tts` | mounts/60-voice.js (wave C) |
-| 60 | `adapter_registered` | mounts/70-adapters.js (wave C integration adapters) |
-| 61 | `adapter_updated` | mounts/70-adapters.js |
-| 62 | `adapter_deleted` | mounts/70-adapters.js |
-| 63 | `adapter_test_blocked` | mounts/70-adapters.js (no trusted context resolver or adapter-bound broker; legacy direct probe is never used) |
-| 64 | `adapter_credentials_blocked` | mounts/70-adapters.js (no injected Vault lifecycle; legacy hash-only secret path is never used) |
-| 65 | `adapter_test_governed` | mounts/70-adapters.js (successful governed probe metadata only: adapter, tenant, bot, status) |
-| 66 | `adapter_test_rejected` | mounts/70-adapters.js (governed probe refusal code only; no request body or secret) |
-| 67 | `adapter_credentials_forbidden` | mounts/70-adapters.js (non-operator credential write attempt) |
-| 68 | `adapter_credentials_set` | mounts/70-adapters.js (Vault lifecycle success metadata only; never the value) |
-| 69 | `adapter_credentials_rejected` | mounts/70-adapters.js (Vault lifecycle refusal code only) |
-| 70 | `adapter_management_forbidden` | mounts/70-adapters.js (worker attempted adapter register/update/delete without operator role or `adapter.manage`; no body/config stored) |
-| 65 | `deploy_artifact` | mounts/75-deploy.js (wave C: rendered service/launcher downloads) |
-| 66 | `openai_request` | mounts/85-openai.js (counts only: model, bot, msgCount, charsIn/Out, streaming — no message content) |
-| 67 | `trust_scan` | mounts/91-trust.js (D4: metadata ONLY — chars, hits, rule names; scanned text is NEVER stored or logged) |
-| 68 | `provider_live_access_denied` | mounts/92-providers-live.js (D5: worker attempted access to live probe) |
-| 69 | `provider_live_probed` | mounts/92-providers-live.js (D5: operator successfully probed providers) |
-| 70 | `telegram_notify` | mounts/71-telegram.js (D2: chat_id + chars + outcome only — never text, never token) |
-| 71 | `adapter_handle_forbidden` | mounts/70-adapters.js (non-operator handle lifecycle attempt; no handle id or body) |
-| 72 | `adapter_handle_blocked` | mounts/70-adapters.js (handle lifecycle unavailable; no secret material) |
-| 73 | `adapter_handle_inspected` | mounts/70-adapters.js (operator inspected handle metadata; no handle id or key) |
-| 74 | `adapter_handle_issued` | mounts/70-adapters.js (opaque handle issuance metadata; no handle id, Vault key, or plaintext) |
-| 75 | `adapter_handle_revoked` | mounts/70-adapters.js (operator revoked handle; no handle id or secret material) |
-| 76 | `adapter_handle_rejected` | mounts/70-adapters.js (handle lifecycle refusal code only; no handle id, body, or secret material) |
+| 17 | `computer_inspection` | mounts/42-computer.js |
+| 18 | `computer_state_changed` | mounts/42-computer.js |
+| 19 | `control_released` | mounts/42-computer.js |
+| 20 | `control_taken` | mounts/42-computer.js |
+| 21 | `genesis` | hash-chain.js, sql-chain.js |
+| 22 | `goal_added` | continuity.js |
+| 23 | `goal_cleared` | continuity.js |
+| 24 | `goal_completed` | continuity.js |
+| 25 | `goal_loop_started` | continuity.js |
+| 26 | `goal_loop_stopped` | continuity.js |
+| 27 | `goal_paused` | continuity.js |
+| 28 | `goal_resumed` | continuity.js |
+| 29 | `goal_step_awaiting_approval` | continuity.js |
+| 30 | `goal_step_denied` | continuity.js |
+| 31 | `goal_stepped` | continuity.js |
+| 32 | `mcp_registered` | plugins.js |
+| 33 | `mcp_rejected` | plugins.js |
+| 34 | `mcp_unregistered` | plugins.js |
+| 35 | `plugin_disabled` | plugins.js |
+| 36 | `plugin_enabled` | plugins.js |
+| 37 | `plugin_installed` | plugins.js |
+| 38 | `plugin_rejected` | plugins.js |
+| 39 | `plugin_uninstalled` | plugins.js |
+| 40 | `plugins_forbidden` | mounts/35-plugins.js |
+| 41 | `profile_updated` | mounts/31-agents.js |
+| 42 | `provider_plan` | mounts/45-providers.js |
+| 43 | `provider_probe` | mounts/45-providers.js |
+| 44 | `room_created` | groups.js |
+| 45 | `room_deleted` | groups.js |
+| 46 | `room_handoff` | groups.js |
+| 47 | `room_limit_hit` | groups.js |
+| 48 | `room_message` | groups.js |
+| 49 | `secret_configured` | plugins.js |
+| 50 | `secret_removed` | plugins.js |
+| 51 | `selfrepair_diagnosed` | selfrepair.js |
+| 52 | `slash_run` | continuity.js |
+| 53 | `harness_build` | mounts/55-harness.js (wave B executors, merged after doc extraction) |
+| 54 | `harness_result` | mounts/55-harness.js |
+| 55 | `playground_run` | mounts/80-playground.js (wave C) |
+| 56 | `worktree_snapshot` | mounts/55-harness.js |
+| 57 | `worktree_remove` | mounts/55-harness.js |
+| 58 | `web_fetch` | mounts/65-web.js, src/gateway/webtools.js |
+| 59 | `voice_stt` | mounts/60-voice.js (wave C) |
+| 60 | `voice_tts` | mounts/60-voice.js (wave C) |
+| 61 | `adapter_registered` | mounts/70-adapters.js (wave C integration adapters) |
+| 62 | `adapter_updated` | mounts/70-adapters.js |
+| 63 | `adapter_deleted` | mounts/70-adapters.js |
+| 64 | `adapter_test_blocked` | mounts/70-adapters.js (no trusted context resolver or adapter-bound broker; legacy direct probe is never used) |
+| 65 | `adapter_credentials_blocked` | mounts/70-adapters.js (no injected Vault lifecycle; legacy hash-only secret path is never used) |
+| 66 | `adapter_test_governed` | mounts/70-adapters.js (successful governed probe metadata only: adapter, tenant, bot, status) |
+| 67 | `adapter_test_rejected` | mounts/70-adapters.js (governed probe refusal code only; no request body or secret) |
+| 68 | `adapter_credentials_forbidden` | mounts/70-adapters.js (non-operator credential write attempt) |
+| 69 | `adapter_credentials_set` | mounts/70-adapters.js (Vault lifecycle success metadata only; never the value) |
+| 70 | `adapter_credentials_rejected` | mounts/70-adapters.js (Vault lifecycle refusal code only) |
+| 71 | `adapter_management_forbidden` | mounts/70-adapters.js (worker attempted adapter register/update/delete without operator role or `adapter.manage`; no body/config stored) |
+| 72 | `deploy_artifact` | mounts/75-deploy.js (wave C: rendered service/launcher downloads) |
+| 73 | `openai_request` | mounts/85-openai.js (counts only: model, bot, msgCount, charsIn/Out, streaming — no message content) |
+| 74 | `trust_scan` | mounts/91-trust.js (D4: metadata ONLY — chars, hits, rule names; scanned text is NEVER stored or logged) |
+| 75 | `provider_live_access_denied` | mounts/92-providers-live.js (D5: worker attempted access to live probe) |
+| 76 | `provider_live_probed` | mounts/92-providers-live.js (D5: operator successfully probed providers) |
+| 77 | `telegram_notify` | mounts/71-telegram.js (D2: chat_id + chars + outcome only — never text, never token) |
+| 78 | `adapter_handle_forbidden` | mounts/70-adapters.js (non-operator handle lifecycle attempt; no handle id or body) |
+| 79 | `adapter_handle_blocked` | mounts/70-adapters.js (handle lifecycle unavailable; no secret material) |
+| 80 | `adapter_handle_inspected` | mounts/70-adapters.js (operator inspected handle metadata; no handle id or key) |
+| 81 | `adapter_handle_issued` | mounts/70-adapters.js (opaque handle issuance metadata; no handle id, Vault key, or plaintext) |
+| 82 | `adapter_handle_revoked` | mounts/70-adapters.js (operator revoked handle; no handle id or secret material) |
+| 83 | `adapter_handle_rejected` | mounts/70-adapters.js (handle lifecycle refusal code only; no handle id, body, or secret material) |
 
 | 71 | `telegram_notify_rejected` | mounts/71-telegram.js (D2: non-operator attempt; reason + bot name only) |
 | 72 | `observation_scanned` | llm-loop.js (E3: per loop turn, tool + hits + chars — never the text) |
