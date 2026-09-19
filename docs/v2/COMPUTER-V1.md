@@ -197,3 +197,50 @@ The external Computer Node bridge has four additional invariants:
 Transport authentication still does not grant execution authority. These rules
 harden observation transport only and do not introduce effectful computer-use
 capabilities.
+
+
+## Computer Node v0.2 action bridge
+
+v0.2 extends the external node bridge with provider-neutral action invocation
+without making the node transport token an authority credential.
+
+New operator surface:
+
+```text
+POST /v2/computer/action
+```
+
+Request shape:
+
+```json
+{
+  "providerId": "native-windows-control",
+  "capability": "computer.process.list",
+  "input": {}
+}
+```
+
+Observation actions remain operator-only at Trust Gateway but do not require a
+ComputerSession. Effectful capabilities additionally require all of the following:
+
+1. the caller passes existing `canApprove` operator authorization;
+2. the capability is in the canonical Computer ABI and is advertised by the
+   selected provider;
+3. a live `ComputerSession` id is supplied and is not terminal or held by a
+   different operator;
+4. Trust Gateway has a separately configured
+   `TG_COMPUTER_NODE_AUTHORITY_TOKEN`;
+5. Computer Node independently verifies the corresponding
+   `X-Aftergraph-Authority` channel.
+
+The ordinary `TG_COMPUTER_NODE_TOKEN` remains transport authentication only.
+It is never forwarded as effect authority.
+
+Successful or refused effectful actions append only a sanitized action/refusal
+summary to the ComputerSession hash chain. Raw command input, file contents,
+process arguments, shell text, node tokens and authority tokens are not copied
+into the audit event or frame.
+
+The v0.2 action bridge is an implementation slice, not a production-readiness
+claim. Promotion requires exact-head Trust Gateway tests, Runtime package
+build/tests and physical-host acceptance against the intended Computer Node.
