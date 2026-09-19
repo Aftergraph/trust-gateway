@@ -27,6 +27,7 @@ const { send, readBody, canApprove } = require('../server');
 const { getHub } = require('../events');
 const { ComputerStore, KINDS, getComputerStore } = require('../computer');
 const { DEPTHS, getComputerProviderRegistry } = require('../computer-runtime');
+const { ensureConfiguredComputerNode } = require('../computer-node-client');
 
 function authBot(gw, req, url) {
   const h = req.headers['authorization'] || '';
@@ -116,6 +117,9 @@ async function route(gw, req, res, ctx, pathname) {
       gw._audit({ type: 'computer_control_denied', bot: bot.name, action: 'providers', reason: 'operator_required' });
       return send(res, 403, { error: 'operator_required' });
     }
+    const node = await ensureConfiguredComputerNode(gw, providers);
+    if (node.configured && !node.ok)
+      return send(res, 503, { error: 'computer_node_unavailable', reason: node.error });
     return send(res, 200, { providers: providers.list() });
   }
 
@@ -131,6 +135,9 @@ async function route(gw, req, res, ctx, pathname) {
     const depth = body.depth ?? 'standard';
     if (!DEPTHS.includes(depth))
       return send(res, 400, { error: 'bad_depth', allowed: DEPTHS });
+    const node = await ensureConfiguredComputerNode(gw, providers);
+    if (node.configured && !node.ok)
+      return send(res, 503, { error: 'computer_node_unavailable', reason: node.error });
     const out = await providers.inspectHealth({ depth });
     return send(res, out.unavailable ? 503 : 200, out);
   }
