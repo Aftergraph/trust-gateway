@@ -16,6 +16,8 @@ function config() {
   const authorityToken = process.env.TG_COMPUTER_NODE_AUTHORITY_TOKEN || '';
   if (!url && !token) return { configured: false };
   if (!url || !token) return { configured: true, ok: false, error: 'incomplete_configuration' };
+  if (authorityToken && authorityToken.length < 32)
+    return { configured: true, ok: false, error: 'bad_authority_token' };
   let parsed;
   try { parsed = new URL(url); } catch { return { configured: true, ok: false, error: 'bad_url' }; }
   if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password)
