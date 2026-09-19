@@ -69,7 +69,16 @@ function revalidate(action_id, context = null) {
   const out = (result.stdout || '').trim();
   try {
     const parsed = JSON.parse(out);
-    if (result.status === 0 && parsed?.ok === true) return { ok: true };
+    if (result.status === 0 && parsed?.ok === true) {
+      const actionId = parsed.action_id;
+      const authorityLeaseId = parsed.authority_lease_id;
+      if (actionId === undefined && authorityLeaseId === undefined) return { ok: true };
+      if (typeof actionId !== 'string' || actionId !== String(action_id) ||
+          typeof authorityLeaseId !== 'string' || !authorityLeaseId) {
+        return { ok: false, code: 'AIE_UNREACHABLE' };
+      }
+      return { ok: true, action_id: actionId, authority_lease_id: authorityLeaseId };
+    }
     if (result.status === 1 && parsed?.ok === false &&
         typeof parsed.code === 'string' && /^AIE-[A-Z]+-\d{3}$/.test(parsed.code)) {
       return { ok: false, code: parsed.code };
