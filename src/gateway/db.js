@@ -77,6 +77,22 @@ function open(file = resolveDbFile()) {
       PRIMARY KEY (tenant_id, identity_ref)
     );
   `);
+  d.exec(`
+    CREATE TABLE IF NOT EXISTS platform_policy_decisions (
+      id                   TEXT PRIMARY KEY,
+      action_id            TEXT NOT NULL,
+      phase                TEXT NOT NULL,
+      tenant_id            TEXT NOT NULL,
+      principal_id         TEXT NOT NULL,
+      mission_id           TEXT NOT NULL,
+      authority_lease_id   TEXT NOT NULL,
+      execution_context_id TEXT,
+      allow                INTEGER NOT NULL,
+      reason               TEXT NOT NULL,
+      decided_at           TEXT NOT NULL,
+      UNIQUE(action_id, phase)
+    );
+  `);
   // FS-I5 — tenant-scoped secrets vault (encrypted values, see
   // secrets-vault.js). Table exists unconditionally so the schema is stable
   // whether or not TG_SECRETS_VAULT is enabled.
