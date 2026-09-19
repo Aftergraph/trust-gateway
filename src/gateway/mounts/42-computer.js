@@ -34,6 +34,7 @@ const {
 } = require('../computer-runtime');
 
 const V02_WITHHELD_CAPABILITIES = Object.freeze([
+  'computer.files.write',
   'computer.shell.start',
   'computer.shell.send',
   'computer.shell.output',
