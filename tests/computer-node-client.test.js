@@ -187,6 +187,66 @@ test('computer node client: coalesces multi-provider inspection, preserves prove
   }
 });
 
+test('computer node client: omitted provider success fails closed', async () => {
+  const node = http.createServer(async (req, res) => {
+    res.setHeader('content-type', 'application/json');
+    if (req.headers.authorization !== `Bearer ${TOKEN}`) {
+      res.statusCode = 401;
+      res.end(JSON.stringify({ error: 'unauthorized' }));
+      return;
+    }
+    if (req.method === 'GET' && req.url === '/v1/manifest') {
+      res.end(JSON.stringify({
+        nodeId: 'jonas-lenovo',
+        providers: [{
+          id: 'native-windows',
+          kind: 'native',
+          version: '0.1.0',
+          nodeId: 'jonas-lenovo',
+          capabilities: ['computer.health.inspect'],
+        }],
+      }));
+      return;
+    }
+    if (req.method === 'POST' && req.url === '/v1/inspect') {
+      res.end(JSON.stringify({
+        nodeId: 'jonas-lenovo',
+        providers: [],
+        findings: [],
+        errors: [],
+      }));
+      return;
+    }
+    res.statusCode = 404;
+    res.end(JSON.stringify({ error: 'not_found' }));
+  });
+
+  process.env.TG_COMPUTER_NODE_URL = await listen(node);
+  process.env.TG_COMPUTER_NODE_TOKEN = TOKEN;
+  process.env.TG_COMPUTER_FILE = tmpFile('computer-omitted-success.json');
+
+  const gateway = makeGateway();
+  const gatewayServer = http.createServer((req, res) => gateway.handle(req, res));
+  const base = await listen(gatewayServer);
+  try {
+    const health = await call(base, 'POST', '/v2/computer/inspect', {
+      scope: 'health',
+      depth: 'standard',
+    });
+    assert.equal(health.status, 503);
+    assert.equal(health.body.ok, false);
+    assert.equal(health.body.unavailable, true);
+    assert.deepEqual(health.body.providers, []);
+    assert.deepEqual(health.body.errors, [
+      { providerId: 'native-windows', error: 'provider_failed' },
+    ]);
+  } finally {
+    clearNodeEnv();
+    await new Promise((resolve) => gatewayServer.close(resolve));
+    await new Promise((resolve) => node.close(resolve));
+  }
+});
+
 test('computer node client: provider errors are not converted into clean findings', async () => {
   const node = http.createServer(async (req, res) => {
     res.setHeader('content-type', 'application/json');
