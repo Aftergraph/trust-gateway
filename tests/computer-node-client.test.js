@@ -12,6 +12,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { Gateway } = require('../src/gateway/server');
+const { config } = require('../src/gateway/computer-node-client');
 
 const TOKEN = 'n'.repeat(48);
 
@@ -48,8 +49,34 @@ async function call(base, method, p, body = null) {
   return { status: res.status, body: await res.json() };
 }
 
-test('computer node client: attaches remote provider and preserves provider provenance', async () => {
+function clearNodeEnv() {
+  delete process.env.TG_COMPUTER_NODE_URL;
+  delete process.env.TG_COMPUTER_NODE_TOKEN;
+}
+
+test('computer node config: plaintext HTTP is loopback-only', () => {
+  process.env.TG_COMPUTER_NODE_TOKEN = TOKEN;
+
+  process.env.TG_COMPUTER_NODE_URL = 'http://127.0.0.1:7799';
+  assert.equal(config().ok, true);
+
+  process.env.TG_COMPUTER_NODE_URL = 'http://localhost:7799';
+  assert.equal(config().ok, true);
+
+  process.env.TG_COMPUTER_NODE_URL = 'http://10.0.0.42:7799';
+  assert.deepEqual(
+    { ok: config().ok, error: config().error },
+    { ok: false, error: 'tls_required' },
+  );
+
+  process.env.TG_COMPUTER_NODE_URL = 'https://computer.example.test';
+  assert.equal(config().ok, true);
+  clearNodeEnv();
+});
+
+test('computer node client: coalesces multi-provider inspection, preserves provenance, and audits outcome', async () => {
   const seen = [];
+  let inspectCalls = 0;
   const node = http.createServer(async (req, res) => {
     seen.push({ url: req.url, auth: req.headers.authorization });
     res.setHeader('content-type', 'application/json');
@@ -61,28 +88,48 @@ test('computer node client: attaches remote provider and preserves provider prov
     if (req.method === 'GET' && req.url === '/v1/manifest') {
       res.end(JSON.stringify({
         nodeId: 'jonas-lenovo',
-        providers: [{
-          id: 'native-windows',
-          kind: 'native',
-          version: '0.1.0',
-          nodeId: 'jonas-lenovo',
-          capabilities: ['computer.health.inspect', 'computer.process.list'],
-        }],
+        providers: [
+          {
+            id: 'native-windows',
+            kind: 'native',
+            version: '0.1.0',
+            nodeId: 'jonas-lenovo',
+            capabilities: ['computer.health.inspect'],
+          },
+          {
+            id: 'cua-local',
+            kind: 'cua-driver',
+            version: '1.0.0',
+            nodeId: 'jonas-lenovo',
+            capabilities: ['computer.health.inspect'],
+          },
+        ],
       }));
       return;
     }
     if (req.method === 'POST' && req.url === '/v1/inspect') {
+      inspectCalls += 1;
       res.end(JSON.stringify({
         nodeId: 'jonas-lenovo',
-        providers: ['native-windows'],
-        findings: [{
-          type: 'orphan_process',
-          severity: 'warning',
-          summary: 'node PID 100 has missing parent PID 999',
-          evidenceRefs: ['windows:process:100'],
-          recommendedCapability: 'computer.process.stop',
-          providerId: 'native-windows',
-        }],
+        providers: ['native-windows', 'cua-local'],
+        findings: [
+          {
+            type: 'orphan_process',
+            severity: 'warning',
+            summary: 'node PID 100 has missing parent PID 999',
+            evidenceRefs: ['windows:process:100'],
+            recommendedCapability: 'computer.process.stop',
+            providerId: 'native-windows',
+          },
+          {
+            type: 'stuck_dialog',
+            severity: 'info',
+            summary: 'one modal dialog is visible',
+            evidenceRefs: ['cua:window:1'],
+            recommendedCapability: null,
+            providerId: 'cua-local',
+          },
+        ],
         errors: [],
       }));
       return;
@@ -103,9 +150,7 @@ test('computer node client: attaches remote provider and preserves provider prov
   try {
     const providers = await call(base, 'GET', '/v2/computer/providers');
     assert.equal(providers.status, 200);
-    assert.equal(providers.body.providers.length, 1);
-    assert.equal(providers.body.providers[0].id, 'native-windows');
-    assert.equal(providers.body.providers[0].nodeId, 'jonas-lenovo');
+    assert.equal(providers.body.providers.length, 2);
     assert.equal(providers.body.providers[0].url, undefined);
     assert.equal(providers.body.providers[0].token, undefined);
 
@@ -114,17 +159,94 @@ test('computer node client: attaches remote provider and preserves provider prov
       depth: 'forensic',
     });
     assert.equal(health.status, 200);
-    assert.equal(health.body.findings.length, 1);
-    assert.equal(health.body.findings[0].providerId, 'native-windows');
-    assert.equal(health.body.findings[0].nodeId, 'jonas-lenovo');
-    assert.equal(health.body.findings[0].type, 'orphan_process');
+    assert.equal(health.body.findings.length, 2);
+    assert.deepEqual(
+      health.body.findings.map((row) => row.providerId).sort(),
+      ['cua-local', 'native-windows'],
+    );
+    assert.equal(inspectCalls, 1);
+
+    const audits = gateway.chain.entries.map((entry) => entry.payload)
+      .filter((payload) => payload && payload.type === 'computer_inspection');
+    assert.equal(audits.length, 1);
+    assert.equal(audits[0].bot, 'atlas');
+    assert.equal(audits[0].depth, 'forensic');
+    assert.equal(audits[0].outcome, 'success');
+    assert.equal(audits[0].providerCount, 2);
+    assert.equal(audits[0].findingCount, 2);
+    assert.equal(audits[0].errorCount, 0);
+    assert.equal(audits[0].findings, undefined);
 
     assert.ok(seen.every((row) => row.auth === `Bearer ${TOKEN}`));
     assert.ok(!JSON.stringify(providers.body).includes(TOKEN));
     assert.ok(!JSON.stringify(health.body).includes(TOKEN));
   } finally {
-    delete process.env.TG_COMPUTER_NODE_URL;
-    delete process.env.TG_COMPUTER_NODE_TOKEN;
+    clearNodeEnv();
+    await new Promise((resolve) => gatewayServer.close(resolve));
+    await new Promise((resolve) => node.close(resolve));
+  }
+});
+
+test('computer node client: provider errors are not converted into clean findings', async () => {
+  const node = http.createServer(async (req, res) => {
+    res.setHeader('content-type', 'application/json');
+    if (req.headers.authorization !== `Bearer ${TOKEN}`) {
+      res.statusCode = 401;
+      res.end(JSON.stringify({ error: 'unauthorized' }));
+      return;
+    }
+    if (req.method === 'GET' && req.url === '/v1/manifest') {
+      res.end(JSON.stringify({
+        nodeId: 'jonas-lenovo',
+        providers: [{
+          id: 'native-windows',
+          kind: 'native',
+          version: '0.1.0',
+          nodeId: 'jonas-lenovo',
+          capabilities: ['computer.health.inspect'],
+        }],
+      }));
+      return;
+    }
+    if (req.method === 'POST' && req.url === '/v1/inspect') {
+      res.end(JSON.stringify({
+        nodeId: 'jonas-lenovo',
+        providers: [],
+        findings: [],
+        errors: [{ providerId: 'native-windows', error: 'provider_failed' }],
+      }));
+      return;
+    }
+    res.statusCode = 404;
+    res.end(JSON.stringify({ error: 'not_found' }));
+  });
+
+  process.env.TG_COMPUTER_NODE_URL = await listen(node);
+  process.env.TG_COMPUTER_NODE_TOKEN = TOKEN;
+  process.env.TG_COMPUTER_FILE = tmpFile('computer-errors.json');
+
+  const gateway = makeGateway();
+  const gatewayServer = http.createServer((req, res) => gateway.handle(req, res));
+  const base = await listen(gatewayServer);
+  try {
+    const health = await call(base, 'POST', '/v2/computer/inspect', {
+      scope: 'health',
+      depth: 'standard',
+    });
+    assert.equal(health.status, 200);
+    assert.equal(health.body.ok, false);
+    assert.equal(health.body.partial, true);
+    assert.deepEqual(health.body.findings, []);
+    assert.deepEqual(health.body.errors, [
+      { providerId: 'native-windows', error: 'provider_failed' },
+    ]);
+
+    const audits = gateway.chain.entries.map((entry) => entry.payload)
+      .filter((payload) => payload && payload.type === 'computer_inspection');
+    assert.equal(audits.at(-1).outcome, 'partial');
+    assert.equal(audits.at(-1).errorCount, 1);
+  } finally {
+    clearNodeEnv();
     await new Promise((resolve) => gatewayServer.close(resolve));
     await new Promise((resolve) => node.close(resolve));
   }
@@ -145,7 +267,7 @@ test('computer node client: incomplete config fails closed without leaking confi
     assert.equal(result.body.reason, 'incomplete_configuration');
     assert.ok(!JSON.stringify(result.body).includes('127.0.0.1:1'));
   } finally {
-    delete process.env.TG_COMPUTER_NODE_URL;
+    clearNodeEnv();
     await new Promise((resolve) => gatewayServer.close(resolve));
   }
 });
