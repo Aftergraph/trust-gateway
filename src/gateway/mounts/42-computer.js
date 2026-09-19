@@ -29,10 +29,10 @@ const { ComputerStore, KINDS, getComputerStore } = require('../computer');
 const { DEPTHS, getComputerProviderRegistry } = require('../computer-runtime');
 const { ensureConfiguredComputerNode } = require('../computer-node-client');
 
-function authBot(gw, req, url) {
+function authBot(gw, req, url, allowQueryToken = false) {
   const h = req.headers['authorization'] || '';
   const m = /^Bearer\s+(.+)$/i.exec(h);
-  const token = m ? m[1] : (url.searchParams.get('token') || '');
+  const token = m ? m[1] : (allowQueryToken ? (url.searchParams.get('token') || '') : '');
   if (!token) return null;
   for (const [name, bot] of Object.entries(gw.bots)) {
     if (!bot || !bot.token) continue;
@@ -99,7 +99,8 @@ module.exports = {
 };
 
 async function route(gw, req, res, ctx, pathname) {
-  const bot = authBot(gw, req, ctx.url);
+  const queryTokenAllowed = req.method === 'GET' && /\/stream$/.test(pathname);
+  const bot = authBot(gw, req, ctx.url, queryTokenAllowed);
   if (!bot) {
     gw._audit({ type: 'auth_rejected', path: pathname });
     return send(res, 401, { error: 'unauthorized' });
