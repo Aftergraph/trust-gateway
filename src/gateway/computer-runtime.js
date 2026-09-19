@@ -99,8 +99,11 @@ function normalizeFinding(provider, finding) {
 }
 
 class ComputerProviderRegistry {
-  constructor() {
+  constructor({ inspectionTimeoutMs = 5000 } = {}) {
+    if (!Number.isFinite(inspectionTimeoutMs) || inspectionTimeoutMs < 1 || inspectionTimeoutMs > 60000)
+      throw new Error('bad_inspection_timeout');
     this.providers = new Map();
+    this.inspectionTimeoutMs = inspectionTimeoutMs;
   }
 
   register(manifest, adapter) {
@@ -149,14 +152,27 @@ class ComputerProviderRegistry {
         continue;
       }
       try {
-        const out = await provider.adapter.inspectHealth({ depth });
-        const rows = out && Array.isArray(out.findings) ? out.findings : [];
-        for (const row of rows) {
+        const timeout = new Promise((_, reject) => {
+          const timer = setTimeout(() => reject(new Error('provider_timeout')), this.inspectionTimeoutMs);
+          if (typeof timer.unref === 'function') timer.unref();
+        });
+        const out = await Promise.race([
+          provider.adapter.inspectHealth({ depth }),
+          timeout,
+        ]);
+        if (!out || typeof out !== 'object' || Array.isArray(out) || !Array.isArray(out.findings)) {
+          errors.push({ providerId: provider.manifest.id, error: 'provider_malformed_result' });
+          continue;
+        }
+        for (const row of out.findings) {
           const normalized = normalizeFinding(provider, row);
           if (normalized) findings.push(normalized);
         }
-      } catch {
-        errors.push({ providerId: provider.manifest.id, error: 'provider_failed' });
+      } catch (e) {
+        errors.push({
+          providerId: provider.manifest.id,
+          error: String(e && e.message) === 'provider_timeout' ? 'provider_timeout' : 'provider_failed',
+        });
       }
     }
 
