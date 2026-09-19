@@ -13,6 +13,7 @@ function isLoopbackHost(hostname) {
 function config() {
   const url = process.env.TG_COMPUTER_NODE_URL || '';
   const token = process.env.TG_COMPUTER_NODE_TOKEN || '';
+  const authorityToken = process.env.TG_COMPUTER_NODE_AUTHORITY_TOKEN || '';
   if (!url && !token) return { configured: false };
   if (!url || !token) return { configured: true, ok: false, error: 'incomplete_configuration' };
   let parsed;
@@ -21,7 +22,13 @@ function config() {
     return { configured: true, ok: false, error: 'bad_url' };
   if (parsed.protocol === 'http:' && !isLoopbackHost(parsed.hostname))
     return { configured: true, ok: false, error: 'tls_required' };
-  return { configured: true, ok: true, url: parsed.toString().replace(/\/$/, ''), token };
+  return {
+    configured: true,
+    ok: true,
+    url: parsed.toString().replace(/\/$/, ''),
+    token,
+    authorityToken,
+  };
 }
 
 async function jsonFetch(url, token, options = {}) {
@@ -55,6 +62,31 @@ function createInspectionFetcher(baseUrl, token) {
     }).catch(() => {});
     return promise;
   };
+}
+
+function createActionInvoker(baseUrl, token, authorityToken) {
+  return async function invokeAction(request, { effectful = false } = {}) {
+    if (!request || typeof request !== 'object' || Array.isArray(request))
+      throw new Error('bad_action_request');
+    const headers = { 'content-type': 'application/json' };
+    if (effectful) {
+      if (!authorityToken) throw new Error('effect_authority_unconfigured');
+      headers['x-aftergraph-authority'] = authorityToken;
+    }
+    return jsonFetch(`${baseUrl}/v1/action`, token, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(request),
+    });
+  };
+}
+
+async function invokeConfiguredComputerNode(request, options = {}) {
+  const cfg = config();
+  if (!cfg.configured) throw new Error('computer_node_unconfigured');
+  if (!cfg.ok) throw new Error(cfg.error || 'computer_node_unavailable');
+  const invoke = createActionInvoker(cfg.url, cfg.token, cfg.authorityToken);
+  return invoke(request, options);
 }
 
 function providerAdapter(fetchInspection, providerId) {
@@ -120,5 +152,7 @@ module.exports = {
   config,
   isLoopbackHost,
   createInspectionFetcher,
+  createActionInvoker,
+  invokeConfiguredComputerNode,
   ensureConfiguredComputerNode,
 };
