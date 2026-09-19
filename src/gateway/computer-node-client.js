@@ -62,10 +62,13 @@ function providerAdapter(fetchInspection, providerId) {
     async inspectHealth({ depth }) {
       const out = await fetchInspection(depth);
       if (!out || typeof out !== 'object' || Array.isArray(out)
-          || !Array.isArray(out.findings) || !Array.isArray(out.errors))
+          || !Array.isArray(out.providers)
+          || !Array.isArray(out.findings)
+          || !Array.isArray(out.errors))
         throw new Error('node_malformed_inspection');
       const providerError = out.errors.find((e) => e && e.providerId === providerId);
       if (providerError) throw new Error('node_provider_failed');
+      if (!out.providers.includes(providerId)) throw new Error('node_provider_not_successful');
       const findings = out.findings
         .filter((finding) => finding && finding.providerId === providerId)
         .map(({ providerId: _providerId, ...finding }) => finding);
