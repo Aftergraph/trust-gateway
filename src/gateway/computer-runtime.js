@@ -144,9 +144,10 @@ class ComputerProviderRegistry {
 
     const findings = [];
     const errors = [];
+    const attemptedProviders = [];
     const providers = [];
     for (const provider of eligible) {
-      providers.push(projectProvider(provider));
+      attemptedProviders.push(projectProvider(provider));
       if (typeof provider.adapter.inspectHealth !== 'function') {
         errors.push({ providerId: provider.manifest.id, error: 'adapter_missing_inspect_health' });
         continue;
@@ -163,6 +164,7 @@ class ComputerProviderRegistry {
           errors.push({ providerId: provider.manifest.id, error: 'provider_malformed_result' });
           continue;
         }
+        providers.push(projectProvider(provider));
         for (const row of out.findings) {
           const normalized = normalizeFinding(provider, row);
           if (normalized) findings.push(normalized);
@@ -181,11 +183,12 @@ class ComputerProviderRegistry {
       || a.providerId.localeCompare(b.providerId));
 
     return {
-      ok: errors.length === 0,
-      unavailable: false,
-      partial: errors.length > 0,
+      ok: errors.length === 0 && providers.length > 0,
+      unavailable: providers.length === 0,
+      partial: errors.length > 0 && providers.length > 0,
       depth,
       providers,
+      attemptedProviders,
       findings,
       errors,
     };
