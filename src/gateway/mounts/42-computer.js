@@ -137,9 +137,26 @@ async function route(gw, req, res, ctx, pathname) {
     if (!DEPTHS.includes(depth))
       return send(res, 400, { error: 'bad_depth', allowed: DEPTHS });
     const node = await ensureConfiguredComputerNode(gw, providers);
-    if (node.configured && !node.ok)
+    if (node.configured && !node.ok) {
+      gw._audit({
+        type: 'computer_inspection',
+        bot: bot.name,
+        depth,
+        outcome: 'unavailable',
+        reason: node.error,
+      });
       return send(res, 503, { error: 'computer_node_unavailable', reason: node.error });
+    }
     const out = await providers.inspectHealth({ depth });
+    gw._audit({
+      type: 'computer_inspection',
+      bot: bot.name,
+      depth,
+      outcome: out.unavailable ? 'unavailable' : out.ok ? 'success' : 'partial',
+      providerCount: Array.isArray(out.providers) ? out.providers.length : 0,
+      findingCount: Array.isArray(out.findings) ? out.findings.length : 0,
+      errorCount: Array.isArray(out.errors) ? out.errors.length : 0,
+    });
     return send(res, out.unavailable ? 503 : 200, out);
   }
 

@@ -5,6 +5,11 @@
 const connecting = new WeakMap();
 const ready = new WeakSet();
 
+function isLoopbackHost(hostname) {
+  const h = String(hostname || '').toLowerCase();
+  return h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h === '::1';
+}
+
 function config() {
   const url = process.env.TG_COMPUTER_NODE_URL || '';
   const token = process.env.TG_COMPUTER_NODE_TOKEN || '';
@@ -14,6 +19,8 @@ function config() {
   try { parsed = new URL(url); } catch { return { configured: true, ok: false, error: 'bad_url' }; }
   if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password)
     return { configured: true, ok: false, error: 'bad_url' };
+  if (parsed.protocol === 'http:' && !isLoopbackHost(parsed.hostname))
+    return { configured: true, ok: false, error: 'tls_required' };
   return { configured: true, ok: true, url: parsed.toString().replace(/\/$/, ''), token };
 }
 
@@ -25,24 +32,46 @@ async function jsonFetch(url, token, options = {}) {
       ...(options.headers || {}),
     },
     signal: AbortSignal.timeout(5000),
+    redirect: 'error',
   });
   if (!res.ok) throw new Error(`computer_node_http_${res.status}`);
   return res.json();
 }
 
-function providerAdapter(baseUrl, token, providerId) {
+function createInspectionFetcher(baseUrl, token) {
+  const inFlight = new Map();
+  return function fetchInspection(depth) {
+    if (inFlight.has(depth)) return inFlight.get(depth);
+    const promise = jsonFetch(`${baseUrl}/v1/inspect`, token, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ scope: 'health', depth }),
+    });
+    inFlight.set(depth, promise);
+    promise.finally(() => {
+      setImmediate(() => {
+        if (inFlight.get(depth) === promise) inFlight.delete(depth);
+      });
+    }).catch(() => {});
+    return promise;
+  };
+}
+
+function providerAdapter(fetchInspection, providerId) {
   return {
     async inspectHealth({ depth }) {
-      const out = await jsonFetch(`${baseUrl}/v1/inspect`, token, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ scope: 'health', depth }),
-      });
-      const findings = Array.isArray(out && out.findings)
-        ? out.findings
-          .filter((f) => f && f.providerId === providerId)
-          .map(({ providerId: _providerId, ...f }) => f)
-        : [];
+      const out = await fetchInspection(depth);
+      if (!out || typeof out !== 'object' || Array.isArray(out)
+          || !Array.isArray(out.providers)
+          || !Array.isArray(out.findings)
+          || !Array.isArray(out.errors))
+        throw new Error('node_malformed_inspection');
+      const providerError = out.errors.find((e) => e && e.providerId === providerId);
+      if (providerError) throw new Error('node_provider_failed');
+      if (!out.providers.includes(providerId)) throw new Error('node_provider_not_successful');
+      const findings = out.findings
+        .filter((finding) => finding && finding.providerId === providerId)
+        .map(({ providerId: _providerId, ...finding }) => finding);
       return { findings };
     },
   };
@@ -57,6 +86,7 @@ async function connect(gw, registry) {
   if (!manifest || typeof manifest.nodeId !== 'string' || !Array.isArray(manifest.providers))
     return { configured: true, ok: false, error: 'bad_manifest' };
 
+  const fetchInspection = createInspectionFetcher(cfg.url, cfg.token);
   for (const provider of manifest.providers) {
     const out = registry.register({
       id: provider.id,
@@ -64,7 +94,7 @@ async function connect(gw, registry) {
       version: provider.version,
       nodeId: provider.nodeId || manifest.nodeId,
       capabilities: provider.capabilities,
-    }, providerAdapter(cfg.url, cfg.token, provider.id));
+    }, providerAdapter(fetchInspection, provider.id));
     if (!out.ok && out.error !== 'provider_exists')
       return { configured: true, ok: false, error: out.error };
   }
@@ -86,4 +116,9 @@ async function ensureConfiguredComputerNode(gw, registry) {
   return promise;
 }
 
-module.exports = { config, ensureConfiguredComputerNode };
+module.exports = {
+  config,
+  isLoopbackHost,
+  createInspectionFetcher,
+  ensureConfiguredComputerNode,
+};

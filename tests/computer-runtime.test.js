@@ -184,7 +184,9 @@ test('computer v1: times out stuck providers and marks malformed provider output
 
   const out = await registry.inspectHealth({ depth: 'standard' });
   assert.equal(out.ok, false);
-  assert.equal(out.partial, true);
+  assert.equal(out.unavailable, true);
+  assert.equal(out.partial, false);
+  assert.deepEqual(out.providers, []);
   assert.deepEqual(out.errors, [
     { providerId: 'stuck', error: 'provider_timeout' },
     { providerId: 'malformed', error: 'provider_malformed_result' },

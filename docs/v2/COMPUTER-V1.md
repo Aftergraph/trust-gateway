@@ -178,3 +178,22 @@ It exposes an authenticated loopback-first HTTP protocol:
 
 Its built-in `native-windows` provider performs read-only PowerShell/CIM health
 inspection. Arbitrary remote shell execution is intentionally not part of v1.
+
+
+## v1.0.1 node-bridge hardening
+
+The external Computer Node bridge has four additional invariants:
+
+1. Plaintext `http://` node URLs are accepted only for loopback hosts.
+   Non-loopback node transport must use HTTPS.
+2. One gateway health inspection performs one composite node inspection per
+   requested depth, even when several provider adapters are registered.
+3. Provider-specific node failures remain failures. If no provider completes
+   successfully, the gateway returns `503` with `unavailable: true`.
+4. Every operator host inspection emits a `computer_inspection` audit record
+   containing outcome and counts only; raw findings and node credentials are
+   never sealed into that summary event.
+
+Transport authentication still does not grant execution authority. These rules
+harden observation transport only and do not introduce effectful computer-use
+capabilities.
