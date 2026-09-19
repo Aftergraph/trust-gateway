@@ -32,6 +32,13 @@ const {
   DEPTHS,
   getComputerProviderRegistry,
 } = require('../computer-runtime');
+
+const V02_WITHHELD_CAPABILITIES = Object.freeze([
+  'computer.shell.start',
+  'computer.shell.send',
+  'computer.shell.output',
+  'computer.shell.stop',
+]);
 const {
   ensureConfiguredComputerNode,
   invokeConfiguredComputerNode,
@@ -184,6 +191,16 @@ async function route(gw, req, res, ctx, pathname) {
     if (!providerId) return send(res, 400, { error: 'bad_provider_id' });
     if (!CAPABILITIES.includes(capability))
       return send(res, 400, { error: 'bad_capability', allowed: CAPABILITIES });
+    if (V02_WITHHELD_CAPABILITIES.includes(capability)) {
+      gw._audit({
+        type: 'computer_control_denied',
+        bot: bot.name,
+        action: 'node_action',
+        capability,
+        reason: 'capability_withheld_v02',
+      });
+      return send(res, 409, { error: 'capability_withheld_v02' });
+    }
     if (!input || typeof input !== 'object' || Array.isArray(input))
       return send(res, 400, { error: 'bad_input' });
 
