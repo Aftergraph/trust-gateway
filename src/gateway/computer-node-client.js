@@ -32,6 +32,7 @@ async function jsonFetch(url, token, options = {}) {
       ...(options.headers || {}),
     },
     signal: AbortSignal.timeout(5000),
+    redirect: 'error',
   });
   if (!res.ok) throw new Error(`computer_node_http_${res.status}`);
   return res.json();
