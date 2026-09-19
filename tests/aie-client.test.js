@@ -35,7 +35,11 @@ test('missing interpreter fails closed even with server escape hatch set', t => 
     TG_AIE_FAIL_OPEN: 'true' }), { ok: false, code: 'AIE_UNREACHABLE' });
 });
 for (const [label, stdout, status, expected] of [
-  ['success', '{"ok":true}', 0, { ok: true }],
+  ['legacy success', '{"ok":true}', 0, { ok: true }],
+  ['V2.1 success', '{"ok":true,"action_id":"act_11111111111111111111111111111111","authority_lease_id":"auth_22222222222222222222222222222222"}', 0,
+    { ok: true, action_id: 'act_11111111111111111111111111111111', authority_lease_id: 'auth_22222222222222222222222222222222' }],
+  ['mismatched action success', '{"ok":true,"action_id":"act_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","authority_lease_id":"auth_22222222222222222222222222222222"}', 0,
+    { ok: false, code: 'AIE_UNREACHABLE' }],
   ['revoked', '{"ok":false,"code":"AIE-AUTH-003"}', 1, { ok: false, code: 'AIE-AUTH-003' }],
   ['failed process claiming success', '{"ok":true}', 1, { ok: false, code: 'AIE_UNREACHABLE' }],
   ['truthy non-boolean', '{"ok":"false"}', 0, { ok: false, code: 'AIE_UNREACHABLE' }],
@@ -45,7 +49,10 @@ for (const [label, stdout, status, expected] of [
   ['inconsistent rejection exit', '{"ok":false,"code":"AIE-AUTH-003"}', 0, { ok: false, code: 'AIE_UNREACHABLE' }],
   ['invalid error code', '{"ok":false,"code":{"secret":"not a code"}}', 1, { ok: false, code: 'AIE_UNREACHABLE' }],
 ]) test(`bridge protocol: ${label}`, t => {
-  assert.deepEqual(revalidate('action_x', bridgeDouble(t, stdout, status)), expected);
+  const actionId = label.includes('V2.1') || label.includes('mismatched')
+    ? 'act_11111111111111111111111111111111'
+    : 'action_x';
+  assert.deepEqual(revalidate(actionId, bridgeDouble(t, stdout, status)), expected);
 });
 test('invalid action IDs cannot be authorized by positive bridge output', t => {
   const env = bridgeDouble(t, '{"ok":true}', 0);
@@ -84,7 +91,7 @@ assert result.status == 'admitted'
 state.save_all()
 state._conn.close()
 `);
-  assert.deepEqual(revalidate('action_live', env), { ok: true });
+  assert.equal(revalidate('action_live', env).ok, true);
   assert.deepEqual(revalidate('action_live', env, { bot: 'worker', tool: 'fs.read', args: null }),
     { ok: false, code: 'AIE-AUTH-004' }, 'TG execution must reject an unbound admission');
   assert.deepEqual(revalidate('unknown', env), { ok: false, code: 'AIE-AUTH-004' });
