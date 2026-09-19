@@ -16,7 +16,11 @@ function deny(status, error, detail) {
   return e;
 }
 
-async function authorizeV21Action({ req, gw, body, bot, tool, args }) {
+async function authorizeV21Action({ req, gw, body, bot, tool, args, deps = {} }) {
+  const resolveIdentity = deps.resolvePlatformIdentity || resolvePlatformIdentity;
+  const loadContext = deps.getExecutionContext || getExecutionContext;
+  const liveRevalidate = deps.revalidate || revalidate;
+  const persistDecision = deps.createExecutionDecision || createExecutionDecision;
   const executionContextId = body.execution_context_id;
   if (executionContextId === undefined || executionContextId === null) {
     return { legacy: true };
@@ -28,12 +32,12 @@ async function authorizeV21Action({ req, gw, body, bot, tool, args }) {
     throw deny(400, 'invalid_action_id');
   }
 
-  const identity = resolvePlatformIdentity(req, gw);
+  const identity = resolveIdentity(req, gw);
   if (!identity || identity.status !== 200) {
     throw deny(identity && identity.status || 503, identity && identity.body && identity.body.error || 'platform_identity_unavailable');
   }
 
-  const loaded = await getExecutionContext(executionContextId);
+  const loaded = await loadContext(executionContextId);
   if (!loaded.ok) {
     const status = loaded.reason === 'execution_context_not_found' ? 404 :
       loaded.reason === 'invalid_execution_context_id' ? 400 : 503;
@@ -51,7 +55,7 @@ async function authorizeV21Action({ req, gw, body, bot, tool, args }) {
     throw deny(403, 'execution_context_mission_mismatch');
   }
 
-  const rv = revalidate(body.action_id, { bot: bot.name, tool, args });
+  const rv = liveRevalidate(body.action_id, { bot: bot.name, tool, args });
   if (!rv.ok) {
     let status = 403;
     let error = 'revalidation_failed';
@@ -65,7 +69,7 @@ async function authorizeV21Action({ req, gw, body, bot, tool, args }) {
     throw deny(403, 'execution_context_authority_mismatch');
   }
 
-  const pdr = createExecutionDecision({
+  const pdr = persistDecision({
     action_id: body.action_id,
     phase: 'execution',
     tenant_id: context.tenant_id,
