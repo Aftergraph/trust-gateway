@@ -62,6 +62,7 @@ class ApprovalStoreDb extends ApprovalStore {
       CREATE TABLE IF NOT EXISTS ${this.table} (
         id                TEXT PRIMARY KEY,
         action_id         TEXT,
+        platform_context_json TEXT,
         bot               TEXT,
         tool              TEXT,
         args_json         TEXT,
@@ -81,6 +82,9 @@ class ApprovalStoreDb extends ApprovalStore {
     const columns = this.db.prepare(`PRAGMA table_info(${this.table})`).all();
     if (!columns.some((c) => c.name === 'action_id')) {
       this.db.exec(`ALTER TABLE ${this.table} ADD COLUMN action_id TEXT`);
+    }
+    if (!columns.some((c) => c.name === 'platform_context_json')) {
+      this.db.exec(`ALTER TABLE ${this.table} ADD COLUMN platform_context_json TEXT`);
     }
     this._loadOrImport();
   }
@@ -108,12 +112,12 @@ class ApprovalStoreDb extends ApprovalStore {
     if (!Array.isArray(arr)) throw new Error('approvals: file must be a JSON array');
     tx(() => {
       const ins = this.db.prepare(
-        `INSERT INTO ${this.table}(id, action_id, bot, tool, args_json, status, requested_by,
+        `INSERT INTO ${this.table}(id, action_id, platform_context_json, bot, tool, args_json, status, requested_by,
                                    resolved_by, created_at, resolved_at,
                                    args_summary_json, reason, expires_at, impact_json)
-         VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
-            action_id = excluded.action_id, bot = excluded.bot, tool = excluded.tool, args_json = excluded.args_json,
+            action_id = excluded.action_id, platform_context_json = excluded.platform_context_json, bot = excluded.bot, tool = excluded.tool, args_json = excluded.args_json,
            status = excluded.status, requested_by = excluded.requested_by,
            resolved_by = excluded.resolved_by, created_at = excluded.created_at,
            resolved_at = excluded.resolved_at,
@@ -126,6 +130,7 @@ class ApprovalStoreDb extends ApprovalStore {
         ins.run(
           r.id,
           r.action_id ?? null,
+          r.platform_context == null ? null : json(r.platform_context),
           r.bot ?? null,
           r.tool ?? null,
           r.status === 'pending' ? json(r.args) : null, // scrub before persist, always
@@ -153,6 +158,7 @@ class ApprovalStoreDb extends ApprovalStore {
       this.requests.set(r.id, {
         id: r.id,
         action_id: r.action_id ?? null,
+        platform_context: r.platform_context_json === null ? null : JSON.parse(r.platform_context_json),
         bot: r.bot,
         tool: r.tool,
         args: r.args_json === null ? undefined : JSON.parse(r.args_json),
@@ -178,12 +184,12 @@ class ApprovalStoreDb extends ApprovalStore {
   _save() {
     tx(() => {
       const ins = this.db.prepare(
-        `INSERT INTO ${this.table}(id, action_id, bot, tool, args_json, status, requested_by,
+        `INSERT INTO ${this.table}(id, action_id, platform_context_json, bot, tool, args_json, status, requested_by,
                                    resolved_by, created_at, resolved_at,
                                    args_summary_json, reason, expires_at, impact_json)
-         VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
-            action_id = excluded.action_id, bot = excluded.bot, tool = excluded.tool, args_json = excluded.args_json,
+            action_id = excluded.action_id, platform_context_json = excluded.platform_context_json, bot = excluded.bot, tool = excluded.tool, args_json = excluded.args_json,
            status = excluded.status, requested_by = excluded.requested_by,
            resolved_by = excluded.resolved_by, created_at = excluded.created_at,
            resolved_at = excluded.resolved_at,
@@ -198,6 +204,7 @@ class ApprovalStoreDb extends ApprovalStore {
         ins.run(
           r.id,
           r.action_id ?? null,
+          r.platform_context == null ? null : json(r.platform_context),
           r.bot ?? null,
           r.tool ?? null,
           pending ? json(r.args) : null, // scrub secrets from resolved/expired
