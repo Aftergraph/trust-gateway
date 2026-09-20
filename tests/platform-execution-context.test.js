@@ -7,6 +7,7 @@ const { authorizeV21Action } = require('../src/gateway/platform-execution');
 const IDS = {
   action: 'act_11111111111111111111111111111111',
   context: 'ctx_22222222222222222222222222222222',
+  work: 'wrk_99999999999999999999999999999999',
   tenant: 'ten_33333333333333333333333333333333',
   principal: 'prn_44444444444444444444444444444444',
   authority: 'auth_55555555555555555555555555555555',
@@ -30,6 +31,7 @@ function baseDeps(overrides = {}) {
       context: {
         schema: 'execution-context/1.0',
         execution_context_id: IDS.context,
+        work_id: IDS.work,
         organization_id: IDS.org,
         tenant_id: IDS.tenant,
         principal_id: IDS.principal,
@@ -43,6 +45,14 @@ function baseDeps(overrides = {}) {
       authority_lease_id: IDS.authority,
     }),
     createExecutionDecision: (input) => ({ id: IDS.pdr, ...input }),
+    recordExecutionPolicyDecision: async ({ workId, executionContextId, executionPdrId }) => ({
+      ok: workId === IDS.work && executionContextId === IDS.context && executionPdrId === IDS.pdr,
+      receipt: {
+        status: 'recorded',
+        execution_context_id: executionContextId,
+        execution_pdr_id: executionPdrId,
+      },
+    }),
     ...overrides,
   };
 }
@@ -98,6 +108,7 @@ test('unknown or cross-tenant execution context fails before AIE and PDR', async
         context: {
           schema: 'execution-context/1.0',
           execution_context_id: IDS.context,
+          work_id: IDS.work,
           organization_id: IDS.org,
           tenant_id: 'ten_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
           principal_id: IDS.principal,
@@ -171,4 +182,52 @@ test('V2.1 path requires canonical action and execution-context ids', async () =
   const badCtx = input(deps);
   badCtx.body.execution_context_id = 'ctx-not-canonical';
   await assert.rejects(() => authorizeV21Action(badCtx), (err) => err.code === 'invalid_execution_context_id');
+});
+
+
+test('WORKS evidence-correlation failure is fail-closed after PDR and before authorize result', async () => {
+  let pdrCalls = 0;
+  let correlationCalls = 0;
+  const deps = baseDeps({
+    createExecutionDecision: (record) => {
+      pdrCalls++;
+      return { id: IDS.pdr, ...record };
+    },
+    recordExecutionPolicyDecision: async () => {
+      correlationCalls++;
+      return { ok: false, reason: 'works_unreachable' };
+    },
+  });
+
+  await assert.rejects(
+    () => authorizeV21Action(input(deps)),
+    (err) => err.code === 'works_evidence_correlation_failed' &&
+      err.detail === 'works_unreachable',
+  );
+  assert.equal(pdrCalls, 1);
+  assert.equal(correlationCalls, 1);
+});
+
+test('successful V2.1 authorization persists matching PDR correlation before return', async () => {
+  const order = [];
+  const deps = baseDeps({
+    createExecutionDecision: (record) => {
+      order.push('pdr');
+      return { id: IDS.pdr, ...record };
+    },
+    recordExecutionPolicyDecision: async (record) => {
+      order.push('works');
+      assert.deepEqual(record, {
+        workId: IDS.work,
+        executionContextId: IDS.context,
+        executionPdrId: IDS.pdr,
+      });
+      return { ok: true, receipt: { status: 'recorded' } };
+    },
+  });
+
+  const out = await authorizeV21Action(input(deps));
+  order.push('returned');
+  assert.deepEqual(order, ['pdr', 'works', 'returned']);
+  assert.equal(out.correlation.ok, true);
 });
