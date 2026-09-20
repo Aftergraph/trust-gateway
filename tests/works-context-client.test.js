@@ -48,7 +48,7 @@ test('execution PDR correlation sends bearer plus platform-bridge binding', asyn
   assert.equal(out.ok, true);
   assert.equal(seen.url, 'http://works.test/v1/works/wrk_11111111111111111111111111111111/evidence');
   assert.equal(seen.init.method, 'POST');
-  assert.equal(seen.init.headers.authorization, 'Bearer worker-bearer');
+  assert.equal(seen.init.headers.authorization, 'Bearer ' + 'w'.repeat(48));
   assert.equal(seen.init.headers['x-works-platform-bridge'], 'b'.repeat(48));
 });
 
