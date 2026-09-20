@@ -68,14 +68,17 @@ async function recordExecutionPolicyDecision(
   }
   const { url, token, bridgeSecret } = _cfg();
   if (!url) return { ok: false, reason: 'works_disabled' };
+  if (typeof token !== 'string' || token.length < 32) {
+    return { ok: false, reason: 'works_auth_unconfigured' };
+  }
   if (bridgeSecret.length < 32) return { ok: false, reason: 'works_bridge_unconfigured' };
 
   const headers = {
     accept: 'application/json',
     'content-type': 'application/json',
+    authorization: `Bearer ${token}`,
     'x-works-platform-bridge': bridgeSecret,
   };
-  if (token) headers.authorization = `Bearer ${token}`;
 
   let resp;
   try {
