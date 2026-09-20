@@ -23,7 +23,7 @@ test.after(() => {
 
 test('execution PDR correlation sends bearer plus platform-bridge binding', async () => {
   process.env.WORKS_API_URL = 'http://works.test';
-  process.env.WORKS_API_TOKEN = 'worker-bearer';
+  process.env.WORKS_API_TOKEN = 'w'.repeat(48);
   process.env.WORKS_PLATFORM_BRIDGE_SECRET = 'b'.repeat(48);
   delete require.cache[require.resolve(MODULE)];
   const { recordExecutionPolicyDecision } = require(MODULE);
@@ -54,7 +54,7 @@ test('execution PDR correlation sends bearer plus platform-bridge binding', asyn
 
 test('missing platform-bridge secret fails before network I/O', async () => {
   process.env.WORKS_API_URL = 'http://works.test';
-  process.env.WORKS_API_TOKEN = 'worker-bearer';
+  process.env.WORKS_API_TOKEN = 'w'.repeat(48);
   delete process.env.WORKS_PLATFORM_BRIDGE_SECRET;
   delete require.cache[require.resolve(MODULE)];
   const { recordExecutionPolicyDecision } = require(MODULE);
@@ -69,5 +69,26 @@ test('missing platform-bridge secret fails before network I/O', async () => {
   });
 
   assert.deepEqual(out, { ok: false, reason: 'works_bridge_unconfigured' });
+  assert.equal(calls, 0);
+});
+
+
+test('missing WORKS bearer fails before network I/O', async () => {
+  process.env.WORKS_API_URL = 'http://works.test';
+  delete process.env.WORKS_API_TOKEN;
+  process.env.WORKS_PLATFORM_BRIDGE_SECRET = 'b'.repeat(48);
+  delete require.cache[require.resolve(MODULE)];
+  const { recordExecutionPolicyDecision } = require(MODULE);
+
+  let calls = 0;
+  const out = await recordExecutionPolicyDecision({
+    workId: 'wrk_11111111111111111111111111111111',
+    executionContextId: 'ctx_22222222222222222222222222222222',
+    executionPdrId: 'pdr_33333333333333333333333333333333',
+  }, {
+    fetchImpl: async () => { calls++; throw new Error('must not run'); },
+  });
+
+  assert.deepEqual(out, { ok: false, reason: 'works_auth_unconfigured' });
   assert.equal(calls, 0);
 });
