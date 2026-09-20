@@ -52,7 +52,19 @@ async function call(base, method, p, body = null) {
 function clearNodeEnv() {
   delete process.env.TG_COMPUTER_NODE_URL;
   delete process.env.TG_COMPUTER_NODE_TOKEN;
+  delete process.env.TG_COMPUTER_NODE_AUTHORITY_TOKEN;
 }
+
+test('computer node config: weak authority token fails closed', () => {
+  process.env.TG_COMPUTER_NODE_URL = 'http://127.0.0.1:7799';
+  process.env.TG_COMPUTER_NODE_TOKEN = TOKEN;
+  process.env.TG_COMPUTER_NODE_AUTHORITY_TOKEN = 'too-short';
+  assert.deepEqual(
+    { ok: config().ok, error: config().error },
+    { ok: false, error: 'bad_authority_token' },
+  );
+  clearNodeEnv();
+});
 
 test('computer node config: plaintext HTTP is loopback-only', () => {
   process.env.TG_COMPUTER_NODE_TOKEN = TOKEN;

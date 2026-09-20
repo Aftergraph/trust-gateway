@@ -26,8 +26,24 @@ const crypto = require('node:crypto');
 const { send, readBody, canApprove } = require('../server');
 const { getHub } = require('../events');
 const { ComputerStore, KINDS, getComputerStore } = require('../computer');
-const { DEPTHS, getComputerProviderRegistry } = require('../computer-runtime');
-const { ensureConfiguredComputerNode } = require('../computer-node-client');
+const {
+  CAPABILITIES,
+  EFFECTFUL_CAPABILITIES,
+  DEPTHS,
+  getComputerProviderRegistry,
+} = require('../computer-runtime');
+
+const V02_WITHHELD_CAPABILITIES = Object.freeze([
+  'computer.files.write',
+  'computer.shell.start',
+  'computer.shell.send',
+  'computer.shell.output',
+  'computer.shell.stop',
+]);
+const {
+  ensureConfiguredComputerNode,
+  invokeConfiguredComputerNode,
+} = require('../computer-node-client');
 
 function authBot(gw, req, url, allowQueryToken = false) {
   const h = req.headers['authorization'] || '';
@@ -158,6 +174,112 @@ async function route(gw, req, res, ctx, pathname) {
       errorCount: Array.isArray(out.errors) ? out.errors.length : 0,
     });
     return send(res, out.unavailable ? 503 : 200, out);
+  }
+
+  if (seg.length === 3 && seg[2] === 'action' && method === 'POST') {
+    if (!canApprove(bot)) {
+      gw._audit({ type: 'computer_control_denied', bot: bot.name, action: 'node_action', reason: 'operator_required' });
+      return send(res, 403, { error: 'operator_required' });
+    }
+
+    let body;
+    try { body = await bodyJson(req); } catch (e) { return parseOr400(res, e); }
+    const providerId = typeof body.providerId === 'string' ? body.providerId : '';
+    const capability = typeof body.capability === 'string' ? body.capability : '';
+    const input = body.input === undefined ? {} : body.input;
+    const sessionId = typeof body.sessionId === 'string' ? body.sessionId : null;
+
+    if (!providerId) return send(res, 400, { error: 'bad_provider_id' });
+    if (!CAPABILITIES.includes(capability))
+      return send(res, 400, { error: 'bad_capability', allowed: CAPABILITIES });
+    if (V02_WITHHELD_CAPABILITIES.includes(capability)) {
+      gw._audit({
+        type: 'computer_control_denied',
+        bot: bot.name,
+        action: 'node_action',
+        capability,
+        reason: 'capability_withheld_v02',
+      });
+      return send(res, 409, { error: 'capability_withheld_v02' });
+    }
+    if (!input || typeof input !== 'object' || Array.isArray(input))
+      return send(res, 400, { error: 'bad_input' });
+
+    const node = await ensureConfiguredComputerNode(gw, providers);
+    if (node.configured && !node.ok)
+      return send(res, 503, { error: 'computer_node_unavailable', reason: node.error });
+
+    const provider = providers.get(providerId);
+    if (!provider) return send(res, 404, { error: 'provider_not_found' });
+    if (!provider.capabilities.includes(capability))
+      return send(res, 400, { error: 'capability_not_advertised' });
+
+    const effectful = EFFECTFUL_CAPABILITIES.includes(capability);
+    let session = null;
+    if (effectful) {
+      if (!sessionId) return send(res, 400, { error: 'computer_session_required' });
+      session = store.get(sessionId);
+      if (!session) return send(res, 404, { error: 'computer_session_not_found' });
+      if (session.state === 'done') return send(res, 409, { error: 'computer_session_done' });
+      if (session.control && session.control.heldBy && session.control.heldBy !== bot.name)
+        return send(res, 409, { error: 'computer_session_held_by_other', heldBy: session.control.heldBy });
+    }
+
+    try {
+      const out = await invokeConfiguredComputerNode({
+        providerId,
+        capability,
+        input,
+      }, { effectful });
+
+      const outcome = out && out.ok === true ? 'success' : 'provider_refused';
+      gw._audit({
+        type: 'computer_action',
+        bot: bot.name,
+        providerId,
+        capability,
+        effectful,
+        sessionId,
+        outcome,
+      });
+
+      if (effectful && session) {
+        const frame = store.appendFrame(session.id, {
+          kind: out && out.ok === true ? 'action' : 'refusal',
+          summary: `${capability} ${out && out.ok === true ? 'executed' : 'refused'} via ${providerId}`,
+          ref: null,
+        });
+        if (!frame.ok) {
+          gw._audit({
+            type: 'computer_frame_denied',
+            sessionId: session.id,
+            bot: bot.name,
+            reason: frame.error,
+          });
+          return send(res, 503, { error: 'computer_evidence_append_failed' });
+        }
+      }
+
+      return send(res, out && out.ok === true ? 200 : 422, out);
+    } catch (e) {
+      const message = String(e && e.message || '');
+      const reason = message === 'effect_authority_unconfigured'
+        ? 'effect_authority_unconfigured'
+        : message.startsWith('computer_node_')
+          ? message
+          : 'computer_node_action_failed';
+      gw._audit({
+        type: 'computer_action',
+        bot: bot.name,
+        providerId,
+        capability,
+        effectful,
+        sessionId,
+        outcome: 'error',
+        reason,
+      });
+      return send(res, reason === 'effect_authority_unconfigured' ? 503 : 502, { error: reason });
+    }
   }
 
   // ── collection ──

@@ -34,6 +34,17 @@ const CAPABILITIES = Object.freeze([
   'computer.input.scroll',
 ]);
 
+const EFFECTFUL_CAPABILITIES = Object.freeze([
+  'computer.process.stop',
+  'computer.files.write',
+  'computer.shell.start',
+  'computer.shell.send',
+  'computer.shell.stop',
+  'computer.input.click',
+  'computer.input.type',
+  'computer.input.scroll',
+]);
+
 const SEVERITIES = Object.freeze(['critical', 'warning', 'info']);
 const DEPTHS = Object.freeze(['quick', 'standard', 'forensic']);
 const ID_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
@@ -211,6 +222,7 @@ function getComputerProviderRegistry(gw) {
 module.exports = {
   PROVIDER_KINDS,
   CAPABILITIES,
+  EFFECTFUL_CAPABILITIES,
   SEVERITIES,
   DEPTHS,
   validateManifest,
