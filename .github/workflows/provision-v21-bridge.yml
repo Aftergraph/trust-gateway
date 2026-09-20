@@ -1,0 +1,39 @@
+name: Provision V2.1 TG-WORKS bridge
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - deploy/provision-v21-bridge.sh
+      - .github/workflows/provision-v21-bridge.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v21-bridge-provision-production
+  cancel-in-progress: false
+
+jobs:
+  provision-vds:
+    if: github.event.pull_request.head.ref == 'ops/v21-provision-credentials' && github.event.pull_request.user.login == 'JonasAbde'
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Refuse non-canonical source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ github.repository }}" = "Aftergraph/trust-gateway"
+          test "${{ github.head_ref }}" = "ops/v21-provision-credentials"
+      - name: Provision production credentials and verify services
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x deploy/provision-v21-bridge.sh
+          if [ "$(id -u)" -eq 0 ]; then
+            EXPECTED_VDS_HOST=vmi3517816 ./deploy/provision-v21-bridge.sh
+          else
+            sudo -n env EXPECTED_VDS_HOST=vmi3517816 ./deploy/provision-v21-bridge.sh
+          fi
