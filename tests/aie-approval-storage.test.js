@@ -54,16 +54,35 @@ test('migrates a legacy SQLite approvals table and reloads action identity in a 
     const { ApprovalStoreDb } = require('./src/gateway/approvals-db');
     const store = new ApprovalStoreDb({ table: 'approvals', jsonFile: ${JSON.stringify(path.join(dir, 'missing.json'))} });
     const old = store.get('apr_000007');
-    const added = store.request({ bot: { name: 'operator' }, tool: 'fs.write', args: { path: '/tmp/x' }, reason: 'bound', action_id: 'aie-action-7' });
+    const added = store.request({
+      bot: { name: 'operator' },
+      tool: 'fs.write',
+      args: { path: '/tmp/x' },
+      reason: 'bound',
+      action_id: 'aie-action-7',
+      platform_context: {
+        action_id: 'act_11111111111111111111111111111111',
+        execution_context_id: 'ctx_22222222222222222222222222222222',
+        mission_id: 'mis_storage',
+        identity: {
+          organization_id: 'org_33333333333333333333333333333333',
+          tenant_id: 'ten_44444444444444444444444444444444',
+          principal_id: 'prn_55555555555555555555555555555555'
+        }
+      }
+    });
     const db = require('./src/gateway/db').db;
     const columns = db.prepare('PRAGMA table_info(approvals)').all().map((c) => c.name);
     console.log(JSON.stringify({ old, added, columns }));
   `, { TG_DB_FILE: dbFile }));
   assert.equal(first.old.action_id, null);
+  assert.equal(first.old.platform_context, null);
   assert.equal(first.old.bot, legacy.bot);
   assert.deepEqual(first.old.args, legacy.args);
   assert.equal(first.added.action_id, 'aie-action-7');
+  assert.equal(first.added.platform_context.execution_context_id, 'ctx_22222222222222222222222222222222');
   assert.ok(first.columns.includes('action_id'));
+  assert.ok(first.columns.includes('platform_context_json'));
 
   const reloaded = JSON.parse(node(`
     const { ApprovalStoreDb } = require('./src/gateway/approvals-db');
@@ -71,9 +90,12 @@ test('migrates a legacy SQLite approvals table and reloads action identity in a 
     console.log(JSON.stringify({ old: store.get('apr_000007'), added: store.get('apr_000008') }));
   `, { TG_DB_FILE: dbFile }));
   assert.equal(reloaded.old.action_id, null);
+  assert.equal(reloaded.old.platform_context, null);
   assert.equal(reloaded.old.bot, 'worker');
   assert.deepEqual(reloaded.old.args, legacy.args);
   assert.equal(reloaded.added.action_id, 'aie-action-7');
+  assert.equal(reloaded.added.platform_context.execution_context_id, 'ctx_22222222222222222222222222222222');
+  assert.equal(reloaded.added.platform_context.identity.principal_id, 'prn_55555555555555555555555555555555');
   assert.equal(reloaded.added.bot, 'operator');
   assert.deepEqual(reloaded.added.args, { path: '/tmp/x' });
 });
@@ -87,6 +109,16 @@ test('imports JSON action_id and persists it through a fresh SQLite process', ()
     args: { command: 'echo json' }, argsSummary: '{"command":"echo json"}',
     reason: 'import', status: 'pending', createdAt: Date.now(), expiresAt: Date.now() + 60000,
     resolvedBy: null, resolvedAt: null, impact: { risk: 'destructive' },
+    platform_context: {
+      action_id: 'act_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      execution_context_id: 'ctx_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      mission_id: 'mis_json',
+      identity: {
+        organization_id: 'org_cccccccccccccccccccccccccccccccc',
+        tenant_id: 'ten_dddddddddddddddddddddddddddddddd',
+        principal_id: 'prn_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+      }
+    },
   };
   fs.writeFileSync(jsonFile, JSON.stringify([row]));
   const result = JSON.parse(node(`
@@ -95,6 +127,7 @@ test('imports JSON action_id and persists it through a fresh SQLite process', ()
     console.log(JSON.stringify(store.get('apr_000003')));
   `, { TG_DB_FILE: dbFile }));
   assert.equal(result.action_id, 'json-action-3');
+  assert.equal(result.platform_context.execution_context_id, row.platform_context.execution_context_id);
   assert.equal(result.bot, 'worker');
   assert.deepEqual(result.args, row.args);
 
@@ -103,5 +136,6 @@ test('imports JSON action_id and persists it through a fresh SQLite process', ()
     console.log(JSON.stringify(new ApprovalStoreDb({ jsonFile: ${JSON.stringify(jsonFile)} }).get('apr_000003')));
   `, { TG_DB_FILE: dbFile }));
   assert.equal(reloaded.action_id, 'json-action-3');
+  assert.deepEqual(reloaded.platform_context, row.platform_context);
   assert.deepEqual(reloaded.args, row.args);
 });

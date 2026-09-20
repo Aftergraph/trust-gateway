@@ -15,7 +15,9 @@ const { ApprovalStore } = require('./approvals');
 const { getApprovals } = require('./approvals-db'); // FS-A5: env-gated DB variant
 const { MemoryStore, getMemoryStore } = require('./memory');
 const { BudgetStore } = require('./budgets');
-const { revalidate: aie_revalidate } = require('./aie-client'); // TG → AIE execution-time revalidation
+const { revalidate: aie_revalidate } = require('./aie-client'); // legacy TG → AIE execution-time revalidation
+const { authorizeV21Action } = require('./platform-execution');
+const { resolvePlatformIdentity } = require('./platform-identity');
 const disk = require('./disk-audit');
 const { TelemetryRing, DEFAULT_FILE: DEFAULT_TELEMETRY_FILE } = require('./telemetry');
 const { loadMounts, match } = require('./http-mounts');
@@ -77,6 +79,8 @@ class Gateway extends EventEmitter {
     adapterCredentialLifecycle = null, // injected tenant-scoped Vault credential lifecycle
     adapterContextResolver = null, // injected trusted mission/authority context resolver
     adapterRuntime = null, // composed adapter runtime; explicit dependencies remain supported
+    platformAuthorize = authorizeV21Action,
+    platformIdentityResolver = resolvePlatformIdentity,
   } = {}) {
     super();
     this.bots = bots;
@@ -104,6 +108,8 @@ class Gateway extends EventEmitter {
     this.governedEgressBroker = governedEgressBroker ?? composedAdapterRuntime.governedEgressBroker ?? null;
     this.adapterCredentialLifecycle = adapterCredentialLifecycle ?? composedAdapterRuntime.adapterCredentialLifecycle ?? null;
     this.adapterContextResolver = adapterContextResolver ?? composedAdapterRuntime.adapterContextResolver ?? null;
+    this.platformAuthorize = platformAuthorize;
+    this.platformIdentityResolver = platformIdentityResolver;
     this.budgets = budgets ?? null; // v2 Slice 2: opt-in; null => feature off => zero behavior change
     this.now = now;
     this.mounts = mountFiles ? loadMounts() : (Array.isArray(mounts) ? mounts.slice() : []);
@@ -628,12 +634,36 @@ class Gateway extends EventEmitter {
     }
     if (verdict.decision === 'needs_approval') {
       const action_id = body.action_id || null;
+      let platform_context = null;
+      if (body.execution_context_id !== undefined && body.execution_context_id !== null) {
+        const identity = this.platformIdentityResolver(req, this);
+        if (!identity || identity.status !== 200) {
+          this._audit({
+            type: 'action.platform_identity_unavailable',
+            bot: bot.name,
+            tool,
+            action_id,
+            execution_context_id: body.execution_context_id,
+          });
+          return send(res, Number(identity && identity.status) || 503, {
+            decision: 'deny',
+            error: identity && identity.body && identity.body.error || 'platform_identity_unavailable',
+          });
+        }
+        platform_context = {
+          action_id,
+          execution_context_id: body.execution_context_id,
+          mission_id: body.mission_id ?? null,
+          identity: identity.body,
+        };
+      }
       const approval = this.approvals.request({
         bot,
         tool,
         args,
         reason: verdict.reason,
         action_id,
+        platform_context,
       });
       this._audit({ type: 'approval_requested', approvalId: approval.id, bot: bot.name, tool, class: cls });
       // Audit the deterministic impact snapshot — never the raw args.
@@ -648,25 +678,58 @@ class Gateway extends EventEmitter {
 
     // allow → execute (executor wins for synthetic tools, else jailed dispatch)
     if (!this.dispatch && !this._findExecutor(tool)) return send(res, 500, { error: 'no_dispatcher' });
-    // TG → AIE execution-time revalidation (TH-12): fail-closed by default
-    const failOpen = process.env.TG_AIE_FAIL_OPEN === 'true';
-    try {
-      const rv = aie_revalidate(body.action_id || 'tg-' + Date.now(), { bot: bot.name, tool, args });
-      if (!rv.ok) {
-        this._audit({ type: 'action.revalidation_failed', bot: bot.name, tool, error: rv.code });
-        if (!failOpen) {
-          // Map AIE codes → TG HTTP
-          let status = 403, err = 'revalidation_failed';
-          if (rv.code === 'AIE-AUTH-002') { status = 410; err = 'lease_expired'; }
-          else if (rv.code === 'AIE-AUTH-003') { err = 'authority_revoked'; }
-          else if (rv.code === 'AIE-AUTH-004') { err = 'action_not_admitted'; }
-          else if (rv.code === 'AIE_UNREACHABLE') { status = 502; err = 'aie_unreachable'; }
-          return send(res, status, { decision: 'deny', error: err, error_code: rv.code });
-        }
+    // Platform V2.1 actions bind immutable WORKS execution context + current
+    // TG identity + AIE action-time authority before dispatch. Legacy requests
+    // keep the existing AIE path until the phase-3 migration is complete.
+    let platformExecution = null;
+    if (body.execution_context_id !== undefined && body.execution_context_id !== null) {
+      try {
+        platformExecution = await this.platformAuthorize({ req, gw: this, body, bot, tool, args });
+        this._audit({
+          type: 'action.execution_authorized',
+          bot: bot.name,
+          tool,
+          action_id: body.action_id,
+          execution_context_id: body.execution_context_id,
+          authority_lease_id: platformExecution.context.authority_lease_id,
+          execution_pdr_id: platformExecution.pdr.id,
+        });
+      } catch (e) {
+        this._audit({
+          type: 'action.revalidation_failed',
+          bot: bot.name,
+          tool,
+          action_id: body.action_id,
+          execution_context_id: body.execution_context_id,
+          error: e && e.code ? e.code : String(e),
+        });
+        return send(res, Number(e && e.status) || 502, {
+          decision: 'deny',
+          error: e && e.code ? e.code : 'platform_execution_unavailable',
+          ...(e && e.detail ? { error_code: e.detail } : {}),
+        });
       }
-    } catch (e) {
-      this._audit({ type: 'action.revalidation_failed', bot: bot.name, tool, error: String(e) });
-      if (!failOpen) return send(res, 502, { decision: 'deny', error: 'aie_unreachable' });
+    } else {
+      // TG → AIE execution-time revalidation (TH-12): fail-closed by default
+      const failOpen = process.env.TG_AIE_FAIL_OPEN === 'true';
+      try {
+        const rv = aie_revalidate(body.action_id || 'tg-' + Date.now(), { bot: bot.name, tool, args });
+        if (!rv.ok) {
+          this._audit({ type: 'action.revalidation_failed', bot: bot.name, tool, error: rv.code });
+          if (!failOpen) {
+            // Map AIE codes → TG HTTP
+            let status = 403, err = 'revalidation_failed';
+            if (rv.code === 'AIE-AUTH-002') { status = 410; err = 'lease_expired'; }
+            else if (rv.code === 'AIE-AUTH-003') { err = 'authority_revoked'; }
+            else if (rv.code === 'AIE-AUTH-004') { err = 'action_not_admitted'; }
+            else if (rv.code === 'AIE_UNREACHABLE') { status = 502; err = 'aie_unreachable'; }
+            return send(res, status, { decision: 'deny', error: err, error_code: rv.code });
+          }
+        }
+      } catch (e) {
+        this._audit({ type: 'action.revalidation_failed', bot: bot.name, tool, error: String(e) });
+        if (!failOpen) return send(res, 502, { decision: 'deny', error: 'aie_unreachable' });
+      }
     }
     if (this.budgets && !this.budgets.consume(bot.name).ok) {
       this._audit({ type: 'budget_denied', bot: bot.name, tool });
@@ -674,8 +737,26 @@ class Gateway extends EventEmitter {
     }
     try {
       const result = await this._run(bot.name, tool, args);
-      this._audit({ type: 'action_executed', bot: bot.name, tool, ok: true });
-      return send(res, 200, { decision: 'allow', admission_decision_id: admissionDecisionId, result });
+      this._audit({
+        type: 'action_executed',
+        bot: bot.name,
+        tool,
+        ok: true,
+        ...(platformExecution ? {
+          action_id: body.action_id,
+          execution_context_id: platformExecution.context.execution_context_id,
+          execution_pdr_id: platformExecution.pdr.id,
+        } : {}),
+      });
+      return send(res, 200, {
+        decision: 'allow',
+        admission_decision_id: admissionDecisionId,
+        ...(platformExecution ? {
+          execution_context_id: platformExecution.context.execution_context_id,
+          execution_pdr_id: platformExecution.pdr.id,
+        } : {}),
+        result,
+      });
     } catch (e) {
       this._audit({ type: 'action_executed', bot: bot.name, tool, ok: false, error: String(e && e.message) });
       return send(res, 502, { decision: 'allow', error: 'dispatch_failed' });
@@ -703,7 +784,13 @@ class Gateway extends EventEmitter {
 
     const approver = bot.name;
     const parkedAction = parked && parked.status === 'pending'
-      ? { tool: parked.tool, args: parked.args, bot: parked.bot, action_id: parked.action_id }
+      ? {
+          tool: parked.tool,
+          args: parked.args,
+          bot: parked.bot,
+          action_id: parked.action_id,
+          platform_context: parked.platform_context || null,
+        }
       : null;
     const result = this.approvals.resolve(id, verb, approver);
     this._audit({
@@ -723,27 +810,84 @@ class Gateway extends EventEmitter {
     // Approved → execute the parked decision (survives restart via durable store).
     if (!parkedAction) return send(res, 500, { error: 'parked_action_missing' });
     if (!this.dispatch && !this._findExecutor(parkedAction.tool)) return send(res, 500, { error: 'no_dispatcher' });
-    // Generate fallback action_id when AIE is not in use (most tests). The
-    // aie_revalidate call below handles missing AIE via TG_AIE_FAIL_OPEN.
-    const actionId = parkedAction.action_id || 'tg-apr-' + id;
-    // TG → AIE execution-time revalidation (TH-12): fail-closed by default
-    const failOpen = process.env.TG_AIE_FAIL_OPEN === 'true';
-    try {
-      const rv = aie_revalidate(actionId, { bot: parkedAction.bot, tool: parkedAction.tool, args: parkedAction.args });
-      if (!rv.ok) {
-        this._audit({ type: 'action.revalidation_failed', bot: parkedAction.bot, tool: parkedAction.tool, error: rv.code });
-        if (!failOpen) {
-          let status = 403, err = 'revalidation_failed';
-          if (rv.code === 'AIE-AUTH-002') { status = 410; err = 'lease_expired'; }
-          else if (rv.code === 'AIE-AUTH-003') { err = 'authority_revoked'; }
-          else if (rv.code === 'AIE-AUTH-004') { err = 'action_not_admitted'; }
-          else if (rv.code === 'AIE_UNREACHABLE') { status = 502; err = 'aie_unreachable'; }
-          return send(res, status, { id, status: 'approved', decision: 'deny', error: err, error_code: rv.code });
-        }
+    // Approval is permission to retry authorization, not authority to execute.
+    // V2.1 actions therefore repeat the full action-time chain after approval:
+    // immutable WORKS context -> current stored identity binding -> AIE live
+    // revalidation -> execution PDR -> durable WORKS correlation -> dispatch.
+    let platformExecution = null;
+    if (parkedAction.platform_context && parkedAction.platform_context.execution_context_id) {
+      const originalBotConfig = this.bots[parkedAction.bot];
+      if (!originalBotConfig) {
+        this._audit({ type: 'action.revalidation_failed', bot: parkedAction.bot, tool: parkedAction.tool, error: 'original_principal_unavailable' });
+        return send(res, 403, { id, status: 'approved', decision: 'deny', error: 'original_principal_unavailable' });
       }
-    } catch (e) {
-      this._audit({ type: 'action.revalidation_failed', bot: parkedAction.bot, tool: parkedAction.tool, error: String(e) });
-      if (!failOpen) return send(res, 502, { id, status: 'approved', decision: 'deny', error: 'aie_unreachable' });
+      const pc = parkedAction.platform_context;
+      const platformBody = {
+        action_id: pc.action_id,
+        execution_context_id: pc.execution_context_id,
+        ...(pc.mission_id ? { mission_id: pc.mission_id } : {}),
+      };
+      try {
+        platformExecution = await this.platformAuthorize({
+          req,
+          gw: this,
+          body: platformBody,
+          bot: { name: parkedAction.bot, ...originalBotConfig },
+          tool: parkedAction.tool,
+          args: parkedAction.args,
+          deps: {
+            resolvePlatformIdentity: () => ({ status: 200, body: pc.identity }),
+          },
+        });
+        this._audit({
+          type: 'action.execution_authorized_after_approval',
+          approvalId: id,
+          bot: parkedAction.bot,
+          tool: parkedAction.tool,
+          action_id: pc.action_id,
+          execution_context_id: pc.execution_context_id,
+          authority_lease_id: platformExecution.context.authority_lease_id,
+          execution_pdr_id: platformExecution.pdr.id,
+        });
+      } catch (e) {
+        this._audit({
+          type: 'action.revalidation_failed',
+          approvalId: id,
+          bot: parkedAction.bot,
+          tool: parkedAction.tool,
+          action_id: pc.action_id,
+          execution_context_id: pc.execution_context_id,
+          error: e && e.code ? e.code : String(e),
+        });
+        return send(res, Number(e && e.status) || 502, {
+          id,
+          status: 'approved',
+          decision: 'deny',
+          error: e && e.code ? e.code : 'platform_execution_unavailable',
+          ...(e && e.detail ? { error_code: e.detail } : {}),
+        });
+      }
+    } else {
+      // Legacy approvals retain the existing AIE action-time revalidation.
+      const actionId = parkedAction.action_id || 'tg-apr-' + id;
+      const failOpen = process.env.TG_AIE_FAIL_OPEN === 'true';
+      try {
+        const rv = aie_revalidate(actionId, { bot: parkedAction.bot, tool: parkedAction.tool, args: parkedAction.args });
+        if (!rv.ok) {
+          this._audit({ type: 'action.revalidation_failed', bot: parkedAction.bot, tool: parkedAction.tool, error: rv.code });
+          if (!failOpen) {
+            let status = 403, err = 'revalidation_failed';
+            if (rv.code === 'AIE-AUTH-002') { status = 410; err = 'lease_expired'; }
+            else if (rv.code === 'AIE-AUTH-003') { err = 'authority_revoked'; }
+            else if (rv.code === 'AIE-AUTH-004') { err = 'action_not_admitted'; }
+            else if (rv.code === 'AIE_UNREACHABLE') { status = 502; err = 'aie_unreachable'; }
+            return send(res, status, { id, status: 'approved', decision: 'deny', error: err, error_code: rv.code });
+          }
+        }
+      } catch (e) {
+        this._audit({ type: 'action.revalidation_failed', bot: parkedAction.bot, tool: parkedAction.tool, error: String(e) });
+        if (!failOpen) return send(res, 502, { id, status: 'approved', decision: 'deny', error: 'aie_unreachable' });
+      }
     }
     if (this.budgets && !this.budgets.consume(parkedAction.bot).ok) {
       this._audit({ type: 'budget_denied', bot: parkedAction.bot, tool: parkedAction.tool });
@@ -751,8 +895,26 @@ class Gateway extends EventEmitter {
     }
     try {
       const out2 = await this._run(parkedAction.bot, parkedAction.tool, parkedAction.args);
-      this._audit({ type: 'action_executed_after_approval', approvalId: id, tool: parkedAction.tool, ok: true });
-      return send(res, 200, { id, status: 'approved', result: out2 });
+      this._audit({
+        type: 'action_executed_after_approval',
+        approvalId: id,
+        tool: parkedAction.tool,
+        ok: true,
+        ...(platformExecution ? {
+          action_id: platformExecution.pdr.action_id,
+          execution_context_id: platformExecution.context.execution_context_id,
+          execution_pdr_id: platformExecution.pdr.id,
+        } : {}),
+      });
+      return send(res, 200, {
+        id,
+        status: 'approved',
+        ...(platformExecution ? {
+          execution_context_id: platformExecution.context.execution_context_id,
+          execution_pdr_id: platformExecution.pdr.id,
+        } : {}),
+        result: out2,
+      });
     } catch (e) {
       this._audit({ type: 'action_executed_after_approval', approvalId: id, tool: parkedAction.tool, ok: false });
       return send(res, 502, { id, status: 'approved', error: 'dispatch_failed' });
