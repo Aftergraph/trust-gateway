@@ -79,6 +79,8 @@ class Gateway extends EventEmitter {
     adapterCredentialLifecycle = null, // injected tenant-scoped Vault credential lifecycle
     adapterContextResolver = null, // injected trusted mission/authority context resolver
     adapterRuntime = null, // composed adapter runtime; explicit dependencies remain supported
+    platformAuthorize = authorizeV21Action,
+    platformIdentityResolver = resolvePlatformIdentity,
   } = {}) {
     super();
     this.bots = bots;
@@ -106,6 +108,8 @@ class Gateway extends EventEmitter {
     this.governedEgressBroker = governedEgressBroker ?? composedAdapterRuntime.governedEgressBroker ?? null;
     this.adapterCredentialLifecycle = adapterCredentialLifecycle ?? composedAdapterRuntime.adapterCredentialLifecycle ?? null;
     this.adapterContextResolver = adapterContextResolver ?? composedAdapterRuntime.adapterContextResolver ?? null;
+    this.platformAuthorize = platformAuthorize;
+    this.platformIdentityResolver = platformIdentityResolver;
     this.budgets = budgets ?? null; // v2 Slice 2: opt-in; null => feature off => zero behavior change
     this.now = now;
     this.mounts = mountFiles ? loadMounts() : (Array.isArray(mounts) ? mounts.slice() : []);
@@ -632,7 +636,7 @@ class Gateway extends EventEmitter {
       const action_id = body.action_id || null;
       let platform_context = null;
       if (body.execution_context_id !== undefined && body.execution_context_id !== null) {
-        const identity = resolvePlatformIdentity(req, this);
+        const identity = this.platformIdentityResolver(req, this);
         if (!identity || identity.status !== 200) {
           this._audit({
             type: 'action.platform_identity_unavailable',
@@ -680,7 +684,7 @@ class Gateway extends EventEmitter {
     let platformExecution = null;
     if (body.execution_context_id !== undefined && body.execution_context_id !== null) {
       try {
-        platformExecution = await authorizeV21Action({ req, gw: this, body, bot, tool, args });
+        platformExecution = await this.platformAuthorize({ req, gw: this, body, bot, tool, args });
         this._audit({
           type: 'action.execution_authorized',
           bot: bot.name,
@@ -824,7 +828,7 @@ class Gateway extends EventEmitter {
         ...(pc.mission_id ? { mission_id: pc.mission_id } : {}),
       };
       try {
-        platformExecution = await authorizeV21Action({
+        platformExecution = await this.platformAuthorize({
           req,
           gw: this,
           body: platformBody,
