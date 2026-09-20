@@ -1,7 +1,7 @@
 'use strict';
 
 const { resolvePlatformIdentity } = require('./platform-identity');
-const { getExecutionContext } = require('./works-context-client');
+const { getExecutionContext, recordExecutionPolicyDecision } = require('./works-context-client');
 const { revalidate } = require('./aie-client');
 const { createExecutionDecision } = require('./policy-decision-record');
 
@@ -21,6 +21,7 @@ async function authorizeV21Action({ req, gw, body, bot, tool, args, deps = {} })
   const loadContext = deps.getExecutionContext || getExecutionContext;
   const liveRevalidate = deps.revalidate || revalidate;
   const persistDecision = deps.createExecutionDecision || createExecutionDecision;
+  const persistCorrelation = deps.recordExecutionPolicyDecision || recordExecutionPolicyDecision;
   const executionContextId = body.execution_context_id;
   if (executionContextId === undefined || executionContextId === null) {
     return { legacy: true };
@@ -81,7 +82,16 @@ async function authorizeV21Action({ req, gw, body, bot, tool, args, deps = {} })
     reason: 'admitted',
   });
 
-  return { legacy: false, context, pdr, identity: current, revalidation: rv };
+  const correlation = await persistCorrelation({
+    workId: context.work_id,
+    executionContextId: context.execution_context_id,
+    executionPdrId: pdr.id,
+  });
+  if (!correlation || correlation.ok !== true) {
+    throw deny(503, 'works_evidence_correlation_failed', correlation && correlation.reason);
+  }
+
+  return { legacy: false, context, pdr, correlation, identity: current, revalidation: rv };
 }
 
 module.exports = { authorizeV21Action };
