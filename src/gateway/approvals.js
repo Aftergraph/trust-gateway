@@ -53,7 +53,7 @@ class ApprovalStore {
     try { fs.chmodSync(this.file, 0o600); } catch { /* best effort */ }
   }
 
-  request({ bot, tool, args, reason, ttlMs = null, action_id = null } = {}) {
+  request({ bot, tool, args, reason, ttlMs = null, action_id = null, platform_context = null } = {}) {
     const id = `apr_${String(this._next++).padStart(6, '0')}`;
     const created = this.now();
     const impact = this._computeImpact({ tool, args, gw: this.gw });
@@ -63,6 +63,12 @@ class ApprovalStore {
       // execution-time revalidation must use the same action ID that was
       // admitted before the request was parked.
       action_id: action_id || null,
+      // Platform V2.1 identity/context is gateway-owned metadata, never a
+      // bearer credential. Preserve it across approval so action-time
+      // authority can be revalidated immediately before dispatch.
+      platform_context: platform_context && typeof platform_context === 'object'
+        ? { ...platform_context }
+        : null,
       bot: bot ? bot.name : null,
       tool,
       args,
