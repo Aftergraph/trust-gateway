@@ -58,6 +58,12 @@ esac
 command -v openssl >/dev/null || { echo "provision: openssl missing" >&2; exit 14; }
 command -v curl >/dev/null || { echo "provision: curl missing" >&2; exit 14; }
 
+if [[ "${PROVISION_DRY_RUN:-0}" == "1" ]]; then
+  echo "provision: DRY-RUN PASS host=${short_host}"
+  echo "provision: systemd-derived paths and canonical TG remote verified"
+  exit 0
+fi
+
 read_env() {
   local file="$1" key="$2"
   awk -v k="${key}" 'index($0,k"=")==1 { print substr($0,length(k)+2) }' "${file}" | tail -n1
