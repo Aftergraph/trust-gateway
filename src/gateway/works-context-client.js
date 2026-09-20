@@ -8,6 +8,7 @@ function _cfg() {
   return {
     url: process.env.WORKS_API_URL || '',
     token: process.env.WORKS_API_TOKEN || '',
+    bridgeSecret: process.env.WORKS_PLATFORM_BRIDGE_SECRET || '',
   };
 }
 
@@ -65,10 +66,15 @@ async function recordExecutionPolicyDecision(
       typeof executionPdrId !== 'string' || !PDR_RE.test(executionPdrId)) {
     return { ok: false, reason: 'invalid_platform_reference' };
   }
-  const { url, token } = _cfg();
+  const { url, token, bridgeSecret } = _cfg();
   if (!url) return { ok: false, reason: 'works_disabled' };
+  if (bridgeSecret.length < 32) return { ok: false, reason: 'works_bridge_unconfigured' };
 
-  const headers = { accept: 'application/json', 'content-type': 'application/json' };
+  const headers = {
+    accept: 'application/json',
+    'content-type': 'application/json',
+    'x-works-platform-bridge': bridgeSecret,
+  };
   if (token) headers.authorization = `Bearer ${token}`;
 
   let resp;
