@@ -147,6 +147,19 @@ class CredentialHandleStore {
     if (String(request.purpose || '') !== row.purpose) throw fail('credential_handle_scope_mismatch');
 
     const meta = rowToPublic(row);
+
+    // The vault's storage tenant is a Trust Gateway-local slug (for example
+    // "main"), while platform execution contexts carry canonical ten_* IDs.
+    // Never silently equate those namespaces. A handle may cross the namespace
+    // boundary only when it was explicitly attenuated to the exact platform
+    // tenant in scopeRefs. Legacy callers whose request tenant equals the vault
+    // tenant remain valid.
+    const requestTenantId = String(request.tenantId || '').trim();
+    if (requestTenantId && requestTenantId !== row.tenant &&
+        !meta.scopeRefs.includes('platform-tenant:' + requestTenantId)) {
+      throw fail('credential_handle_tenant_mismatch');
+    }
+
     const destination = request.destination || {};
     const host = String(destination.host || '').toLowerCase();
     const method = String(request.http?.method || '').toUpperCase();

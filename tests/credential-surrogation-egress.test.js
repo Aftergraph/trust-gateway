@@ -200,6 +200,41 @@ test('unknown, expired, revoked, foreign-principal and foreign-mission handles f
   });
 });
 
+test('platform tenant namespace must be explicitly attenuated when vault tenant differs', () => {
+  fixture('platform-tenant-binding', ({ db, vault }) => {
+    vault.setSecret('main', 'github-token', 'secret');
+    const store = new CredentialHandleStore({ db, vault, now: () => 1_000 });
+
+    const scoped = issue(store, {
+      scopeRefs: [
+        'repo:Aftergraph/example',
+        'platform-tenant:ten_22222222222222222222222222222222',
+      ],
+    });
+    const req = request(scoped.handleId, {
+      tenantId: 'ten_22222222222222222222222222222222',
+    });
+    assert.doesNotThrow(() => store.resolveForBroker(scoped.handleId, req));
+
+    const wrong = request(scoped.handleId, {
+      tenantId: 'ten_99999999999999999999999999999999',
+    });
+    assert.throws(
+      () => store.resolveForBroker(scoped.handleId, wrong),
+      /credential_handle_tenant_mismatch/,
+    );
+
+    const unscoped = issue(store, { scopeRefs: ['repo:Aftergraph/example'] });
+    assert.throws(
+      () => store.resolveForBroker(unscoped.handleId, req),
+      /credential_handle_tenant_mismatch/,
+    );
+
+    const legacySameNamespace = request(unscoped.handleId, { tenantId: 'main' });
+    assert.doesNotThrow(() => store.resolveForBroker(unscoped.handleId, legacySameNamespace));
+  });
+});
+
 test('handle scope constrains destination, method and path', () => {
   fixture('scope', ({ db, vault }) => {
     vault.setSecret('main', 'github-token', 'secret');

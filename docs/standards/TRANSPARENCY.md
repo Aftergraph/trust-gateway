@@ -917,3 +917,5 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 294 | `tenant_lifecycle_acked` | mounts/161-tenant-lifecycle-transitions.js (TG85: {by, tenant, owner, ack} — operator recorded an owner acknowledgement of a validated kind) |
 | 295 | `tenant_lifecycle_ack_failed` | mounts/161-tenant-lifecycle-transitions.js (TG85: {by, tenant, reason} — acknowledgement rejected: bad kind, unknown owner, or missing record) |
 | 296 | `tenant_lifecycle_ack_denied` | mounts/161-tenant-lifecycle-transitions.js (TG85: {bot} — non-operator attempted acknowledgement record) |
+| 297 | `git_egress_requested` | gateway/git-egress.js (P2: governed Git egress requested; audit binds execution_context_id, action_id, effect_id, effect_class, repository, ref and operation; never secret material) |
+| 298 | `git_egress_completed` | gateway/git-egress.js (P2: governed Git egress completed; audit records status plus execution/action/effect/repository/ref/operation bindings; never secret material) |

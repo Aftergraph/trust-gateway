@@ -1,0 +1,333 @@
+name: P2 live governed Git egress + Sentinel
+
+on:
+  push:
+    branches:
+      - steward/p2-governed-git-egress-v0
+    paths:
+      - ".github/workflows/p2-live-governed-git-egress.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: tg-p2-live-governed-git-egress
+  cancel-in-progress: true
+
+jobs:
+  proof:
+    name: AIE → TG governed remote Git → Sentinel
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_REPO: Aftergraph/trust-gateway
+      TARGET_PR: "129"
+      TARGET_BRANCH: p2/governed-egress-live-proof
+      SHA_A: 62b980ce33cca199607bfe45827fcc1a714c8b96
+      SHA_B: 7eac0b6c20edd19fdc6a1864831a548ac97a0d13
+      TG_SHA: 7eac0b6c20edd19fdc6a1864831a548ac97a0d13
+      AIE_SHA: 4e3514b936d2d65433b6c51901afb56908abd545
+      SENTINEL_SHA: eb51f824af2279ee3eee5daa8572bd54a34b3ca8
+      ACTION_ID: act_dddddddddddddddddddddddddddddddd
+      AUTHORITY_LEASE_ID: auth_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+      PRINCIPAL_ID: principal/steward-p2
+      MISSION_ID: mission/steward-p2-live-tg
+
+    steps:
+      - name: Checkout exact Trust Gateway candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.TG_SHA }}
+          path: .p2/tg
+          persist-credentials: false
+          clean: true
+
+      - name: Checkout exact AIE owner
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: Aftergraph/aie
+          ref: ${{ env.AIE_SHA }}
+          path: .p2/aie
+          persist-credentials: false
+          clean: true
+
+      - name: Checkout exact Sentinel owner
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: Aftergraph/sentinel
+          ref: ${{ env.SENTINEL_SHA }}
+          path: .p2/sentinel
+          persist-credentials: false
+          clean: true
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+
+      - name: Install exact AIE runtime
+        run: python3 -m pip install -q -e "$GITHUB_WORKSPACE/.p2/aie"
+
+      - name: Assert exact pre-state
+        run: |
+          set -euo pipefail
+          test "$(git -C .p2/tg rev-parse HEAD)" = "$TG_SHA"
+          test "$(git -C .p2/aie rev-parse HEAD)" = "$AIE_SHA"
+          test "$(git -C .p2/sentinel rev-parse HEAD)" = "$SENTINEL_SHA"
+          test "$(gh api "repos/$TARGET_REPO/git/ref/heads/$TARGET_BRANCH" --jq '.object.sha')" = "$SHA_A"
+          test "$(gh api "repos/$TARGET_REPO/pulls/$TARGET_PR" --jq '.head.sha')" = "$SHA_A"
+
+      - name: Sentinel records exact remote subject A
+        run: |
+          set -euo pipefail
+          rm -f /tmp/p2-tg-ledger.jsonl /tmp/p2-tg-sentinel-a.json
+          set +e
+          node .p2/sentinel/bin/sentinel.js review --pr "$TARGET_PR" --repo "$TARGET_REPO" --format json --ledger-path /tmp/p2-tg-ledger.jsonl > /tmp/p2-tg-sentinel-a.json
+          rc=$?
+          set -e
+          test "$rc" -eq 0 -o "$rc" -eq 1
+          node --input-type=module - <<'NODE'
+          import fs from 'node:fs';
+          const d=JSON.parse(fs.readFileSync('/tmp/p2-tg-sentinel-a.json','utf8'));
+          if(d.review.headSha!==process.env.SHA_A) throw new Error('sentinel_a_head_mismatch');
+          console.log(JSON.stringify({sentinel_a:'PASS',head:d.review.headSha,verdict:d.verdict.decision,receipt_id:d.receipt?.receipt_id||null}));
+          NODE
+
+      - name: Seed persistent AIE authority for exact Git mutation
+        run: |
+          set -euo pipefail
+          rm -f /tmp/p2-tg-aie.db /tmp/p2-tg-digest.txt
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const {actionFingerprint}=require('./.p2/tg/src/gateway/aie-client.js');
+          const args={repository:'Aftergraph/trust-gateway',ref:'refs/heads/p2/governed-egress-live-proof',new_sha:process.env.SHA_B,force:true};
+          fs.writeFileSync('/tmp/p2-tg-digest.txt',actionFingerprint({bot:'worker',tool:'git.push',args}));
+          NODE
+          digest="$(cat /tmp/p2-tg-digest.txt)"
+          python3 - "$GITHUB_WORKSPACE/.p2/aie" /tmp/p2-tg-aie.db "$ACTION_ID" "$PRINCIPAL_ID" "$MISSION_ID" "$AUTHORITY_LEASE_ID" "$digest" <<'PY'
+          import sys
+          from datetime import datetime,timedelta,timezone
+          from pathlib import Path
+          aie_root,db_path,action_id,principal_id,mission_id,authority_id,digest=sys.argv[1:]
+          sys.path.insert(0,str(Path(aie_root)/"src"))
+          from aie_runtime.engine import ActionRequest,AdmissionEngine,AuthorityLease,Mission,Principal
+          from aie_runtime.persistent_state import PersistentState
+          now=datetime.now(timezone.utc)
+          state=PersistentState(db_path=db_path)
+          state.principals[principal_id]=Principal(principal_id,"agent","ref:steward-p2-live")
+          state.missions[mission_id]=Mission(mission_id,"RUNNING")
+          state.leases[authority_id]=AuthorityLease(
+              id=authority_id,
+              principal_id=principal_id,
+              mission_id=mission_id,
+              capabilities={"git.push"},
+              resource_prefixes=("repo:Aftergraph/trust-gateway",),
+              expires_at=now+timedelta(minutes=10),
+              budget_remaining=10,
+              revoked=False,
+          )
+          AdmissionEngine(state,policy=lambda _:True).admit(ActionRequest(
+              action_id,principal_id,mission_id,authority_id,"git.push",
+              "repo:Aftergraph/trust-gateway#refs/heads/p2/governed-egress-live-proof",1,
+              extensions=({"namespace":"urn:aftergraph:tg-action:v1","sha256":digest},),
+          ))
+          state.save_all()
+          state._conn.close()
+          PY
+
+      - name: Execute live AIE-gated governed Git mutation
+        env:
+          P2_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const os=require('node:os');
+          const path=require('node:path');
+          const {spawnSync}=require('node:child_process');
+          const {open}=require('./.p2/tg/src/gateway/db');
+          const {SecretsVault}=require('./.p2/tg/src/gateway/secrets-vault');
+          const {CredentialHandleStore}=require('./.p2/tg/src/gateway/credential-handles');
+          const {createGovernedEgressBroker}=require('./.p2/tg/src/gateway/governed-egress');
+          const {createPinnedTransport}=require('./.p2/tg/src/gateway/pinned-transport');
+          const {GovernedGitEgress}=require('./.p2/tg/src/gateway/git-egress');
+
+          const token=process.env.P2_GITHUB_TOKEN;
+          if(!token) throw new Error('github_token_missing');
+          const digest=fs.readFileSync('/tmp/p2-tg-digest.txt','utf8').trim();
+          const aieState='/tmp/p2-tg-aie.db';
+          const bridge=path.join(process.cwd(),'.p2/aie/scripts/aie_revalidate_bridge.py');
+          function revalidate(){
+            const out=spawnSync('python3',[bridge,'--state',aieState,'--action-id',process.env.ACTION_ID,'--expected-binding',digest],{encoding:'utf8',env:process.env,maxBuffer:256*1024});
+            let p=null; try{p=JSON.parse((out.stdout||'').trim())}catch{}
+            if(out.status!==0||!p?.ok||p.authority_lease_id!==process.env.AUTHORITY_LEASE_ID) return {ok:false,reason:p?.code||'aie_revalidation_failed'};
+            return {ok:true,version:p.authority_lease_id};
+          }
+
+          const dir=fs.mkdtempSync(path.join(os.tmpdir(),'p2-tg-live-'));
+          const db=open(path.join(dir,'gateway.db'));
+          const vault=new SecretsVault({db,enabled:true,master:'p2-tg-live-ephemeral'});
+          vault.setSecret('main','proof-token',token);
+          const now=Date.now();
+          const targetPath='/repos/Aftergraph/trust-gateway/git/refs/heads/p2/governed-egress-live-proof';
+          const store=new CredentialHandleStore({db,vault,now:()=>Date.now()});
+          const handle=store.issue({
+            tenant:'main',secretKey:'proof-token',principalId:process.env.PRINCIPAL_ID,
+            missionId:process.env.MISSION_ID,authorityRef:process.env.AUTHORITY_LEASE_ID,
+            purpose:'git_push',credentialClass:'github_actions_ephemeral_token',
+            allowedDestinations:['api.github.com'],allowedMethods:['PATCH'],
+            allowedPathPrefixes:[targetPath],
+            scopeRefs:['repo:Aftergraph/trust-gateway','ref:refs/heads/p2/governed-egress-live-proof'],
+            expiresAt:now+5*60*1000,
+          });
+
+          const audit=[];
+          let transportCalls=0;
+          const pinned=createPinnedTransport();
+          const broker=createGovernedEgressBroker({
+            handleStore:store,
+            authorityCheck:async()=>revalidate(),
+            approvalCheck:async()=>({ok:true,expiresAt:now+5*60*1000}),
+            destinationPolicy:[{host:'api.github.com',schemes:['https'],ports:[443],methods:['PATCH'],pathPrefixes:[targetPath]}],
+            audit:e=>audit.push(e),
+            commitGuard:async({request})=>(
+              request.executionContextId==='ctx_p2_tg_live_1' &&
+              request.actionId===process.env.ACTION_ID &&
+              request.effectId==='effect_p2_tg_live_1' &&
+              request.effectClass==='git.mutate' &&
+              request.git?.repository==='Aftergraph/trust-gateway' &&
+              request.git?.ref==='refs/heads/p2/governed-egress-live-proof'
+            )?{ok:true,permitId:'permit/p2-tg-live-1'}:{ok:false},
+            credentialInjector:({secret,request})=>({...request,http:{...request.http,headers:{...request.http.headers,authorization:'Bearer '+secret}}}),
+            transport:async(req,ctx)=>{transportCalls+=1;return pinned(req,ctx);},
+          });
+
+          const git=new GovernedGitEgress({broker,audit:e=>audit.push(e)});
+          (async()=>{
+            try{
+              const out=await git.execute({
+                operation:'push',repository:'Aftergraph/trust-gateway',
+                ref:'refs/heads/p2/governed-egress-live-proof',newSha:process.env.SHA_B,force:true,
+                requestId:'req_p2_tg_live_1',correlationId:'cor_p2_tg_live_1',
+                executionContextId:'ctx_p2_tg_live_1',actionId:process.env.ACTION_ID,
+                effectId:'effect_p2_tg_live_1',tenantId:'main',
+                principalId:process.env.PRINCIPAL_ID,missionId:process.env.MISSION_ID,
+                authorityRef:process.env.AUTHORITY_LEASE_ID,credentialHandle:handle.handleId,
+              });
+              if(out.result.status!==200) throw new Error('github_mutation_status_'+out.result.status);
+              if(transportCalls!==1) throw new Error('unexpected_transport_calls_'+transportCalls);
+              if(JSON.stringify(audit).includes(token)) throw new Error('token_leaked_to_audit');
+              const ev=spawnSync('python3',['-c',"import sqlite3,sys;c=sqlite3.connect(sys.argv[1]);print(sum('action.revalidated' in r[0] for r in c.execute('SELECT data FROM evidence')));c.close()",aieState],{encoding:'utf8'});
+              const evidenceCount=Number((ev.stdout||'').trim());
+              if(!(evidenceCount>=1)) throw new Error('aie_evidence_missing');
+              fs.writeFileSync('/tmp/p2-tg-egress.json',JSON.stringify({
+                status:'PASS',request_digest:out.admission.requestDigest,admission_id:out.admission.admissionId,
+                authority_version:out.admission.authorityVersion,aie_revalidation_evidence:evidenceCount,transport_calls:transportCalls,
+                audit_types:audit.map(x=>x.type),
+              }));
+
+              const revoke=[
+                'import sys','from pathlib import Path',
+                'aie_root,db_path,authority_id=sys.argv[1:]',
+                'sys.path.insert(0,str(Path(aie_root)/"src"))',
+                'from aie_runtime.persistent_state import PersistentState',
+                'state=PersistentState(db_path=db_path)',
+                'state.leases[authority_id].revoked=True',
+                'state.save_all()','state._conn.close()',
+              ].join('\n');
+              const rv=spawnSync('python3',['-c',revoke,path.join(process.cwd(),'.p2/aie'),aieState,process.env.AUTHORITY_LEASE_ID],{encoding:'utf8'});
+              if(rv.status!==0) throw new Error('aie_revoke_failed');
+
+              let rejected=false;
+              try{
+                await git.execute({
+                  operation:'push',repository:'Aftergraph/trust-gateway',
+                  ref:'refs/heads/p2/governed-egress-live-proof',newSha:process.env.SHA_A,force:true,
+                  requestId:'req_p2_tg_live_2',correlationId:'cor_p2_tg_live_2',
+                  executionContextId:'ctx_p2_tg_live_1',actionId:process.env.ACTION_ID,
+                  effectId:'effect_p2_tg_live_2',tenantId:'main',
+                  principalId:process.env.PRINCIPAL_ID,missionId:process.env.MISSION_ID,
+                  authorityRef:process.env.AUTHORITY_LEASE_ID,credentialHandle:handle.handleId,
+                });
+              }catch(err){rejected=/authority_revoked/.test(String(err?.code||err?.message||err));}
+              if(!rejected) throw new Error('revoked_authority_not_rejected');
+              if(transportCalls!==1) throw new Error('revoked_authority_reached_transport');
+              fs.writeFileSync('/tmp/p2-tg-revoke.json',JSON.stringify({revocation_fail_closed:'PASS',transport_calls:transportCalls}));
+              console.log(JSON.stringify({governed_remote_git_mutation:'PASS',aie_action_time_revalidation:'PASS',revocation_fail_closed:'PASS',transport_calls:transportCalls}));
+            }finally{
+              try{db.close()}catch{}
+              fs.rmSync(dir,{recursive:true,force:true});
+            }
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+      - name: Independent remote readback
+        run: |
+          set -euo pipefail
+          branch_sha=""
+          pr_head=""
+          for attempt in $(seq 1 15); do
+            branch_sha="$(gh api "repos/$TARGET_REPO/git/ref/heads/$TARGET_BRANCH" --jq '.object.sha')"
+            pr_head="$(gh api "repos/$TARGET_REPO/pulls/$TARGET_PR" --jq '.head.sha')"
+            if [ "$branch_sha" = "$SHA_B" ] && [ "$pr_head" = "$SHA_B" ]; then
+              printf '{"remote_readback":"PASS","attempt":%s,"branch_sha":"%s","pr_head":"%s"}\n' "$attempt" "$branch_sha" "$pr_head"
+              exit 0
+            fi
+            sleep 2
+          done
+          printf 'remote readback did not converge: branch=%s pr=%s expected=%s\n' "$branch_sha" "$pr_head" "$SHA_B" >&2
+          exit 1
+
+      - name: Sentinel verifies exact remote subject B and invalidates A
+        run: |
+          set -euo pipefail
+          set +e
+          node .p2/sentinel/bin/sentinel.js review --pr "$TARGET_PR" --repo "$TARGET_REPO" --format json --ledger-path /tmp/p2-tg-ledger.jsonl > /tmp/p2-tg-sentinel-b.json
+          rc=$?
+          set -e
+          test "$rc" -eq 0 -o "$rc" -eq 1
+          current="$(gh api "repos/$TARGET_REPO/pulls/$TARGET_PR" --jq '.head.sha')"
+          export CURRENT_REMOTE_HEAD="$current"
+          node --input-type=module - <<'NODE'
+          import fs from 'node:fs';
+          import {checkFreshness} from './.p2/sentinel/lib/review.js';
+          const a=JSON.parse(fs.readFileSync('/tmp/p2-tg-sentinel-a.json','utf8'));
+          const b=JSON.parse(fs.readFileSync('/tmp/p2-tg-sentinel-b.json','utf8'));
+          if(b.review.headSha!==process.env.SHA_B) throw new Error('sentinel_b_head_mismatch');
+          const stale=checkFreshness({headSha:a.review.headSha,baseSha:'proof-base'},{headSha:process.env.CURRENT_REMOTE_HEAD,baseSha:'proof-base'});
+          if(stale.fresh!==false||!String(stale.reason||'').includes('head moved')) throw new Error('prior_subject_not_invalidated');
+          console.log(JSON.stringify({sentinel_exact_sha_b:'PASS',stale_a_invalidation:'PASS',prior:a.review.headSha,current:b.review.headSha,reason:stale.reason}));
+          NODE
+
+      - name: Emit live proof receipt
+        run: |
+          set -euo pipefail
+          node --input-type=module - <<'NODE'
+          import fs from 'node:fs';
+          const e=JSON.parse(fs.readFileSync('/tmp/p2-tg-egress.json','utf8'));
+          const r=JSON.parse(fs.readFileSync('/tmp/p2-tg-revoke.json','utf8'));
+          const a=JSON.parse(fs.readFileSync('/tmp/p2-tg-sentinel-a.json','utf8'));
+          const b=JSON.parse(fs.readFileSync('/tmp/p2-tg-sentinel-b.json','utf8'));
+          console.log(JSON.stringify({
+            schema:'steward.p2.live-tg-aie-git-sentinel/0.1',
+            aie_action_time_revalidation:'PASS',
+            governed_remote_git_mutation:'PASS',
+            credential_surrogation:'PASS',
+            remote_exact_sha_readback:'PASS',
+            sentinel_exact_sha_a:'PASS',
+            sentinel_exact_sha_b:'PASS',
+            stale_a_invalidation:'PASS',
+            aie_revocation_fail_closed:'PASS',
+            before:a.review.headSha,after:b.review.headSha,
+            aie_revalidation_evidence:e.aie_revalidation_evidence,
+            egress_request_digest:e.request_digest,
+            transport_calls_after_revocation:r.transport_calls,
+            production_deployment:'absent',
+          }));
+          NODE
