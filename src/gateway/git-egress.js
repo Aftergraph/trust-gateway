@@ -97,6 +97,7 @@ function buildGitHubGitEgressRequest(input = {}) {
       query: {},
       headers: {
         accept: 'application/vnd.github+json',
+        'user-agent': 'aftergraph-trust-gateway',
         'x-github-api-version': '2022-11-28',
         'x-aftergraph-effect-class': classification.effectClass,
       },
