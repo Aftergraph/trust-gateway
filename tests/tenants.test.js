@@ -223,6 +223,13 @@ test('mount tenant-healthz: /healthz returns tenant superset; unknown tenant 404
       assert.equal(dflt.json.ok, true);
       assert.equal(dflt.json.tenant, 'main');
       assert.equal(dflt.json.chain.ok, true);
+      // S5 reality-readback contract: deployed_commit is always present and,
+      // when set, is an exact 40-hex SHA (never abbreviated/ambiguous).
+      assert.ok('deployed_commit' in dflt.json, 'healthz must expose deployed_commit');
+      assert.ok(
+        dflt.json.deployed_commit === null || /^[0-9a-f]{40}$/.test(dflt.json.deployed_commit),
+        'deployed_commit must be null or a full 40-hex SHA',
+      );
       // operator header to a real tenant — create via the SAME store the
       // mount's resolver will use (no fresh() here: it would swap the
       // db.js module graph under the running gateway)
