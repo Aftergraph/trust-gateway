@@ -29,7 +29,7 @@ work:
           trap 'rm -rf "$root"' EXIT
 
           git clone -q --filter=blob:none https://github.com/Aftergraph/STEWARD-by-Aftergraph.git "$root/steward"
-          git -C "$root/steward" checkout -q e147bbac3e4244b358d68466314363cb71073ea2
+          git -C "$root/steward" checkout -q 2fee57aa808a790afd073fd1525e730469764f0f
 
           git clone -q --filter=blob:none https://github.com/Aftergraph/runtime.git "$root/runtime"
           git -C "$root/runtime" checkout -q d9c5efb3a74222326ec71b06d5c2df2d4215d68f
@@ -43,6 +43,9 @@ work:
           git clone -q --filter=blob:none https://github.com/Aftergraph/aie.git "$root/aie"
           git -C "$root/aie" checkout -q 4e3514b936d2d65433b6c51901afb56908abd545
 
+          git clone -q --filter=blob:none https://github.com/Aftergraph/sentinel.git "$root/sentinel"
+          git -C "$root/sentinel" checkout -q eb51f824af2279ee3eee5daa8572bd54a34b3ca8
+
           bash "$root/steward/scripts/p2_tg_aie_cross_process_proof.sh" \
             "$root/runtime" \
             "$root/works-execution" \
@@ -51,6 +54,8 @@ work:
             d9c5efb3a74222326ec71b06d5c2df2d4215d68f \
             64cabe65bf210b2c65b525750acb45fc6d53894d \
             8a2c8d66a67d036227c77904844f105b39723f58 \
-            4e3514b936d2d65433b6c51901afb56908abd545
+            4e3514b936d2d65433b6c51901afb56908abd545 \
+            "$root/sentinel" \
+            eb51f824af2279ee3eee5daa8572bd54a34b3ca8
         cache: false
         timeout_s: 1200
