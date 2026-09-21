@@ -9,6 +9,28 @@
 const { send } = require('../server');
 const { resolveTenant } = require('../tenant-resolve');
 const { enforceQuotas } = require('../tenant-scope');
+const { execFileSync } = require('node:child_process');
+
+// S5 reality-readback: expose the exact git SHA this process was deployed
+// from, so an external probe can bind the RUNNING service to a reproducible
+// commit without traversing the (root-owned, ACL-blocked) checkout. Additive
+// superset of the v1 body — never removes ok/chain/tenant. Env override wins
+// so CI/build can pin it; otherwise resolve HEAD from the on-disk repo.
+let _deployedCommit;
+function deployedCommit() {
+  if (_deployedCommit !== undefined) return _deployedCommit;
+  // Exact-SHA only (STEWARD: every verdict binds to an exact commit SHA) —
+  // abbreviated hashes are rejected so a readback can never be ambiguous.
+  const env = process.env.GATEWAY_DEPLOYED_COMMIT || process.env.SOURCE_VERSION || '';
+  if (/^[0-9a-f]{40}$/.test(env)) { _deployedCommit = env; return _deployedCommit; }
+  try {
+    const sha = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: __dirname, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    _deployedCommit = /^[0-9a-f]{40}$/.test(sha) ? sha : null;
+  } catch { _deployedCommit = null; }
+  return _deployedCommit;
+}
 
 module.exports = {
   name: 'tenant-healthz',
@@ -22,6 +44,6 @@ module.exports = {
     const { tenant } = resolveTenant(req, gw);
     if (!tenant) return send(res, 404, { error: 'not_found' });
     if (enforceQuotas(gw, tenant, res)) return; // FS-I3: fail-closed quotas
-    return send(res, 200, { ok: true, chain: gw.chain.verify(), tenant: tenant.id });
+    return send(res, 200, { ok: true, chain: gw.chain.verify(), tenant: tenant.id, deployed_commit: deployedCommit() });
   },
 };
