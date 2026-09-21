@@ -95,8 +95,8 @@ jobs:
           node --input-type=module - <<'NODE'
           import fs from 'node:fs';
           const d=JSON.parse(fs.readFileSync('/tmp/p2-tg-sentinel-a.json','utf8'));
-          if(d.headSha!==process.env.SHA_A) throw new Error('sentinel_a_head_mismatch');
-          console.log(JSON.stringify({sentinel_a:'PASS',head:d.headSha,verdict:d.verdict,receipt_id:d.receipt?.receipt_id||null}));
+          if(d.review.headSha!==process.env.SHA_A) throw new Error('sentinel_a_head_mismatch');
+          console.log(JSON.stringify({sentinel_a:'PASS',head:d.review.headSha,verdict:d.verdict.decision,receipt_id:d.receipt?.receipt_id||null}));
           NODE
 
       - name: Seed persistent AIE authority for exact Git mutation
@@ -288,10 +288,10 @@ jobs:
           import {checkFreshness} from './.p2/sentinel/lib/review.js';
           const a=JSON.parse(fs.readFileSync('/tmp/p2-tg-sentinel-a.json','utf8'));
           const b=JSON.parse(fs.readFileSync('/tmp/p2-tg-sentinel-b.json','utf8'));
-          if(b.headSha!==process.env.SHA_B) throw new Error('sentinel_b_head_mismatch');
-          const stale=checkFreshness({headSha:a.headSha,baseSha:'proof-base'},{headSha:process.env.CURRENT_REMOTE_HEAD,baseSha:'proof-base'});
+          if(b.review.headSha!==process.env.SHA_B) throw new Error('sentinel_b_head_mismatch');
+          const stale=checkFreshness({headSha:a.review.headSha,baseSha:'proof-base'},{headSha:process.env.CURRENT_REMOTE_HEAD,baseSha:'proof-base'});
           if(stale.fresh!==false||!String(stale.reason||'').includes('head moved')) throw new Error('prior_subject_not_invalidated');
-          console.log(JSON.stringify({sentinel_exact_sha_b:'PASS',stale_a_invalidation:'PASS',prior:a.headSha,current:b.headSha,reason:stale.reason}));
+          console.log(JSON.stringify({sentinel_exact_sha_b:'PASS',stale_a_invalidation:'PASS',prior:a.review.headSha,current:b.review.headSha,reason:stale.reason}));
           NODE
 
       - name: Emit live proof receipt
@@ -313,7 +313,7 @@ jobs:
             sentinel_exact_sha_b:'PASS',
             stale_a_invalidation:'PASS',
             aie_revocation_fail_closed:'PASS',
-            before:a.headSha,after:b.headSha,
+            before:a.review.headSha,after:b.review.headSha,
             aie_revalidation_evidence:e.aie_revalidation_evidence,
             egress_request_digest:e.request_digest,
             transport_calls_after_revocation:r.transport_calls,
