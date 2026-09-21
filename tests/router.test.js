@@ -160,8 +160,8 @@ test('POST /v2/router/route: verified mode emits receipt with verification_requi
     assert.equal(result.receipt.verification, 'exact_head');
     assert.equal(result.receipt.execution_context_id, 'ctx_0123456789abcdef0123456789abcdef');
     assert.ok(result.receipt.reason_codes.includes('capability_match'));
-    assert.ok(result.receipt.reason_codes.includes('cost_ceiling_recorded_unenforced'));
-    assert.ok(result.receipt.reason_codes.includes('training_policy_unevaluated_no_terms_metadata'));
+    assert.ok(result.receipt.reason_codes.includes('cost_ceiling_enforced'));
+    assert.ok(result.receipt.reason_codes.includes('provider_training_permitted'));
     // legacy fields unchanged
     assert.ok(result.model);
     assert.ok(result.provider);
