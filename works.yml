@@ -1,13 +1,9 @@
-# works.yml — Trust Gateway CI via the works control plane.
-#
-# Zero GitHub Actions in this repo by convention; the local wave
-# scripts (wave-*/conformance-tier-*) remain the dev-loop tools.
-# This pipeline is the per-push verification gate published as the
-# `works-execution` commit status.
+# Proof-only WORKS pipeline for STEWARD P2 Runtime→WORKS→TG→AIE.
+# DO NOT MERGE. Uses Trust Gateway's already-wired tg-ci VDS pool.
 version: 1
 
 work:
-  verify:
+  steward-p2-tg-aie-proof:
     triggers:
       - push
       - pull_request
@@ -16,18 +12,45 @@ work:
       confidence: development
       os: linux
       arch: amd64
-      # Dedicated single-worker pool: the suite contains load-sensitive
-      # HTTP tests (chain-archive bloat-guard) that can ECONNRESET when
-      # two suites run concurrently on this box. Serializing trust-gateway
-      # CI through one worker removes the flake; other repos stay on
-      # avc-core (3 parallel workers).
       pool: tg-ci
 
     nodes:
-      test:
+      proof:
         run: |
+          set -euo pipefail
           export PATH=/opt/works/node-current/bin:$PATH
-          npm test
-        cache: true
-        cache_key_inputs: [run, repository]
-        timeout_s: 900
+
+          command -v git
+          command -v go
+          command -v node
+          command -v python3
+
+          root="$(mktemp -d)"
+          trap 'rm -rf "$root"' EXIT
+
+          git clone -q --filter=blob:none https://github.com/Aftergraph/STEWARD-by-Aftergraph.git "$root/steward"
+          git -C "$root/steward" checkout -q f7bbe4939a1e24ceaaf7030d79fccadc4b8981f5
+
+          git clone -q --filter=blob:none https://github.com/Aftergraph/runtime.git "$root/runtime"
+          git -C "$root/runtime" checkout -q d9c5efb3a74222326ec71b06d5c2df2d4215d68f
+
+          git clone -q --filter=blob:none https://github.com/Aftergraph/works-execution.git "$root/works-execution"
+          git -C "$root/works-execution" checkout -q 64cabe65bf210b2c65b525750acb45fc6d53894d
+
+          git clone -q --filter=blob:none https://github.com/Aftergraph/trust-gateway.git "$root/trust-gateway-owner"
+          git -C "$root/trust-gateway-owner" checkout -q 8a2c8d66a67d036227c77904844f105b39723f58
+
+          git clone -q --filter=blob:none https://github.com/Aftergraph/aie.git "$root/aie"
+          git -C "$root/aie" checkout -q 4e3514b936d2d65433b6c51901afb56908abd545
+
+          bash "$root/steward/scripts/p2_tg_aie_cross_process_proof.sh" \
+            "$root/runtime" \
+            "$root/works-execution" \
+            "$root/trust-gateway-owner" \
+            "$root/aie" \
+            d9c5efb3a74222326ec71b06d5c2df2d4215d68f \
+            64cabe65bf210b2c65b525750acb45fc6d53894d \
+            8a2c8d66a67d036227c77904844f105b39723f58 \
+            4e3514b936d2d65433b6c51901afb56908abd545
+        cache: false
+        timeout_s: 1200
