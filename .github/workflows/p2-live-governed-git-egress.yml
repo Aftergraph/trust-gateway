@@ -270,8 +270,19 @@ jobs:
       - name: Independent remote readback
         run: |
           set -euo pipefail
-          test "$(gh api "repos/$TARGET_REPO/git/ref/heads/$TARGET_BRANCH" --jq '.object.sha')" = "$SHA_B"
-          test "$(gh api "repos/$TARGET_REPO/pulls/$TARGET_PR" --jq '.head.sha')" = "$SHA_B"
+          branch_sha=""
+          pr_head=""
+          for attempt in $(seq 1 15); do
+            branch_sha="$(gh api "repos/$TARGET_REPO/git/ref/heads/$TARGET_BRANCH" --jq '.object.sha')"
+            pr_head="$(gh api "repos/$TARGET_REPO/pulls/$TARGET_PR" --jq '.head.sha')"
+            if [ "$branch_sha" = "$SHA_B" ] && [ "$pr_head" = "$SHA_B" ]; then
+              printf '{"remote_readback":"PASS","attempt":%s,"branch_sha":"%s","pr_head":"%s"}\n' "$attempt" "$branch_sha" "$pr_head"
+              exit 0
+            fi
+            sleep 2
+          done
+          printf 'remote readback did not converge: branch=%s pr=%s expected=%s\n' "$branch_sha" "$pr_head" "$SHA_B" >&2
+          exit 1
 
       - name: Sentinel verifies exact remote subject B and invalidates A
         run: |
