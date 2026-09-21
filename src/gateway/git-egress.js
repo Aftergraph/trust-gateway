@@ -11,6 +11,11 @@ function fail(code) {
 function normalizeRepository(repository) {
   const value = String(repository || '').trim();
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(value)) throw fail('git_repository_invalid');
+  const [owner, repo] = value.split('/');
+  if (!owner || !repo || owner === '.' || owner === '..' || repo === '.' || repo === '..' ||
+      owner.includes('..') || repo.includes('..') || owner.startsWith('.') || repo.startsWith('.')) {
+    throw fail('git_repository_invalid');
+  }
   return value;
 }
 
