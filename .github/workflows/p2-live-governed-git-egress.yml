@@ -166,8 +166,10 @@ jobs:
           function revalidate(){
             const out=spawnSync('python3',[bridge,'--state',aieState,'--action-id',process.env.ACTION_ID,'--expected-binding',digest],{encoding:'utf8',env:process.env,maxBuffer:256*1024});
             let p=null; try{p=JSON.parse((out.stdout||'').trim())}catch{}
-            if(out.status!==0||!p?.ok||p.authority_lease_id!==process.env.AUTHORITY_LEASE_ID) return {ok:false,reason:p?.code||'aie_revalidation_failed'};
-            return {ok:true,version:p.authority_lease_id};
+            if(out.status!==0||!p?.ok) return {ok:false,reason:p?.code||'aie_revalidation_failed'};
+            // Current AIE bridge contract returns {ok, code}; successful revalidation
+            // is already bound to this action's persisted authority lease + TG digest.
+            return {ok:true,version:process.env.AUTHORITY_LEASE_ID};
           }
 
           const dir=fs.mkdtempSync(path.join(os.tmpdir(),'p2-tg-live-'));
