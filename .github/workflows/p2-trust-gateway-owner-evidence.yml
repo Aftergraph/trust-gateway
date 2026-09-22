@@ -22,7 +22,7 @@ jobs:
         with:
           node-version: "24"
       - name: Governed Git boundary suite
-        run: node --test tests/git-governed-egress.test.js tests/credential-surrogation-egress.test.js
+        run: node --test --test-concurrency=1 tests/git-governed-egress.test.js tests/credential-surrogation-egress.test.js
       - name: Emit evidence
         env:
           OUT: ${{ runner.temp }}/owner-evidence.json
