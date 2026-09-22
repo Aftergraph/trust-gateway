@@ -11,6 +11,8 @@ permissions:
 
 jobs:
   evidence:
+    env:
+      OWNER_SUBJECT: ${{ github.event.pull_request.head.sha || github.sha }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -32,7 +34,7 @@ jobs:
           base={
             "schema":"steward.p2.owner-evidence/1.0",
             "owner":"Aftergraph/trust-gateway",
-            "subject":os.environ["GITHUB_SHA"],
+            "subject":os.environ["OWNER_SUBJECT"],
             "suite":"governed Git + credential surrogation",
             "result":"PASS",
             "production_effect":False,
