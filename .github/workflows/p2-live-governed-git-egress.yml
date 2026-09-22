@@ -26,10 +26,10 @@ jobs:
       TARGET_REPO: Aftergraph/trust-gateway
       TARGET_PR: "129"
       TARGET_BRANCH: p2/governed-egress-live-proof
-      SHA_A: 62b980ce33cca199607bfe45827fcc1a714c8b96
-      SHA_B: 7eac0b6c20edd19fdc6a1864831a548ac97a0d13
-      TG_SHA: 7eac0b6c20edd19fdc6a1864831a548ac97a0d13
-      AIE_SHA: 4e3514b936d2d65433b6c51901afb56908abd545
+      SHA_A: 7eac0b6c20edd19fdc6a1864831a548ac97a0d13
+      SHA_B: f07311cc3b3c15edae13c1ff4394231f33fd23f9
+      TG_SHA: ba5027241555393c81f71cdf63ded50093bc87d2
+      AIE_SHA: 4c8b871478183557d147a6670a57c5b5e7b15024
       SENTINEL_SHA: eb51f824af2279ee3eee5daa8572bd54a34b3ca8
       ACTION_ID: act_dddddddddddddddddddddddddddddddd
       AUTHORITY_LEASE_ID: auth_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
