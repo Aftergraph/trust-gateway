@@ -201,11 +201,14 @@ class Gateway extends EventEmitter {
 
   // Resolution order: registered executor wins (synthetic v2 tools), else the
   // configured dispatcher (jailed fs/shell). Errors propagate to call sites.
-  async _run(botName, tool, args) {
+  async _run(botName, tool, args, platformExecution = null) {
     const exec = this._findExecutor(tool);
-    if (exec) return exec(botName, tool, args);
+    // Platform-aware executors may consume the fourth argument to bind the
+    // effect commit to the exact authorization result that immediately
+    // preceded dispatch. Existing three-argument executors remain compatible.
+    if (exec) return exec(botName, tool, args, platformExecution);
     if (!this.dispatch) throw new Error('no_dispatcher');
-    return this.dispatch(botName, tool, args);
+    return this.dispatch(botName, tool, args, platformExecution);
   }
 
   _auth(req) {
@@ -736,7 +739,7 @@ class Gateway extends EventEmitter {
       return send(res, 402, { decision: 'deny', error: 'budget_exhausted' });
     }
     try {
-      const result = await this._run(bot.name, tool, args);
+      const result = await this._run(bot.name, tool, args, platformExecution);
       this._audit({
         type: 'action_executed',
         bot: bot.name,
@@ -894,7 +897,12 @@ class Gateway extends EventEmitter {
       return send(res, 402, { id, status: 'approved', decision: 'deny', error: 'budget_exhausted' });
     }
     try {
-      const out2 = await this._run(parkedAction.bot, parkedAction.tool, parkedAction.args);
+      const out2 = await this._run(
+        parkedAction.bot,
+        parkedAction.tool,
+        parkedAction.args,
+        platformExecution,
+      );
       this._audit({
         type: 'action_executed_after_approval',
         approvalId: id,
