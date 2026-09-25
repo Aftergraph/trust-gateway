@@ -75,51 +75,6 @@ function request(handleId, overrides = {}) {
   };
 }
 
-function issue(store, overrides = {}) {
-  return store.issue({
-    tenant: 'main',
-    secretKey: 'github-token',
-    principalId: 'principal/alice',
-    missionId: 'mission/release-42',
-    authorityRef: 'authority/release-publisher',
-    purpose: 'publish_release',
-    credentialClass: 'github_token',
-    allowedDestinations: ['api.github.com'],
-    allowedMethods: ['POST'],
-    allowedPathPrefixes: ['/repos/Aftergraph/example/'],
-    scopeRefs: ['repo:Aftergraph/example'],
-    expiresAt: 2_000,
-    ...overrides,
-  });
-}
-
-function request(handleId, overrides = {}) {
-  return {
-    requestId: 'er_1',
-    correlationId: 'corr_1',
-    principalId: 'principal/alice',
-    missionId: 'mission/release-42',
-    authorityRef: 'authority/release-publisher',
-    purpose: 'publish_release',
-    credentialHandle: handleId,
-    destination: { scheme: 'https', host: 'api.github.com', port: 443 },
-    http: {
-      method: 'POST',
-      path: '/repos/Aftergraph/example/releases',
-      query: { draft: 'false', z: '2', a: '1' },
-      headers: { 'content-type': 'application/json', 'x-operation': 'release' },
-      bodyDigest: 'sha256:body-1',
-    },
-    data: {
-      sensitivity: ['internal'],
-      provenanceRefs: ['evidence/source-1'],
-      lineageId: 'lineage/1',
-    },
-    requestedAt: 1_000,
-    ...overrides,
-  };
-}
-
 function broker(store, opts = {}) {
   const audit = [];
   const transportCalls = [];

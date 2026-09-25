@@ -1,0 +1,112 @@
+name: P2 trust-gateway owner evidence
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/p2-trust-gateway-owner-evidence.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    env:
+      OWNER_SUBJECT: ${{ github.event.pull_request.head.sha || github.sha }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          clean: true
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+      - name: Governed Git boundary suite
+        run: node --test --test-concurrency=1 tests/git-governed-egress.test.js tests/credential-surrogation-egress.test.js
+      - name: Emit evidence
+        env:
+          OUT: ${{ runner.temp }}/owner-evidence.json
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os
+          base={
+            "schema":"steward.p2.owner-evidence/1.0",
+            "owner":"Aftergraph/trust-gateway",
+            "subject":os.environ["OWNER_SUBJECT"],
+            "suite":"governed Git + credential surrogation",
+            "result":"PASS",
+            "production_effect":False,
+          }
+          canonical=json.dumps(base,sort_keys=True,separators=(",",":")).encode()
+          base["content_sha256"]=hashlib.sha256(canonical).hexdigest()
+          open(os.environ["OUT"],"w",encoding="utf-8").write(json.dumps(base,indent=2,sort_keys=True)+"\n")
+          print(json.dumps(base,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: p2-trust-gateway-owner-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/owner-evidence.json
+          if-no-files-found: error
+
+
+  live-readback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TARGET_URL: https://trust-gateway.fly.dev/healthz
+      EXPECTED_MAIN_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+      EVIDENCE_OUT: ${{ runner.temp }}/trust-gateway-live-readback.json
+    steps:
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+      - name: Probe live deployed commit
+        run: |
+          node --input-type=module - <<'NODE'
+          import fs from 'node:fs';
+          import crypto from 'node:crypto';
+
+          const url = process.env.TARGET_URL;
+          const expected = process.env.EXPECTED_MAIN_SHA;
+          const response = await fetch(url, {
+            redirect: 'error',
+            headers: { accept: 'application/json', 'user-agent': 'aftergraph-steward-p2-readback/1.0' },
+          });
+          const raw = await response.text();
+          let body = null;
+          try { body = JSON.parse(raw); } catch {}
+
+          const deployed = body?.deployed_commit ?? null;
+          const exact = typeof deployed === 'string' && /^[0-9a-f]{40}$/.test(deployed);
+          const aligned = exact && deployed === expected;
+          const base = {
+            schema: 'steward.p2.trust-gateway-live-readback/1.0',
+            endpoint: url,
+            http_status: response.status,
+            response_ok: response.ok,
+            deployed_commit: deployed,
+            exact_commit_readback: exact,
+            expected_main_sha: expected,
+            deployment_alignment: aligned ? 'CURRENT_MAIN' : 'STALE',
+            production_effect: false,
+          };
+          const canonical = JSON.stringify(base, Object.keys(base).sort());
+          const evidence = {
+            ...base,
+            content_sha256: crypto.createHash('sha256').update(canonical).digest('hex'),
+          };
+          fs.writeFileSync(process.env.EVIDENCE_OUT, JSON.stringify(evidence, null, 2) + '\n');
+          console.log(JSON.stringify(evidence));
+
+          if (!response.ok) throw new Error('healthz_http_failure');
+          if (!exact) throw new Error('deployed_commit_missing_or_invalid');
+          NODE
+      - name: Upload live readback evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: p2-trust-gateway-live-readback-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/trust-gateway-live-readback.json
+          if-no-files-found: error
