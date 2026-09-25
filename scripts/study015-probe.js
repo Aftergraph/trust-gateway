@@ -86,7 +86,7 @@ async function runProbe() {
     }
 
     const forbidden = await worker.approve(destructive.approvalId);
-    if (forbidden.error !== 'forbidden') {
+    if (forbidden.error !== 'operator_required') {
       throw new Error(`worker unexpectedly approved destructive action: ${JSON.stringify(forbidden)}`);
     }
 
