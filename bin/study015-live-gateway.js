@@ -126,13 +126,13 @@ let reconciliationRecorded = false;
 if (reconciliationFile) {
   const parsed = JSON.parse(fs.readFileSync(reconciliationFile, 'utf8'));
   const record = validateStudy015ReconciliationRecord(parsed, {
-    executionContextId: parsed.execution_context_id,
-    actionId: parsed.action_id,
-    effectId: parsed.effect_id,
-    correlationId: parsed.correlation_id,
+    executionContextId: required('STUDY015_RECONCILIATION_EXECUTION_CONTEXT_ID'),
+    actionId: required('STUDY015_RECONCILIATION_ACTION_ID'),
+    effectId: required('STUDY015_RECONCILIATION_EFFECT_ID'),
+    correlationId: required('STUDY015_RECONCILIATION_CAUSAL_ID'),
     repository,
     ref,
-    expectedSha: parsed.expected_sha,
+    expectedSha: required('STUDY015_RECONCILIATION_EXPECTED_SHA'),
   });
   gw._audit({
     type: 'git_egress_reconciled',
