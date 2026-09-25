@@ -33,6 +33,7 @@ const readyOut = required('STUDY015_TG_READY_OUT');
 const dataDir = required('TG_DATA_DIR');
 const auditFile = path.join(dataDir, 'study015-audit.jsonl');
 const port = Number(process.env.STUDY015_TG_PORT || 0);
+const postTransportCrash = process.env.STUDY015_FAIL_AFTER_TRANSPORT_SUCCESS === '1';
 
 if (!/^org_[a-f0-9]{32}$/.test(organizationId)) throw new Error('bad organization id');
 if (!/^ten_[a-f0-9]{32}$/.test(tenantId)) throw new Error('bad tenant id');
@@ -53,6 +54,7 @@ const { createGovernedEgressBroker } = require('../src/gateway/governed-egress')
 const { GovernedGitEgress } = require('../src/gateway/git-egress');
 const { revalidate } = require('../src/gateway/aie-client');
 const { createPinnedTransport } = require('../src/gateway/pinned-transport');
+const { createPostTransportCrashTransport } = require('../research/study015/post-transport-crash');
 const { Gateway } = require('../src/gateway/server');
 
 const tenants = new TenantStore();
@@ -210,7 +212,9 @@ gw.registerExecutor(/^git\.push$/, async (botName, tool, args, platformExecution
         return { ok: false };
       }
     },
-    transport: createPinnedTransport(),
+    transport: createPostTransportCrashTransport(createPinnedTransport(), {
+      enabled: postTransportCrash,
+    }),
   });
 
   const git = new GovernedGitEgress({
@@ -270,6 +274,7 @@ server.listen(port, '127.0.0.1', () => {
     mission_id: missionId,
     authority_lease_id: authorityRef,
     audit_file: auditFile,
+    fault_mode: postTransportCrash ? 'post_transport_success_sigkill' : 'none',
   };
   fs.mkdirSync(path.dirname(readyOut), { recursive: true });
   fs.writeFileSync(readyOut, JSON.stringify(receipt) + '\n', { mode: 0o600 });
