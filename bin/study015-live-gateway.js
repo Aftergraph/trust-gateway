@@ -33,6 +33,8 @@ const readyOut = required('STUDY015_TG_READY_OUT');
 const dataDir = required('TG_DATA_DIR');
 const auditFile = path.join(dataDir, 'study015-audit.jsonl');
 const port = Number(process.env.STUDY015_TG_PORT || 0);
+const postTransportCrash = process.env.STUDY015_FAIL_AFTER_TRANSPORT_SUCCESS === '1';
+const reconciliationFile = String(process.env.STUDY015_RECONCILIATION_FILE || '').trim();
 
 if (!/^org_[a-f0-9]{32}$/.test(organizationId)) throw new Error('bad organization id');
 if (!/^ten_[a-f0-9]{32}$/.test(tenantId)) throw new Error('bad tenant id');
@@ -53,6 +55,8 @@ const { createGovernedEgressBroker } = require('../src/gateway/governed-egress')
 const { GovernedGitEgress } = require('../src/gateway/git-egress');
 const { revalidate } = require('../src/gateway/aie-client');
 const { createPinnedTransport } = require('../src/gateway/pinned-transport');
+const { createPostTransportCrashTransport } = require('../research/study015/post-transport-crash');
+const { validateStudy015ReconciliationRecord } = require('../research/study015/reconciliation-record');
 const { Gateway } = require('../src/gateway/server');
 
 const tenants = new TenantStore();
@@ -117,6 +121,35 @@ const gw = new Gateway({
     operator: { token: operatorToken, role: 'operator', capabilities: ['*'] },
   },
 });
+
+let reconciliationRecorded = false;
+if (reconciliationFile) {
+  const parsed = JSON.parse(fs.readFileSync(reconciliationFile, 'utf8'));
+  const record = validateStudy015ReconciliationRecord(parsed, {
+    executionContextId: required('STUDY015_RECONCILIATION_EXECUTION_CONTEXT_ID'),
+    actionId: required('STUDY015_RECONCILIATION_ACTION_ID'),
+    effectId: required('STUDY015_RECONCILIATION_EFFECT_ID'),
+    correlationId: required('STUDY015_RECONCILIATION_CAUSAL_ID'),
+    repository,
+    ref,
+    expectedSha: required('STUDY015_RECONCILIATION_EXPECTED_SHA'),
+  });
+  gw._audit({
+    type: 'git_egress_reconciled',
+    requestId: record.request_id,
+    correlationId: record.correlation_id,
+    executionContextId: record.execution_context_id,
+    actionId: record.action_id,
+    effectId: record.effect_id,
+    repository: record.repository,
+    ref: record.ref,
+    status: record.status,
+    expectedSha: record.expected_sha,
+    observedSha: record.observed_sha,
+    observedVia: record.observed_via,
+  });
+  reconciliationRecorded = true;
+}
 
 function assertSame(actual, expected, code) {
   if (actual !== expected) {
@@ -210,7 +243,9 @@ gw.registerExecutor(/^git\.push$/, async (botName, tool, args, platformExecution
         return { ok: false };
       }
     },
-    transport: createPinnedTransport(),
+    transport: createPostTransportCrashTransport(createPinnedTransport(), {
+      enabled: postTransportCrash,
+    }),
   });
 
   const git = new GovernedGitEgress({
@@ -270,6 +305,8 @@ server.listen(port, '127.0.0.1', () => {
     mission_id: missionId,
     authority_lease_id: authorityRef,
     audit_file: auditFile,
+    fault_mode: postTransportCrash ? 'post_transport_success_sigkill' : 'none',
+    reconciliation_recorded: reconciliationRecorded,
   };
   fs.mkdirSync(path.dirname(readyOut), { recursive: true });
   fs.writeFileSync(readyOut, JSON.stringify(receipt) + '\n', { mode: 0o600 });
