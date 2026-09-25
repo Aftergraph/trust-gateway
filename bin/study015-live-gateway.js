@@ -30,6 +30,8 @@ const authorityRef = required('STUDY015_AUTHORITY_LEASE_ID');
 const repository = required('STUDY015_GIT_REPOSITORY');
 const ref = required('STUDY015_GIT_REF');
 const readyOut = required('STUDY015_TG_READY_OUT');
+const dataDir = required('TG_DATA_DIR');
+const auditFile = path.join(dataDir, 'study015-audit.jsonl');
 const port = Number(process.env.STUDY015_TG_PORT || 0);
 
 if (!/^org_[a-f0-9]{32}$/.test(organizationId)) throw new Error('bad organization id');
@@ -109,6 +111,7 @@ const handle = handles.issue({
 const gw = new Gateway({
   mountFiles: false,
   telemetryFile: null,
+  auditFile,
   bots: {
     worker: { token: workerToken, role: 'worker', capabilities: [] },
     operator: { token: operatorToken, role: 'operator', capabilities: ['*'] },
@@ -266,6 +269,7 @@ server.listen(port, '127.0.0.1', () => {
     principal_id: principalId,
     mission_id: missionId,
     authority_lease_id: authorityRef,
+    audit_file: auditFile,
   };
   fs.mkdirSync(path.dirname(readyOut), { recursive: true });
   fs.writeFileSync(readyOut, JSON.stringify(receipt) + '\n', { mode: 0o600 });
