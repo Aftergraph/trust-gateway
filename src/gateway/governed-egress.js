@@ -318,15 +318,25 @@ class GovernedEgressBroker {
         requireAddressPinning: true,
       });
     } catch (err) {
+      // A transport may surface the injected credential in its error
+      // message/code (e.g. a verbose client echoing the authorization
+      // header). The secret is in scope here; redact it from the audit
+      // record and from the error propagated to callers so neither the
+      // durable audit log nor an upstream handler can persist it.
+      const secret = resolved.secret;
+      const rawCode = String(err?.code || 'transport_error');
+      const rawMessage = String(err?.message || rawCode);
+      const safeCode = scrubSecret(rawCode, secret) || 'transport_error';
+      const safeMessage = scrubSecret(rawMessage, secret);
       this.audit({
         type: 'egress_failed',
         admissionId: admission.admissionId,
         requestId: admission.requestId,
         correlationId: admission.correlationId,
-        error: String(err?.code || err?.message || 'transport_error'),
+        error: safeCode !== 'transport_error' ? safeCode : safeMessage,
         ts: Number(this.now()),
       });
-      throw err;
+      throw fail(safeCode, safeMessage);
     }
 
     const connectedAddress = String(result?.connectedAddress || '');
