@@ -12,6 +12,6 @@ test('STUDY-015 probe executes real Trust Gateway policy/approval/audit path', a
   assert.match(receipt.source_head, /^[a-f0-9]{40}$/);
   assert.ok(Object.values(receipt.mechanisms).every(Boolean));
   assert.equal(receipt.observations.destructive_decision, 'needs_approval');
-  assert.equal(receipt.observations.worker_approval_error, 'forbidden');
+  assert.equal(receipt.observations.worker_approval_error, 'operator_required');
   assert.equal(receipt.observations.shell_dispatch_count, 1);
 });
