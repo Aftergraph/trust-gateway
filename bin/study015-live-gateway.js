@@ -44,6 +44,7 @@ process.env.TG_SECRETS_VAULT = '1';
 process.env.TG_PLATFORM_ORG_ID = organizationId;
 
 const dbmod = require('../src/gateway/db');
+const { SqlChain } = require('../src/gateway/sql-chain');
 const { TenantStore } = require('../src/gateway/tenants');
 const { SecretsVault } = require('../src/gateway/secrets-vault');
 const { CredentialHandleStore } = require('../src/gateway/credential-handles');
@@ -106,7 +107,11 @@ const handle = handles.issue({
   expiresAt: Date.now() + 30 * 60 * 1000,
 });
 
+const auditDbFile = required('TG_DB_FILE');
+const chain = new SqlChain({ file: auditDbFile });
+
 const gw = new Gateway({
+  chain,
   mountFiles: false,
   telemetryFile: null,
   bots: {
@@ -274,6 +279,7 @@ server.listen(port, '127.0.0.1', () => {
 
 function shutdown() {
   server.close(() => {
+    try { chain.close(); } catch {}
     try { dbmod.closeDb(); } catch {}
     process.exit(0);
   });
