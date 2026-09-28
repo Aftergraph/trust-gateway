@@ -453,6 +453,22 @@ class PluginHub {
       if (!copiedSeal.ok || copiedSeal.integrity.digest !== sourceSeal.integrity.digest) {
         return this._reject(sourceId, copiedSeal.ok ? ['install_copy_digest_mismatch'] : copiedSeal.errors);
       }
+
+      // Re-parse the staged manifest after the content seal. This closes the
+      // parse→hash/copy TOCTOU window: the manifest we persist must describe
+      // the exact bytes that became the installed snapshot.
+      let stagedManifest;
+      try {
+        stagedManifest = JSON.parse(fs.readFileSync(path.join(staging, 'plugin.json'), 'utf8'));
+      } catch {
+        return this._reject(sourceId, ['install_manifest_unparseable']);
+      }
+      const stagedValidation = validateManifest(stagedManifest, { dirName: sourceId });
+      if (!stagedValidation.ok
+          || JSON.stringify(stagedValidation.manifest) !== JSON.stringify(v.manifest)) {
+        return this._reject(sourceId, ['install_manifest_changed_during_copy']);
+      }
+
       fs.renameSync(staging, dest);
     } catch {
       return this._reject(sourceId, ['install_copy_failed']);
