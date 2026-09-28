@@ -34,6 +34,8 @@ const PACKAGE_FILE_MAX = 2 * 1024 * 1024;
 const PACKAGE_BYTES_MAX = 16 * 1024 * 1024;
 const PACKAGE_FILES_MAX = 1024;
 const STATE_VERSION = 1;
+const CONTRACT_VERSION = '0.2';
+const PLUGIN_VIEWS = new Set(['Card', 'Table', 'Form', 'Chart', 'Timeline', 'Approval', 'Progress', 'Artifact']);
 
 const DEFAULT_SOURCE_DIR = path.join(__dirname, '..', '..', 'modules');
 const DEFAULT_DATA_DIR = path.join(__dirname, '..', '..', 'data');
@@ -105,7 +107,11 @@ function validateManifest(raw, { dirName } = {}) {
   if (!isPlainObject(raw)) {
     return { ok: false, errors: ['manifest must be a JSON object'] };
   }
-  const allowed = new Set(['id', 'name', 'version', 'entry', 'description', 'capabilities', 'secrets', 'mcp']);
+  const allowed = new Set([
+    'contractVersion', 'id', 'name', 'version', 'entry', 'description',
+    'capabilities', 'permissions', 'tools', 'views', 'events', 'automations',
+    'sandbox', 'secrets', 'mcp',
+  ]);
   for (const k of Object.keys(raw)) {
     if (!allowed.has(k)) errors.push(`unknown_field:${k}`);
   }
@@ -126,6 +132,21 @@ function validateManifest(raw, { dirName } = {}) {
   if (raw.description !== undefined && (typeof raw.description !== 'string' || raw.description.length > DESC_MAX)) {
     errors.push(`description must be a string ≤${DESC_MAX} chars`);
   }
+  if (raw.contractVersion !== undefined && !['0.1', CONTRACT_VERSION].includes(raw.contractVersion)) {
+    errors.push(`contractVersion must be 0.1|${CONTRACT_VERSION}`);
+  }
+  if (raw.sandbox !== undefined && raw.sandbox !== 'jailed') {
+    errors.push('sandbox must be "jailed"');
+  }
+
+  const normalizeStringList = (field, value) => {
+    if (value === undefined) return [];
+    if (!Array.isArray(value) || value.some((item) => typeof item !== 'string' || item.trim() === '' || item.length > 128)) {
+      errors.push(`${field} must be an array of non-empty strings ≤128 chars`);
+      return [];
+    }
+    return [...new Set(value.map((item) => item.trim()))];
+  };
 
   let capabilities = [];
   if (raw.capabilities !== undefined) {
@@ -133,6 +154,44 @@ function validateManifest(raw, { dirName } = {}) {
       errors.push('capabilities must be an array of non-empty strings');
     } else {
       capabilities = raw.capabilities.slice();
+    }
+  }
+
+  const permissions = normalizeStringList('permissions', raw.permissions);
+  const tools = normalizeStringList('tools', raw.tools);
+  const events = normalizeStringList('events', raw.events);
+
+  let views = [];
+  if (raw.views !== undefined) {
+    if (!Array.isArray(raw.views) || raw.views.some((view) => typeof view !== 'string')) {
+      errors.push('views must be an array of view primitive names');
+    } else {
+      for (const view of raw.views) {
+        if (!PLUGIN_VIEWS.has(view)) errors.push(`unknown_view:${view}`);
+        else if (!views.includes(view)) views.push(view);
+      }
+    }
+  }
+
+  let automations = [];
+  if (raw.automations !== undefined) {
+    if (!Array.isArray(raw.automations)) {
+      errors.push('automations must be an array');
+    } else {
+      for (const automation of raw.automations) {
+        if (!isPlainObject(automation)
+            || typeof automation.trigger !== 'string' || automation.trigger.trim() === ''
+            || typeof automation.action !== 'string' || automation.action.trim() === '') {
+          errors.push('automations must contain {trigger, action} strings');
+          continue;
+        }
+        automations.push({
+          ...(typeof automation.id === 'string' && automation.id ? { id: automation.id } : {}),
+          trigger: automation.trigger.trim(),
+          ...(typeof automation.condition === 'string' && automation.condition ? { condition: automation.condition } : {}),
+          action: automation.action.trim(),
+        });
+      }
     }
   }
 
@@ -169,12 +228,19 @@ function validateManifest(raw, { dirName } = {}) {
   return {
     ok: true,
     manifest: {
+      contractVersion: raw.contractVersion || CONTRACT_VERSION,
       id,
       name: name.trim(),
       version,
       entry,
       description: raw.description || '',
       capabilities,
+      permissions,
+      tools,
+      views,
+      events,
+      automations,
+      sandbox: raw.sandbox || 'jailed',
       secrets,
       mcp,
     },
@@ -537,7 +603,14 @@ class PluginHub {
       name: rec.manifest.name,
       version: rec.manifest.version,
       description: rec.manifest.description,
+      contractVersion: rec.manifest.contractVersion || '0.1',
       capabilities: rec.manifest.capabilities.slice(),
+      permissions: (rec.manifest.permissions || []).slice(),
+      tools: (rec.manifest.tools || []).slice(),
+      views: (rec.manifest.views || []).slice(),
+      events: (rec.manifest.events || []).slice(),
+      automations: (rec.manifest.automations || []).map((automation) => ({ ...automation })),
+      sandbox: rec.manifest.sandbox || 'jailed',
       enabled: rec.enabled === true,
       installedAt: rec.installedAt,
       integrity: rec.integrity ? { ...rec.integrity, sealed: true } : { sealed: false },
@@ -645,6 +718,8 @@ module.exports = {
   parseSkillFrontmatter,
   validateMcpDef,
   hashModuleTree,
+  CONTRACT_VERSION,
+  PLUGIN_VIEWS,
   TRIGGER_MAX,
   SLUG_RE,
 };
