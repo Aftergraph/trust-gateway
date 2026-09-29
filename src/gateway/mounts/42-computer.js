@@ -27,7 +27,7 @@ const { send, readBody, canApprove } = require('../server');
 const { getHub } = require('../events');
 const { ComputerStore, KINDS, getComputerStore } = require('../computer');
 const { DEPTHS, getComputerProviderRegistry } = require('../computer-runtime');
-const { ensureConfiguredComputerNode } = require('../computer-node-client');
+const { ensureConfiguredComputerNode, readConfiguredComputerNodeFile } = require('../computer-node-client');
 
 function authBot(gw, req, url, allowQueryToken = false) {
   const h = req.headers['authorization'] || '';
@@ -158,6 +158,68 @@ async function route(gw, req, res, ctx, pathname) {
       errorCount: Array.isArray(out.errors) ? out.errors.length : 0,
     });
     return send(res, out.unavailable ? 503 : 200, out);
+  }
+
+  if (seg.length === 4 && seg[2] === 'files' && seg[3] === 'read' && method === 'POST') {
+    if (!canApprove(bot)) {
+      gw._audit({ type: 'computer_control_denied', bot: bot.name, action: 'files.read', reason: 'operator_required' });
+      return send(res, 403, { error: 'operator_required' });
+    }
+    let body;
+    try { body = await bodyJson(req); } catch (e) { return parseOr400(res, e); }
+    const filePath = typeof body.path === 'string' ? body.path.trim() : '';
+    if (!filePath) return send(res, 400, { error: 'path_required' });
+    const requestedMax = Number(body.maxBytes ?? 64 * 1024);
+    if (!Number.isFinite(requestedMax) || requestedMax < 1)
+      return send(res, 400, { error: 'bad_max_bytes' });
+    const maxBytes = Math.min(256 * 1024, Math.floor(requestedMax));
+
+    const node = await ensureConfiguredComputerNode(gw, providers);
+    if (!node.configured || !node.ok)
+      return send(res, 503, { error: 'computer_node_unavailable', reason: node.error || 'not_configured' });
+    if (!providers.list().some((provider) => provider.capabilities.includes('computer.files.read')))
+      return send(res, 503, { error: 'computer_file_read_unavailable' });
+
+    try {
+      const out = await readConfiguredComputerNodeFile({ path: filePath, maxBytes });
+      const file = out && out.file && typeof out.file === 'object' ? out.file : null;
+      if (!file || typeof file.text !== 'string') return send(res, 502, { error: 'computer_node_malformed_file_result' });
+      gw._audit({
+        type: 'computer_file_read',
+        bot: bot.name,
+        nodeId: typeof out.nodeId === 'string' ? out.nodeId : null,
+        providerId: typeof out.providerId === 'string' ? out.providerId : null,
+        pathHash: crypto.createHash('sha256').update(filePath, 'utf8').digest('hex'),
+        bytes: Number(file.bytes ?? Buffer.byteLength(file.text)),
+        truncated: Boolean(file.truncated),
+      });
+      return send(res, 200, {
+        nodeId: out.nodeId ?? null,
+        providerId: out.providerId ?? null,
+        file: {
+          path: typeof file.path === 'string' ? file.path : filePath,
+          text: file.text,
+          bytes: Number(file.bytes ?? Buffer.byteLength(file.text)),
+          truncated: Boolean(file.truncated),
+        },
+      });
+    } catch (e) {
+      const status = Number(e && e.status);
+      const safeStatus = [400, 403, 404, 503].includes(status) ? status : 502;
+      const known = new Set([
+        'path_not_allowed', 'file_not_found', 'not_a_file', 'binary_file_not_supported',
+        'file_read_not_configured', 'file_read_roots_unavailable', 'computer_node_not_configured',
+      ]);
+      const reason = known.has(String(e && e.message)) ? String(e.message) : 'computer_node_file_read_failed';
+      gw._audit({
+        type: 'computer_file_read',
+        bot: bot.name,
+        outcome: 'failed',
+        pathHash: crypto.createHash('sha256').update(filePath, 'utf8').digest('hex'),
+        reason,
+      });
+      return send(res, safeStatus, { error: reason });
+    }
   }
 
   // ── collection ──
