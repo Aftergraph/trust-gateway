@@ -97,6 +97,15 @@ test('governed file read requires operator and preserves file contents out of au
   const base = await listen(server);
   t.after(() => server.close());
 
+  const spacedAuthorization = await fetch(base + '/v2/computer', {
+    headers: { authorization: `Bearer ${' '.repeat(8000)}tok-atlas` },
+  });
+  assert.equal(spacedAuthorization.status, 200);
+  const malformedAuthorization = await fetch(base + '/v2/computer', {
+    headers: { authorization: 'Bearer tok-atlas extra' },
+  });
+  assert.equal(malformedAuthorization.status, 401);
+
   const denied = await call(base, 'tok-forge', { path: 'C:\\Aftergraph\\Home-OS\\VERSION' });
   assert.equal(denied.status, 403);
   assert.equal(readCalls, 0);

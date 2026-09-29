@@ -29,10 +29,24 @@ const { ComputerStore, KINDS, getComputerStore } = require('../computer');
 const { DEPTHS, getComputerProviderRegistry } = require('../computer-runtime');
 const { ensureConfiguredComputerNode, readConfiguredComputerNodeFile } = require('../computer-node-client');
 
+function parseBearerAuthorization(header) {
+  if (typeof header !== 'string') return null;
+  const isSeparator = (code) => code === 0x20 || code === 0x09;
+  let separator = 0;
+  while (separator < header.length && !isSeparator(header.charCodeAt(separator))) separator += 1;
+  if (header.slice(0, separator).toLowerCase() !== 'bearer' || separator === header.length) return null;
+  let tokenStart = separator;
+  while (tokenStart < header.length && isSeparator(header.charCodeAt(tokenStart))) tokenStart += 1;
+  if (tokenStart === header.length) return null;
+  for (let index = tokenStart; index < header.length; index += 1) {
+    if (isSeparator(header.charCodeAt(index))) return null;
+  }
+  return header.slice(tokenStart);
+}
+
 function authBot(gw, req, url, allowQueryToken = false) {
-  const h = req.headers['authorization'] || '';
-  const m = /^Bearer\s+(.+)$/i.exec(h);
-  const token = m ? m[1] : (allowQueryToken ? (url.searchParams.get('token') || '') : '');
+  const token = parseBearerAuthorization(req.headers['authorization'])
+    || (allowQueryToken ? (url.searchParams.get('token') || '') : '');
   if (!token) return null;
   for (const [name, bot] of Object.entries(gw.bots)) {
     if (!bot || !bot.token) continue;
