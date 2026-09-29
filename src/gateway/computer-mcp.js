@@ -45,7 +45,7 @@ function toolCatalog({ filePrefixes = [] } = {}) {
       name: 'aftergraph_computer_providers',
       title: 'Aftergraph Computer Providers',
       description: 'List sanitized Computer Node provider metadata through Trust Gateway.',
-      inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+      inputSchema: { 'type': 'object', properties: {}, additionalProperties: false },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     {
@@ -53,9 +53,9 @@ function toolCatalog({ filePrefixes = [] } = {}) {
       title: 'Aftergraph Computer Health',
       description: 'Inspect Jonas-Lenovo/Computer Node health through the governed Trust Gateway boundary.',
       inputSchema: {
-        type: 'object',
+        'type': 'object',
         properties: {
-          depth: { type: 'string', enum: ['quick', 'standard', 'forensic'], default: 'standard' },
+          depth: { 'type': 'string', enum: ['quick', 'standard', 'forensic'], default: 'standard' },
         },
         additionalProperties: false,
       },
@@ -68,11 +68,11 @@ function toolCatalog({ filePrefixes = [] } = {}) {
       title: 'Aftergraph Computer File Read',
       description: 'Read bounded UTF-8 text from explicitly allowlisted host paths through Trust Gateway and Computer Node.',
       inputSchema: {
-        type: 'object',
+        'type': 'object',
         required: ['path'],
         properties: {
-          path: { type: 'string', minLength: 1, maxLength: 1024 },
-          maxBytes: { type: 'integer', minimum: 1, maximum: 262144, default: 65536 },
+          path: { 'type': 'string', minLength: 1, maxLength: 1024 },
+          maxBytes: { 'type': 'integer', minimum: 1, maximum: 262144, default: 65536 },
         },
         additionalProperties: false,
       },
@@ -85,7 +85,7 @@ function toolCatalog({ filePrefixes = [] } = {}) {
 function mcpResult(value, isError = false) {
   const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
   return {
-    content: [{ type: 'text', text }],
+    content: [{ 'type': 'text', text }],
     ...(typeof value === 'object' && value !== null ? { structuredContent: value } : {}),
     isError,
   };
