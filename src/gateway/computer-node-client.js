@@ -34,8 +34,14 @@ async function jsonFetch(url, token, options = {}) {
     signal: AbortSignal.timeout(5000),
     redirect: 'error',
   });
-  if (!res.ok) throw new Error(`computer_node_http_${res.status}`);
-  return res.json();
+  let body = null;
+  try { body = await res.json(); } catch { body = null; }
+  if (!res.ok) {
+    const error = new Error(body && typeof body.error === 'string' ? body.error : `computer_node_http_${res.status}`);
+    error.status = res.status;
+    throw error;
+  }
+  return body;
 }
 
 function createInspectionFetcher(baseUrl, token) {
@@ -103,6 +109,17 @@ async function connect(gw, registry) {
   return { configured: true, ok: true, nodeId: manifest.nodeId };
 }
 
+async function readConfiguredComputerNodeFile({ path, maxBytes = 64 * 1024 } = {}) {
+  const cfg = config();
+  if (!cfg.configured) throw new Error('computer_node_not_configured');
+  if (!cfg.ok) throw new Error(cfg.error);
+  return jsonFetch(`${cfg.url}/v1/files/read`, cfg.token, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ path, maxBytes }),
+  });
+}
+
 async function ensureConfiguredComputerNode(gw, registry) {
   if (ready.has(gw)) return { configured: true, ok: true };
   if (connecting.has(gw)) return connecting.get(gw);
@@ -120,5 +137,6 @@ module.exports = {
   config,
   isLoopbackHost,
   createInspectionFetcher,
+  readConfiguredComputerNodeFile,
   ensureConfiguredComputerNode,
 };
