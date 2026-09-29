@@ -12,6 +12,25 @@ function safeEqual(a, b) {
   return x.length === y.length && timingSafeEqual(x, y);
 }
 
+function isAuthorizationSeparator(code) {
+  return code === 0x20 || code === 0x09;
+}
+
+function parseBearerAuthorization(header) {
+  if (typeof header !== 'string') return null;
+  let separator = 0;
+  while (separator < header.length && !isAuthorizationSeparator(header.charCodeAt(separator))) separator += 1;
+  if (header.slice(0, separator).toLowerCase() !== 'bearer' || separator === header.length) return null;
+
+  let tokenStart = separator;
+  while (tokenStart < header.length && isAuthorizationSeparator(header.charCodeAt(tokenStart))) tokenStart += 1;
+  if (tokenStart === header.length) return null;
+  for (let index = tokenStart; index < header.length; index += 1) {
+    if (isAuthorizationSeparator(header.charCodeAt(index))) return null;
+  }
+  return header.slice(tokenStart);
+}
+
 function isLoopback(hostname) {
   const h = String(hostname || '').toLowerCase();
   return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '[::1]';
@@ -186,8 +205,8 @@ function createComputerMcpHandler({
       res.end(JSON.stringify({ error: 'method_not_allowed' }));
       return;
     }
-    const auth = /^Bearer\s+(.+)$/i.exec(req.headers.authorization || '');
-    if (!auth || !safeEqual(auth[1], accessToken)) {
+    const token = parseBearerAuthorization(req.headers.authorization);
+    if (!token || !safeEqual(token, accessToken)) {
       res.writeHead(401, {
         'content-type': 'application/json; charset=utf-8',
         'www-authenticate': 'Bearer realm="aftergraph-computer"',

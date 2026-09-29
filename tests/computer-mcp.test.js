@@ -19,11 +19,11 @@ function listen(server) {
   }));
 }
 
-async function rpc(base, body, token = ACCESS) {
+async function rpc(base, body, token = ACCESS, authorization = `Bearer ${token}`) {
   return fetch(base + '/mcp', {
     method: 'POST',
     headers: {
-      authorization: `Bearer ${token}`,
+      authorization,
       'content-type': 'application/json',
       accept: 'application/json, text/event-stream',
     },
@@ -82,6 +82,14 @@ test('MCP facade authenticates and forwards only governed read surfaces', async 
   assert.equal(init.status, 200);
   const initBody = await init.json();
   assert.equal(initBody.result.serverInfo.name, 'aftergraph-computer');
+
+  const spacedAuthorization = await rpc(
+    base,
+    { jsonrpc: '2.0', id: 20, method: 'initialize', params: { protocolVersion: '2025-06-18' } },
+    ACCESS,
+    `Bearer    ${ACCESS}`,
+  );
+  assert.equal(spacedAuthorization.status, 200);
 
   const providers = await rpc(base, { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'aftergraph_computer_providers', arguments: {} } });
   const providersBody = await providers.json();
