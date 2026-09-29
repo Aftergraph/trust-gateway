@@ -64,6 +64,43 @@ No attached health provider returns HTTP 503 with
 `unavailable:true` and an empty findings array. The gateway never fabricates
 health findings.
 
+### `POST /v2/computer/files/read`
+
+Operator-only, read-only file surface. The request is bounded:
+
+```json
+{"path":"C:\\Aftergraph\\Home-OS\\VERSION","maxBytes":65536}
+```
+
+The Computer Node must explicitly advertise `computer.files.read`. The node
+resolves the real path, enforces configured read roots, rejects binary files,
+and caps one response at 256 KiB. Trust Gateway records only a SHA-256 of the
+requested path plus byte/truncation metadata in `computer_file_read`; the file
+contents and raw path are not written to the audit event.
+
+## Remote MCP facade
+
+`bin/computer-mcp.js` exposes the read-only Computer surface as a stateless
+Streamable-HTTP-compatible MCP endpoint at `POST /mcp`.
+
+The facade never connects directly to a provider. It calls Trust Gateway using
+an operator token so policy/audit remains canonical. Available tools are:
+
+- `aftergraph_computer_providers`
+- `aftergraph_computer_health`
+- `aftergraph_computer_file_read` (only when an MCP path-prefix allowlist is configured)
+
+Required runtime configuration:
+
+- `TG_GATEWAY_URL`
+- `TG_COMPUTER_MCP_GATEWAY_TOKEN`
+- `AFTERGRAPH_COMPUTER_MCP_TOKEN` (32+ characters)
+- `AFTERGRAPH_COMPUTER_MCP_READ_PREFIXES` (optional; semicolon-separated)
+
+The MCP process binds to loopback by default. Publishing it is a separate
+authenticated HTTPS transport/deployment concern; no public listener is enabled
+by this implementation.
+
 ## Findings
 
 A finding is deliberately small:
@@ -175,9 +212,11 @@ It exposes an authenticated loopback-first HTTP protocol:
 
 - `GET /v1/manifest`
 - `POST /v1/inspect`
+- `POST /v1/files/read` when explicit host read roots are configured
 
 Its built-in `native-windows` provider performs read-only PowerShell/CIM health
-inspection. Arbitrary remote shell execution is intentionally not part of v1.
+inspection and optional bounded text reads. Arbitrary remote shell execution is
+intentionally not part of v1.
 
 
 ## v1.0.1 node-bridge hardening
