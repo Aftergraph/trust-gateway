@@ -346,7 +346,7 @@ plugins.js) across all files under `src/gateway/`.
 | 15 | `computer_frame_denied` | mounts/42-computer.js |
 | 16 | `computer_session_created` | mounts/42-computer.js |
 | 17 | `computer_inspection` | mounts/42-computer.js |
-| 17a | `computer_file_read` | mounts/42-computer.js (operator-only bounded read; audit stores path SHA-256 + metadata, never contents) |
+| 301 | `computer_file_read` | mounts/42-computer.js (operator-only bounded read; audit stores path SHA-256 + metadata, never contents) |
 | 18 | `computer_state_changed` | mounts/42-computer.js |
 | 19 | `control_released` | mounts/42-computer.js |
 | 20 | `control_taken` | mounts/42-computer.js |
