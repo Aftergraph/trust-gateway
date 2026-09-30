@@ -4,6 +4,22 @@ const { admitToolInvocation } = require('./tool-fabric');
 
 const HEX64 = /^[a-f0-9]{64}$/i;
 const FORBIDDEN_KEYS = /value|token|password|secret|api.?key|credentialmaterial/i;
+const ALLOWED_REQUEST_KEYS = new Set([
+  'schemaVersion',
+  'requestId',
+  'toolId',
+  'capability',
+  'toolProvenanceDigest',
+  'principalId',
+  'missionId',
+  'executionContextId',
+  'idempotencyKey',
+  'argumentsDigest',
+  'requestedAt',
+  'authorityGranted',
+  'credentialMaterialPresent',
+]);
+const URL_SAFE_ID = /^[A-Za-z0-9._:-]{1,160}$/;
 
 function validateToolActionRequest(request) {
   const errors = [];
@@ -19,6 +35,10 @@ function validateToolActionRequest(request) {
   if (Object.keys(request).some((key) => FORBIDDEN_KEYS.test(key) && key !== 'credentialMaterialPresent')) {
     errors.push('credential_field_forbidden');
   }
+  const unknownKeys = Object.keys(request).filter((key) => !ALLOWED_REQUEST_KEYS.has(key));
+  if (unknownKeys.length) errors.push('unknown_request_field');
+  if (request.requestId && !URL_SAFE_ID.test(request.requestId)) errors.push('request_id_invalid');
+  if (request.idempotencyKey && !URL_SAFE_ID.test(request.idempotencyKey)) errors.push('idempotency_key_invalid');
   return [...new Set(errors)];
 }
 
