@@ -15,6 +15,7 @@ const path = require('node:path');
 process.env.TG_DB_FILE = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'tg-hil-')), 'gateway.db');
 process.env.TG_ROOMS_FILE = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'tg-hil-rooms-')), 'rooms.json');
 process.env.TG_AIE_FAIL_OPEN = 'true';
+process.env.TG_NEEDYOU_FILE = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'tg-hil-needyou-')), 'needyou.json');
 
 const { Gateway } = require('../src/gateway/server');
 
@@ -84,5 +85,28 @@ test('C3: fail-closed — 404 ukendt room', async () => {
   try {
     const h = await req(port, 'GET', '/v2/rooms/room_nope/hil', 'tok-op');
     assert.equal(h.status, 404);
+  } finally { await new Promise((r) => server.close(r)); }
+});
+
+
+test('C3: canonical NeedsYou store projects open item into HIL cards', async () => {
+  const gw = makeGateway();
+  const { getNeedsYouStore } = require('../src/gateway/needsyou');
+  const store = getNeedsYouStore(gw);
+  const item = store.create({
+    tenantId: 'main',
+    type: 'approval',
+    subject: 'Tool action approval',
+    details: JSON.stringify({ schemaVersion: 'aftergraph.tool-action-needs-you/v1', requestId: 'req-hil-1' }),
+  });
+  const { server, port } = await boot(gw);
+  try {
+    const c = await req(port, 'POST', '/v2/rooms', 'tok-op', { name: 'c3-needyou', bots: ['op'] });
+    const roomId = c.body.room.id;
+    const h = await req(port, 'GET', `/v2/rooms/${roomId}/hil`, 'tok-op');
+    assert.equal(h.status, 200);
+    const card = (h.body.cards || []).find((x) => x.type === 'needyou' && x.id === item.id);
+    assert.ok(card, 'NeedsYou card present from canonical singleton');
+    assert.equal(card.actionable, true);
   } finally { await new Promise((r) => server.close(r)); }
 });
