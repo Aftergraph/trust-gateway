@@ -80,6 +80,18 @@ module.exports = {
         if (!ctx.operator || !ctx.operator.name) {
           return send(res, 403, { error: 'operator_required' });
         }
+        const existing = store.get(id);
+        if (existing && existing.type === 'approval' && typeof existing.details === 'string') {
+          try {
+            const details = JSON.parse(existing.details);
+            if (details?.schemaVersion === 'aftergraph.tool-action-needs-you/v1') {
+              return send(res, 409, {
+                error: 'tool_action_resolution_required',
+                requestId: details.requestId || null,
+              });
+            }
+          } catch { /* ordinary non-JSON details remain resolvable */ }
+        }
         const result = store.resolve(id, ctx.operator.name);
         if (!result.ok) {
           return send(res, 400, { error: result.error });
