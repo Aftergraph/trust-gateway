@@ -144,6 +144,13 @@ test('HomeOS ToolFabric request parks one NeedsYou approval and approve never di
     assert.equal(status.status, 200);
     assert.equal(status.body.proposal.state, 'pending_approval');
 
+    const bypass = await request(port, 'POST', `/v2/need-you/${first.body.approvalId}/resolve`, {});
+    assert.equal(bypass.status, 409);
+    assert.equal(bypass.body.error, 'tool_action_resolution_required');
+
+    const stillPending = await request(port, 'GET', '/v2/tool-fabric/actions/req-http-1');
+    assert.equal(stillPending.body.proposal.state, 'pending_approval');
+
     const approved = await request(
       port,
       'POST',
