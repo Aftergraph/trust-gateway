@@ -24,18 +24,16 @@ module.exports = {
 
       // GET /v2/need-you — list items for current tenant
       if (seg.length === 2 && method === 'GET') {
-        if (!ctx.tenant || !tenant) {
-          return send(res, 400, { error: 'tenant_required' });
-        }
-        const items = store.listByTenant(tenant);
+        const tenantId = typeof ctx.tenant === 'string' ? ctx.tenant : ctx.tenant?.id;
+        if (!tenantId) return send(res, 400, { error: 'tenant_required' });
+        const items = store.listByTenant(tenantId);
         return send(res, 200, { items });
       }
 
       // POST /v2/need-you — create a new item
       if (seg.length === 2 && method === 'POST') {
-        if (!ctx.tenant || !tenant) {
-          return send(res, 400, { error: 'tenant_required' });
-        }
+        const tenantId = typeof ctx.tenant === 'string' ? ctx.tenant : ctx.tenant?.id;
+        if (!tenantId) return send(res, 400, { error: 'tenant_required' });
         let raw = '';
         req.on('data', (c) => {
           raw += c;
@@ -59,7 +57,7 @@ module.exports = {
         }
 
         const item = store.create({
-          tenantId: tenant,
+          tenantId,
           type: doc.type,
           subject: doc.subject,
           details: doc.details || null,
