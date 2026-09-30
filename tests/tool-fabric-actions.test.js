@@ -39,6 +39,9 @@ test('HomeOS ToolFabric request validator forbids authority and credential mater
   assert.ok(validateToolActionRequest({ ...request, authorityGranted: true }).includes('authority_claim_forbidden'));
   assert.ok(validateToolActionRequest({ ...request, credentialMaterialPresent: true }).includes('credential_material_forbidden'));
   assert.ok(validateToolActionRequest({ ...request, apiKey: 'forbidden' }).includes('credential_field_forbidden'));
+  assert.ok(validateToolActionRequest({ ...request, arguments: { raw: true } }).includes('unknown_request_field'));
+  assert.ok(validateToolActionRequest({ ...request, requestId: '../unsafe' }).includes('request_id_invalid'));
+  assert.ok(validateToolActionRequest({ ...request, idempotencyKey: 'bad/key' }).includes('idempotency_key_invalid'));
 });
 
 test('ToolFabric action admission resolves trusted descriptor and admits read-only policy', async () => {
