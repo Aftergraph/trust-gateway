@@ -2,11 +2,7 @@
 // mount: v2/need-you — NeedsYouItem API and NOW projection endpoint.
 // Auth: bearer token (like 20-chat.js).
 
-const { NeedsYouStore } = require('../needsyou');
-
-const store = new NeedsYouStore({
-  file: process.env.TG_NEEDYOU_FILE || 'data/needyou.json',
-});
+const { getNeedsYouStore } = require('../needsyou');
 
 module.exports = {
   name: 'v2-needyou',
@@ -14,6 +10,7 @@ module.exports = {
   path: /^\/v2\/need-you(?:\/.*)?$/,
   auth: 'bearer',
   handle: async (gw, req, res, ctx) => {
+    const store = getNeedsYouStore(gw);
     const pathname = ctx.url.pathname;
     const seg = pathname.split('/').filter(Boolean);
     const method = req.method;
