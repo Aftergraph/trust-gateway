@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "aftergraph.tool-policy-map/v1",
+  "entries": [
+    {
+      "toolId": "relay.system.health",
+      "capability": "EXECUTION_OBSERVE",
+      "policyTool": "system.health"
+    }
+  ]
+}
