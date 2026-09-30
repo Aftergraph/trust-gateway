@@ -56,3 +56,59 @@ test('ToolFabric unknown policy surfaces fail closed', () => {
   assert.equal(result.decision, 'needs_approval');
   assert.equal(result.classification, 'destructive');
 });
+
+
+test('ToolFabric binds opaque credential handles without secret material', () => {
+  const { bindToolCredentialHandle, toGovernedEgressRequest } = require('../src/gateway/tool-fabric');
+  const bound = bindToolCredentialHandle({
+    tool,
+    bindingId: 'github-oauth',
+    credentialHandle: 'ch_opaque',
+    tenantId: 'ten_main',
+    adapterId: 'github',
+    principalId: 'agent-1',
+    missionId: 'mission-1',
+    authorityRef: 'auth-1',
+    purpose: 'github.pr.read',
+  });
+  assert.equal(bound.secretMaterialPresent, false);
+  assert.equal(bound.authorityGranted, false);
+  assert.equal(bound.credentialHandle, 'ch_opaque');
+  assert.equal('secret' in bound, false);
+
+  const request = toGovernedEgressRequest({
+    binding: bound,
+    invocation: {
+      requestId: 'req-1',
+      correlationId: 'corr-1',
+      executionContextId: 'ctx-1',
+      actionId: 'action-1',
+      effectId: 'effect-1',
+      effectClass: 'read',
+      destination: { scheme: 'https', host: 'api.github.com', port: 443 },
+      http: { method: 'GET', path: '/repos/Aftergraph/core/pulls/6', query: {}, headers: {}, bodyDigest: null },
+      data: { sensitivity: [], provenanceRefs: [], lineageId: 'lin-1' }
+    }
+  });
+
+  assert.equal(request.credentialHandle, 'ch_opaque');
+  assert.equal(request.adapterId, 'github');
+  assert.equal(request.data.resourceRef, 'adapter:github');
+  assert.ok(request.data.provenanceRefs.includes('adapter:github'));
+  assert.equal(JSON.stringify(request).includes('super-secret'), false);
+});
+
+test('ToolFabric refuses missing or none credential bindings', () => {
+  const { bindToolCredentialHandle } = require('../src/gateway/tool-fabric');
+  assert.throws(() => bindToolCredentialHandle({
+    tool,
+    bindingId: 'missing',
+    credentialHandle: 'ch_opaque',
+    tenantId: 'ten_main',
+    adapterId: 'github',
+    principalId: 'agent-1',
+    missionId: 'mission-1',
+    authorityRef: 'auth-1',
+    purpose: 'github.pr.read',
+  }), { code: 'credential_binding_unknown' });
+});
