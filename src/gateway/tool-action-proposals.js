@@ -63,6 +63,28 @@ class ToolActionProposalStore {
   }
 
   createOrGet({ tenantId, request, admission }) {
+    for (const [name, value] of Object.entries({
+      tenantId,
+      requestId: request?.requestId,
+      toolId: request?.toolId,
+      capability: request?.capability,
+      toolProvenanceDigest: request?.toolProvenanceDigest,
+      principalId: request?.principalId,
+      missionId: request?.missionId,
+      executionContextId: request?.executionContextId,
+      idempotencyKey: request?.idempotencyKey,
+    })) {
+      if (!String(value || '').trim()) return { ok: false, error: name + '_required', proposal: null };
+    }
+    if (!/^[a-f0-9]{64}$/i.test(request.toolProvenanceDigest)) {
+      return { ok: false, error: 'tool_provenance_digest_invalid', proposal: null };
+    }
+    if (request.argumentsDigest != null && !/^[a-f0-9]{64}$/i.test(request.argumentsDigest)) {
+      return { ok: false, error: 'arguments_digest_invalid', proposal: null };
+    }
+    if (!admission || !['admitted', 'pending_approval', 'denied'].includes(admission.decision)) {
+      return { ok: false, error: 'admission_decision_invalid', proposal: null };
+    }
     const idemKey = this._idemKey(tenantId, request.idempotencyKey);
     const priorRequestId = this.byIdempotency.get(idemKey);
     if (priorRequestId) {
