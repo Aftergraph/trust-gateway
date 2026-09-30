@@ -3,10 +3,12 @@
 const { evaluateToolActionRequest } = require('../tool-fabric-actions');
 const { isOperator } = require('../tenants');
 const { audit } = require('../events');
+const { createFileToolFabricResolverFromEnv } = require('../tool-fabric-resolver');
 
 const MAX_BODY_BYTES = 64 * 1024;
 
 module.exports = function mountToolFabricActions(gw) {
+  const fileResolver = createFileToolFabricResolverFromEnv();
   gw.router.post('/v2/tool-fabric/actions/request', async (req, res) => {
     const op = isOperator(req);
     if (!op) {
@@ -34,7 +36,7 @@ module.exports = function mountToolFabricActions(gw) {
 
       const evaluated = await evaluateToolActionRequest({
         request: parsed,
-        resolver: gw.toolFabricResolver,
+        resolver: gw.toolFabricResolver || fileResolver,
         bot: req.bot,
       });
 
