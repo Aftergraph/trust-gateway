@@ -99,6 +99,20 @@ module.exports = function mountToolFabricActions(gw) {
   const proposalStore = getToolActionProposalStore(gw);
   const needsYouStore = getNeedsYouStore(gw);
   const resolver = () => gw.toolFabricResolver || fileResolver;
+  const reconcileExpiredNeedsYou = (proposal) => {
+    if (!proposal || proposal.state !== 'expired' || !proposal.needsYouId) return;
+    const item = needsYouStore.get(proposal.needsYouId);
+    if (item && item.status === 'open') {
+      const resolved = needsYouStore.resolve(item.id, 'tool-action-expiry');
+      if (resolved.ok) {
+        audit('tool_action_needsyou_expired', {
+          requestId: proposal.requestId,
+          approvalId: item.id,
+          tenantId: proposal.tenantId,
+        });
+      }
+    }
+  };
 
   gw.router.post('/v2/tool-fabric/actions/request', async (req, res) => {
     const op = isOperator(req);
@@ -115,6 +129,10 @@ module.exports = function mountToolFabricActions(gw) {
       resolver: resolver(),
       bot: req.bot,
     });
+
+    if (!evaluated.body.classification) {
+      return sendJson(res, evaluated.status, evaluated.body);
+    }
 
     const persisted = proposalStore.createOrGet({
       tenantId: tenant.id,
@@ -135,6 +153,7 @@ module.exports = function mountToolFabricActions(gw) {
     }
 
     let proposal = persisted.proposal;
+    reconcileExpiredNeedsYou(proposal);
     if (proposal.state === 'pending_approval' && !proposal.needsYouId) {
       const item = needsYouStore.create({
         tenantId: tenant.id,
@@ -196,6 +215,7 @@ module.exports = function mountToolFabricActions(gw) {
 
     const requestId = requestIdFrom(req.url);
     const proposal = proposalStore.get(requestId);
+    reconcileExpiredNeedsYou(proposal);
     if (!proposal || proposal.tenantId !== tenant.id) return sendJson(res, 404, { error: 'not_found' });
     return sendJson(res, 200, { proposal: safeProposalView(proposal) });
   });
