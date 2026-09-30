@@ -919,3 +919,5 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 296 | `tenant_lifecycle_ack_denied` | mounts/161-tenant-lifecycle-transitions.js (TG85: {bot} — non-operator attempted acknowledgement record) |
 | 297 | `git_egress_requested` | gateway/git-egress.js (P2: governed Git egress requested; audit binds execution_context_id, action_id, effect_id, effect_class, repository, ref and operation; never secret material) |
 | 298 | `git_egress_completed` | gateway/git-egress.js (P2: governed Git egress completed; audit records status plus execution/action/effect/repository/ref/operation bindings; never secret material) |
+
+| 360 | `agent_platform_promotion_check` | mounts/160-agent-platform-promotion.js (Agent Platform: operator-only promotion preflight; records candidate id, evidence hash, eligibility decision and denial reasons; never grants authority itself) |
