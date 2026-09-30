@@ -923,3 +923,4 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 360 | `agent_platform_promotion_check` | mounts/160-agent-platform-promotion.js (Agent Platform: operator-only promotion preflight; records candidate id, evidence hash, eligibility decision and denial reasons; never grants authority itself) |
 
 | 361 | `tool_action_admission` | mounts/162-tool-fabric-actions.js (HomeOS/ToolFabric: operator-only action admission request; records correlation identifiers, tool/capability, decision and reason code; never credential material and never grants authority itself) |
+| 362 | `economic_live_settlement_admission_check` | mounts/162-economic-live-settlement.js (Economic Graph Frontier: operator-only admission preflight; records requested mode/lifecycle and fail-closed decision; never grants live settlement authority, carries credentials, or executes value transfer) |
