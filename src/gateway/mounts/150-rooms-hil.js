@@ -56,12 +56,9 @@ module.exports = {
 
     // 2) need-you NOW (limit 10)
     try {
-      const { NeedsYouStore } = require('../needsyou');
-      const path = require('node:path');
-      const store = new NeedsYouStore({ file: process.env.TG_NEEDYOU_FILE || 'data/needyou.json' });
-      let items = [];
-      if (typeof store.listNow === 'function') items = store.listNow();
-      else if (typeof store.list === 'function') items = store.list();
+      const { getNeedsYouStore } = require('../needsyou');
+      const store = getNeedsYouStore(gw);
+      const items = store.listOpen();
       for (const n of items.slice(0, 10)) {
         cards.push({
           type: 'needyou',
