@@ -58,12 +58,14 @@ module.exports = {
     try {
       const { getNeedsYouStore } = require('../needsyou');
       const store = getNeedsYouStore(gw);
-      const items = store.listOpen();
+      const items = ctx.tenantId
+        ? store.listByTenant(ctx.tenantId).filter((item) => item.status === 'open')
+        : [];
       for (const n of items.slice(0, 10)) {
         cards.push({
           type: 'needyou',
           id: n.id,
-          summary: `need-you: ${n.reason || n.title || n.id}`,
+          summary: `need-you: ${n.subject || n.id}`,
           actionable: true,
         });
       }
