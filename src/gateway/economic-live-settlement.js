@@ -18,14 +18,15 @@ function evaluateEconomicLiveSettlement(input = {}) {
     return {
       allowed: true,
       decision: 'ALLOW_SIMULATION_ONLY',
-      reason: 'economic_live_settlement_frontier_simulation',
+      reason: 'economic_live_settlement_noncanonical_simulation',
       externalEffects: 0
     };
   }
 
-  // Current governance truth: live settlement remains FRONTIER. This seam must
-  // fail closed until Trust Gateway consumes governance-owned promotion evidence
-  // proving the capability itself is CANONICAL. Caller-supplied refs never count.
+  // Live settlement may be FRONTIER or CANDIDATE, but remains non-canonical.
+  // This seam must fail closed until Trust Gateway consumes governance-owned
+  // promotion evidence proving the capability itself is CANONICAL.
+  // Caller-supplied refs never count.
   return {
     allowed: false,
     decision: 'DENY',
