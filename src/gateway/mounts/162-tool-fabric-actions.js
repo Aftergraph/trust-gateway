@@ -61,6 +61,18 @@ function safeProposalView(proposal) {
   };
 }
 
+function requestIdFrom(url, resolveRoute = false) {
+  const pathname = String(url || '').split('?')[0];
+  const parts = pathname.split('/').filter(Boolean);
+  if (parts[0] !== 'v2' || parts[1] !== 'tool-fabric' || parts[2] !== 'actions') return null;
+  if (resolveRoute) {
+    if (parts.length !== 5 || parts[4] !== 'resolve') return null;
+  } else if (parts.length !== 4) {
+    return null;
+  }
+  try { return decodeURIComponent(parts[3]); } catch { return null; }
+}
+
 function parseNeedsYouDetails(item) {
   if (!item || typeof item.details !== 'string') return null;
   try {
@@ -182,7 +194,7 @@ module.exports = function mountToolFabricActions(gw) {
     const { tenant } = resolveTenant(req, gw);
     if (!tenant) return sendJson(res, 404, { error: 'not_found' });
 
-    const requestId = req.params?.requestId;
+    const requestId = requestIdFrom(req.url);
     const proposal = proposalStore.get(requestId);
     if (!proposal || proposal.tenantId !== tenant.id) return sendJson(res, 404, { error: 'not_found' });
     return sendJson(res, 200, { proposal: safeProposalView(proposal) });
@@ -201,7 +213,7 @@ module.exports = function mountToolFabricActions(gw) {
     if (decision !== 'approve' && decision !== 'deny') return sendJson(res, 400, { error: 'bad_decision' });
     if (!String(approvalId || '').trim()) return sendJson(res, 400, { error: 'approval_id_required' });
 
-    const requestId = req.params?.requestId;
+    const requestId = requestIdFrom(req.url, true);
     const proposal = proposalStore.get(requestId);
     if (!proposal || proposal.tenantId !== tenant.id) return sendJson(res, 404, { error: 'not_found' });
     if (proposal.state !== 'pending_approval') return sendJson(res, 409, { error: 'not_pending_approval', proposal: safeProposalView(proposal) });
@@ -282,3 +294,4 @@ module.exports = function mountToolFabricActions(gw) {
 
 module.exports.safeProposalView = safeProposalView;
 module.exports.proposalMatchesNeedsYou = proposalMatchesNeedsYou;
+module.exports.requestIdFrom = requestIdFrom;
