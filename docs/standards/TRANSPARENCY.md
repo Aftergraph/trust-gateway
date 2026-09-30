@@ -923,3 +923,9 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 360 | `agent_platform_promotion_check` | mounts/160-agent-platform-promotion.js (Agent Platform: operator-only promotion preflight; records candidate id, evidence hash, eligibility decision and denial reasons; never grants authority itself) |
 
 | 361 | `tool_action_admission` | mounts/162-tool-fabric-actions.js (HomeOS/ToolFabric: operator-only action admission request; records correlation identifiers, tool/capability, decision and reason code; never credential material and never grants authority itself) |
+
+| 362 | `tool_action_proposal_conflict` | mounts/162-tool-fabric-actions.js (ToolFabric proposal idempotency/request identity conflict; audit contains only safe correlation metadata) |
+| 363 | `tool_action_needsyou_created` | mounts/162-tool-fabric-actions.js (ToolFabric pending approval projected into canonical NeedsYou store; no raw args or credentials) |
+| 364 | `tool_action_needsyou_expired` | mounts/162-tool-fabric-actions.js (expired ToolFabric proposal closes its correlated NeedsYou item; no execution) |
+| 365 | `tool_action_approval_revalidation_failed` | mounts/162-tool-fabric-actions.js (human approve attempted after resolver/policy drift; proposal remains non-executable) |
+| 366 | `tool_action_proposal_resolved` | mounts/162-tool-fabric-actions.js (human approve/deny changed proposal state only; no dispatch or authority grant) |
