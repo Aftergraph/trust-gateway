@@ -131,4 +131,26 @@ class NeedsYouStore {
   }
 }
 
-module.exports = { NeedsYouStore, urgencyScore };
+const gatewayStores = new WeakMap();
+
+function getNeedsYouStore(gw, {
+  file = process.env.TG_NEEDYOU_FILE || 'data/needyou.json',
+  now,
+  maxItems,
+} = {}) {
+  if (!gw || (typeof gw !== 'object' && typeof gw !== 'function')) {
+    throw new Error('needyou: gateway instance required');
+  }
+  let store = gatewayStores.get(gw);
+  if (!store) {
+    store = new NeedsYouStore({
+      file,
+      ...(now ? { now } : {}),
+      ...(maxItems ? { maxItems } : {}),
+    });
+    gatewayStores.set(gw, store);
+  }
+  return store;
+}
+
+module.exports = { NeedsYouStore, getNeedsYouStore, urgencyScore };
