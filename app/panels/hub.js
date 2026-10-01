@@ -27,7 +27,13 @@
     if (err.status === 401) return 'unauthorized — connect a token';
     if (err.status === 403) return 'operator role required';
     if (err.status === 404) return 'not found';
-    if (err.status === 409) return 'already registered';
+    if (err.status === 409 && err.error === 'required_secrets_missing') {
+      return 'missing required secrets: ' + ((err.missing || []).join(', ') || 'unknown');
+    }
+    if (err.status === 409 && err.error === 'plugin_integrity_mismatch') {
+      return 'integrity mismatch — reinstall required';
+    }
+    if (err.status === 409) return err.error || 'conflict';
     return 'error ' + (err.status || err.message || '');
   };
 
@@ -56,12 +62,74 @@
     const actionsMsg = el('span', 'muted', '');
     actions.append(toggle, uninstall, actionsMsg);
     card.append(head, actions);
-    const caps = (mod.capabilities || []);
-    if (caps.length) card.append(el('div', 'muted', 'caps: ' + caps.join(', ')));
+
+    const contract = mod.contractVersion || 'legacy';
+    const integrity = mod.integrity || { sealed: false };
+    const integrityText = integrity.sealed
+      ? 'sha256:' + String(integrity.digest || '').slice(0, 12) + '…'
+      : 'legacy unsealed';
+    card.append(el('div', 'muted', 'contract v' + contract + ' · integrity: ' + integrityText));
+
+    const declarations = [
+      ['caps', mod.capabilities],
+      ['permissions', mod.permissions],
+      ['tools', mod.tools],
+      ['views', mod.views],
+      ['events', mod.events],
+    ];
+    for (const [label, values] of declarations) {
+      if (Array.isArray(values) && values.length) {
+        card.append(el('div', 'muted', label + ': ' + values.join(', ')));
+      }
+    }
+    if (Array.isArray(mod.automations) && mod.automations.length) {
+      card.append(el('div', 'muted', 'automations: ' + mod.automations.length));
+    }
+
     const secrets = (mod.secrets || []);
     if (secrets.length) {
-      card.append(el('div', 'muted', 'secrets: ' + secrets
-        .map((s) => s.name + (s.configured ? ' ✓' : ' (unset)')).join(', ')));
+      const secretWrap = el('div', 'plugin-secrets');
+      for (const secret of secrets) {
+        const row = el('div', 'hub-form');
+        row.append(el(
+          'span',
+          'muted',
+          secret.name + (secret.required ? ' · required' : '') + (secret.configured ? ' ✓' : ' · unset'),
+        ));
+        const valueIn = el('input', 'hub-in');
+        valueIn.type = 'password';
+        valueIn.autocomplete = 'off';
+        valueIn.placeholder = 'set ' + secret.name;
+        const setBtn = el('button', 'btn ok', 'set');
+        setBtn.type = 'button';
+        setBtn.addEventListener('click', () => {
+          const value = valueIn.value;
+          if (!value) { actionsMsg.textContent = 'secret value required'; return; }
+          actionsMsg.textContent = '…';
+          api('/v2/plugins/' + encodeURIComponent(mod.id) + '/secrets/' + encodeURIComponent(secret.name), {
+            method: 'PUT',
+            body: JSON.stringify({ value }),
+          })
+            .then(() => { valueIn.value = ''; refresh(); })
+            .catch((err) => { valueIn.value = ''; actionsMsg.textContent = errText(err); });
+        });
+        row.append(valueIn, setBtn);
+        if (secret.configured) {
+          const removeBtn = el('button', 'btn no', 'remove');
+          removeBtn.type = 'button';
+          removeBtn.addEventListener('click', () => {
+            actionsMsg.textContent = '…';
+            api('/v2/plugins/' + encodeURIComponent(mod.id) + '/secrets/' + encodeURIComponent(secret.name), {
+              method: 'DELETE',
+            })
+              .then(refresh)
+              .catch((err) => { actionsMsg.textContent = errText(err); });
+          });
+          row.append(removeBtn);
+        }
+        secretWrap.append(row);
+      }
+      card.append(secretWrap);
     }
     return card;
   }
@@ -253,8 +321,10 @@
           const hits = (d.entries || []).filter((e) => {
             const t = e.payload && e.payload.type;
             return t === 'plugin_installed' || t === 'plugin_uninstalled'
-              || t === 'plugin_enabled' || t === 'plugin_disabled'
-              || t === 'plugin_rejected' || t === 'adapter_kind_register'
+              || t === 'plugin_enabled' || t === 'plugin_enable_refused'
+              || t === 'plugin_integrity_mismatch' || t === 'plugin_disabled'
+              || t === 'plugin_rejected' || t === 'secret_configured'
+              || t === 'secret_removed' || t === 'adapter_kind_register'
               || t === 'adapter_kind_rejected';
           }).slice(-25).reverse();
           if (!hits.length) { list.append(el('div', 'empty', 'no hub events yet')); return; }

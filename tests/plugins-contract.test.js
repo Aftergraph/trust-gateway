@@ -1,340 +1,158 @@
 'use strict';
-process.env.TG_DB_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')), 'gateway.db'); // isolated per-file db
-// Plugin Contract v0.1 tests
-// Covers: manifest validation, CRUD lifecycle, permission enforcement
+process.env.TG_DB_FILE = require('node:path').join(
+  require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'tg-db-')),
+  'gateway.db',
+);
+
+// Plugin Contract v0.2 convergence tests.
+// The canonical implementation is src/gateway/plugins.js + mounts/35-plugins.js.
+// These tests deliberately assert route ownership so a second /v2/plugins
+// implementation cannot silently shadow or be shadowed again.
 
 const test = require('node:test');
 const assert = require('node:assert');
-const http = require('node:http');
 const fs = require('node:fs');
-const path = require('node:path');
 const os = require('node:os');
+const path = require('node:path');
 
-const { Gateway } = require('../src/gateway/server');
+const {
+  PluginHub,
+  validateManifest,
+  CONTRACT_VERSION,
+  PLUGIN_VIEWS,
+} = require('../src/gateway/plugins');
+const { loadMounts, match } = require('../src/gateway/http-mounts');
 
-// ── Manifest validation ───────────────────────────────────────
-
-test('validateManifest: accepts valid v0.1 manifest', () => {
-  const manifest = {
-    id: 'test-plugin',
-    name: 'Test Plugin',
-    version: '1.0.0',
-    entry: 'index.js',
-    description: 'A test plugin',
-    permissions: ['read:*'],
-    tools: ['tool.echo'],
-    views: ['Card', 'Table'],
-    events: ['plugin.test'],
-    automations: [{ id: 'auto-1', trigger: 'plugin.test', action: 'tool.echo' }],
-    sandbox: 'jailed',
-  };
-
-  // Inline validation (same logic as in mount)
-  const errors = [];
-  
-  if (typeof manifest.id !== 'string' || !/^[a-z0-9][a-z0-9._-]{0,63}$/.test(manifest.id)) {
-    errors.push('id must be a lowercase slug');
-  }
-
-  if (typeof manifest.name !== 'string' || manifest.name.trim() === '' || manifest.name.length > 64) {
-    errors.push('name required, 1-64 chars');
-  }
-
-  if (typeof manifest.version !== 'string' || !/^\d+\.\d+\.\d+/.test(manifest.version)) {
-    errors.push('version must be x.y.z semver');
-  }
-
-  if (typeof manifest.entry !== 'string' || !manifest.entry.endsWith('.js')) {
-    errors.push('entry must be a relative .js path');
-  }
-
-  if (manifest.sandbox !== 'jailed') {
-    errors.push('sandbox must be "jailed"');
-  }
-
-  assert.equal(errors.length, 0, `Expected valid manifest, got errors: ${errors.join(', ')}`);
-});
-
-test('validateManifest: rejects invalid manifests', () => {
-  // Missing required fields
-  const missing = validate({});
-  assert.equal(missing.ok, false);
-  assert.ok(missing.errors.some((e) => e.includes('id')));
-
-  // Invalid id
-  const badId = validate({ id: 'INVALID', name: 'Test', version: '1.0.0', entry: 'index.js', sandbox: 'jailed' });
-  assert.equal(badId.ok, false);
-
-  // Invalid version
-  const badVersion = validate({ id: 'test', name: 'Test', version: '1.0', entry: 'index.js', sandbox: 'jailed' });
-  assert.equal(badVersion.ok, false);
-
-  // Wrong sandbox
-  const badSandbox = validate({ id: 'test', name: 'Test', version: '1.0.0', entry: 'index.js', sandbox: 'full' });
-  assert.equal(badSandbox.ok, false);
-  assert.ok(badSandbox.errors.some((e) => e.includes('sandbox')));
-});
-
-function validate(raw) {
-  const errors = [];
-  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
-    return { ok: false, errors: ['manifest must be a JSON object'] };
-  }
-  const { id, name, version, entry } = raw;
-  if (typeof id !== 'string' || !/^[a-z0-9][a-z0-9._-]{0,63}$/.test(id)) errors.push('id must be a lowercase slug');
-  if (typeof name !== 'string' || name.trim() === '' || name.length > 64) errors.push('name required, 1-64 chars');
-  if (typeof version !== 'string' || !/^\d+\.\d+\.\d+/.test(version)) errors.push('version must be x.y.z semver');
-  if (typeof entry !== 'string' || !entry.endsWith('.js') || entry.includes('..')) errors.push('entry must be a relative .js path');
-  if (raw.sandbox !== 'jailed') errors.push('sandbox must be "jailed"');
-  return { ok: errors.length === 0, errors };
-}
-
-// ── Permission enforcement ─────────────────────────────────────
-
-test('permission model: declared permissions do not grant access', () => {
-  const manifest = {
-    id: 'write-plugin',
-    name: 'Write Plugin',
-    version: '1.0.0',
-    entry: 'index.js',
-    permissions: ['write:*', 'destructive:*'],
-    sandbox: 'jailed',
-  };
-
-  // Manifest is valid
-  const v = validate(manifest);
-  assert.equal(v.ok, true);
-
-  // But actual access should be denied without approval
-  // This is the core contract: declaration != access
-  assert.ok(true); // Verified by TG policy enforcement in gateway
-});
-
-test('permission model: TG/AIE policy enforces write operations', () => {
-  // Simulating the TG policy check
-  function checkPermission(bot, requested) {
-    const botPerms = bot.capabilities || [];
-    if (bot.role === 'operator') return { allowed: true };
-    
-    for (const p of botPerms) {
-      if (requested.startsWith('write')) {
-        if (p === 'write:*') return { allowed: true };
-        return { allowed: false, reason: 'write_requires_approval' };
-      }
-    }
-    return { allowed: false, reason: 'permission_denied' };
-  }
-
-  const bot = { role: 'worker', capabilities: ['read:*'] };
-  const result = checkPermission(bot, 'write:file');
-  assert.equal(result.allowed, false);
-  assert.equal(result.reason, 'write_requires_approval');
-});
-
-// ── UI declaration validation ───────────────────────────────────
-
-test('UI declarations: only valid primitives allowed', () => {
-  const views = ['Card', 'Table', 'Form', 'Chart', 'Timeline', 'Approval', 'Progress', 'Artifact'];
-  const invalidViews = ['Card', 'InvalidWidget'];
-
-  const valid = validate({
-    id: 'ui-plugin',
-    name: 'UI Plugin',
-    version: '1.0.0',
-    entry: 'index.js',
-    views,
-    sandbox: 'jailed',
-  });
-
-  assert.equal(valid.ok, true);
-
-  // Invalid views are validated but don't fail the manifest in this test
-  const invalid = validate({
-    id: 'ui-plugin',
-    name: 'UI Plugin',
-    version: '1.0.0',
-    entry: 'index.js',
-    views: invalidViews,
-    sandbox: 'jailed',
-  });
-
-  // View validation is checked at runtime, not at manifest load
-  // This is per contract: "Runtime Validation: TG validates view usage at render time"
-  assert.equal(invalid.ok, true);
-});
-
-// ── Event bus contract ────────────────────────────────────────
-
-test('events: declaration allows subscription', () => {
-  const manifest = {
-    id: 'event-plugin',
-    name: 'Event Plugin',
-    version: '1.0.0',
-    entry: 'index.js',
-    events: ['plugin.test', 'system.*'],
-    sandbox: 'jailed',
-  };
-
-  const v = validate(manifest);
-  assert.equal(v.ok, true);
-});
-
-// ── CRUD lifecycle ────────────────────────────────────────────
+const REPO_MODULES = path.join(__dirname, '..', 'modules');
 
 function tmpdir(prefix) {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }
 
-function makeGateway({ dataDir = null } = {}) {
-  const gw = new Gateway({
-    bots: {
-      worker: { token: 'tok-worker', role: 'worker', capabilities: ['read:*'] },
-      operator: { token: 'tok-op', role: 'operator', capabilities: ['*'] },
-    },
-    dispatch: async (_b, tool) => ({ ok: true, tool }),
-  });
-  if (dataDir) {
-    const pluginsDir = path.join(dataDir, 'plugins.json');
-    if (fs.existsSync(pluginsDir)) {
-      gw.pluginsHub = {
-        _state: JSON.parse(fs.readFileSync(pluginsDir, 'utf8')),
-        list() { return Object.keys(this._state.plugins || {}).map(id => ({ id, ...this._state.plugins[id] })); },
-        view(id) { return this._state.plugins?.[id] || null; },
-        async install(id) {
-          if (!this._state.plugins) this._state.plugins = {};
-          if (this._state.plugins[id]) return { ok: false, status: 409, error: 'already_installed' };
-          this._state.plugins[id] = { installedAt: Date.now(), enabled: false };
-          fs.writeFileSync(pluginsDir, JSON.stringify(this._state, null, 2));
-          return { ok: true, status: 201, module: { id } };
-        },
-        async uninstall(id) {
-          if (!this._state.plugins?.[id]) return { ok: false, status: 404, error: 'not_found' };
-          delete this._state.plugins[id];
-          fs.writeFileSync(pluginsDir, JSON.stringify(this._state, null, 2));
-          return { ok: true, status: 200, uninstalled: id };
-        },
-      };
-    }
-  }
-  return gw;
-}
+test('contract v0.2: accepts and normalizes the full declarative surface', () => {
+  const v = validateManifest({
+    contractVersion: '0.2',
+    id: 'contract-demo',
+    name: 'Contract Demo',
+    version: '2.0.0',
+    entry: 'index.js',
+    description: 'Declarative plugin.',
+    capabilities: ['demo.read'],
+    permissions: ['read:*', 'write:item'],
+    tools: ['demo.read', 'demo.write'],
+    views: ['Card', 'Table'],
+    events: ['plugin.demo.changed'],
+    automations: [{ id: 'sync', trigger: 'plugin.demo.changed', condition: 'ready', action: 'demo.write' }],
+    sandbox: 'jailed',
+    secrets: [{ name: 'API_KEY', required: true }],
+    mcp: [{ name: 'demo-mcp', transport: 'stdio', command: 'node', args: ['server.js'] }],
+  }, { dirName: 'contract-demo' });
 
-async function api(base, method, urlPath, { token, body } = {}) {
-  const res = await fetch(base + urlPath, {
-    method,
-    headers: {
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
-      ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
-    },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-  let json = null;
-  try { json = await res.json(); } catch { /* non-json */ }
-  return { status: res.status, json };
-}
-
-test('CRUD lifecycle: list, install, view, uninstall', async () => {
-  const dataDir = tmpdir('plugin-contract-');
-  fs.mkdirSync(path.join(dataDir, 'plugins'), { recursive: true });
-  
-  const gw = makeGateway({ dataDir });
-  const server = http.createServer((req, res) => gw.handle(req, res));
-  
-  const port = await new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve(server.address().port));
-  });
-  const base = `http://127.0.0.1:${port}`;
-
-  try {
-    // Initial list (no auth - should fail)
-    let r = await api(base, 'GET', '/v2/plugins');
-    assert.equal(r.status, 401);
-
-    // List with auth
-    r = await api(base, 'GET', '/v2/plugins', { token: 'tok-op' });
-    assert.equal(r.status, 200);
-
-    // Install plugin
-    r = await api(base, 'POST', '/v2/plugins', {
-      token: 'tok-op',
-      body: { id: 'test-plugin', name: 'Test', version: '1.0.0', entry: 'index.js', sandbox: 'jailed' }
-    });
-    // Installation may fail if the plugin structure is incomplete
-    if (r.status === 400) {
-      // Skip remaining CRUD steps
-      return;
-    }
-    assert.equal(r.status, 201);
-
-    // View plugin
-    r = await api(base, 'GET', '/v2/plugins/test-plugin', { token: 'tok-op' });
-    assert.equal(r.status, 200);
-    assert.equal(r.json.plugin.id, 'test-plugin');
-
-    // Uninstall
-    r = await api(base, 'DELETE', '/v2/plugins/test-plugin', { token: 'tok-op' });
-    assert.equal(r.status, 200);
-
-    // Verify gone
-    r = await api(base, 'GET', '/v2/plugins/test-plugin', { token: 'tok-op' });
-    assert.equal(r.status, 404);
-  } finally {
-    server.close();
-  }
+  assert.equal(v.ok, true, JSON.stringify(v.errors));
+  assert.equal(CONTRACT_VERSION, '0.2');
+  assert.equal(v.manifest.contractVersion, '0.2');
+  assert.equal(v.manifest.sandbox, 'jailed');
+  assert.deepEqual(v.manifest.permissions, ['read:*', 'write:item']);
+  assert.deepEqual(v.manifest.tools, ['demo.read', 'demo.write']);
+  assert.deepEqual(v.manifest.views, ['Card', 'Table']);
+  assert.deepEqual(v.manifest.events, ['plugin.demo.changed']);
+  assert.deepEqual(v.manifest.automations, [
+    { id: 'sync', trigger: 'plugin.demo.changed', condition: 'ready', action: 'demo.write' },
+  ]);
 });
 
-test('permission enforcement: worker cannot install, operator can', async () => {
-  const dataDir = tmpdir('plugin-contract-');
-  fs.mkdirSync(path.join(dataDir, 'plugins'), { recursive: true });
-  
-  const gw = makeGateway({ dataDir });
-  const server = http.createServer((req, res) => gw.handle(req, res));
-  
-  const port = await new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve(server.address().port));
-  });
-  const base = `http://127.0.0.1:${port}`;
+test('contract v0.2: is a strict superset of explicit v0.1 manifests', () => {
+  const v = validateManifest({
+    contractVersion: '0.1',
+    id: 'legacy-contract',
+    name: 'Legacy Contract',
+    version: '1.0.0',
+    entry: 'index.js',
+    permissions: ['read:*'],
+    tools: ['legacy.read'],
+    views: ['Card'],
+    events: ['legacy.changed'],
+    automations: [{ trigger: 'legacy.changed', action: 'legacy.read' }],
+    sandbox: 'jailed',
+  }, { dirName: 'legacy-contract' });
 
-  try {
-    // Worker install attempt
-    let r = await api(base, 'POST', '/v2/plugins', {
-      token: 'tok-worker',
-      body: { id: 'test-plugin', name: 'Test', version: '1.0.0', entry: 'index.js', sandbox: 'jailed' }
-    });
-    assert.equal(r.status, 403);
-    assert.equal(r.json.error, 'operator_required');
-
-    // Operator install
-    r = await api(base, 'POST', '/v2/plugins', {
-      token: 'tok-op',
-      body: { id: 'test-plugin', name: 'Test', version: '1.0.0', entry: 'index.js', sandbox: 'jailed' }
-    });
-    assert.ok(r.status === 201 || r.status === 400);
-  } finally {
-    server.close();
-  }
+  assert.equal(v.ok, true, JSON.stringify(v.errors));
+  assert.equal(v.manifest.contractVersion, '0.1');
 });
 
-test('fail-closed: invalid manifest rejected', async () => {
-  const dataDir = tmpdir('plugin-contract-');
-  fs.mkdirSync(path.join(dataDir, 'plugins'), { recursive: true });
-  
-  const gw = makeGateway({ dataDir });
-  const server = http.createServer((req, res) => gw.handle(req, res));
-  
-  const port = await new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve(server.address().port));
-  });
-  const base = `http://127.0.0.1:${port}`;
+test('contract v0.2: rejects unknown versions, unsafe sandbox and unknown UI primitives', () => {
+  const base = {
+    id: 'bad-contract',
+    name: 'Bad Contract',
+    version: '1.0.0',
+    entry: 'index.js',
+  };
 
-  try {
-    const r = await api(base, 'POST', '/v2/plugins', {
-      token: 'tok-op',
-      body: { id: 'TEST', name: 'Test', version: '1.0', entry: 'index.js', sandbox: 'jailed' }
-    });
-    assert.equal(r.status, 400);
-    assert.ok(r.json.error === 'invalid_manifest' || r.json.error === 'manifest_rejected');
-  } finally {
-    server.close();
+  let v = validateManifest({ ...base, contractVersion: '9.9' });
+  assert.equal(v.ok, false);
+  assert.ok(v.errors.some((e) => e.includes('contractVersion')));
+
+  v = validateManifest({ ...base, sandbox: 'full-host' });
+  assert.equal(v.ok, false);
+  assert.ok(v.errors.some((e) => e.includes('sandbox')));
+
+  v = validateManifest({ ...base, views: ['Card', 'RawHTML'] });
+  assert.equal(v.ok, false);
+  assert.ok(v.errors.includes('unknown_view:RawHTML'));
+
+  assert.deepEqual([...PLUGIN_VIEWS], [
+    'Card', 'Table', 'Form', 'Chart', 'Timeline', 'Approval', 'Progress', 'Artifact',
+  ]);
+});
+
+test('contract v0.2: declarations remain declarations, not authority grants', () => {
+  const v = validateManifest({
+    id: 'authority-demo',
+    name: 'Authority Demo',
+    version: '1.0.0',
+    entry: 'index.js',
+    permissions: ['write:*', 'destructive:*', 'approval.decide/*'],
+    tools: ['effect.delete'],
+    sandbox: 'jailed',
+  });
+
+  assert.equal(v.ok, true, JSON.stringify(v.errors));
+  assert.deepEqual(v.manifest.permissions, ['write:*', 'destructive:*', 'approval.decide/*']);
+  // Authorization is intentionally absent from validateManifest: TG/AIE
+  // action-time policy remains the authority boundary.
+  assert.equal(Object.hasOwn(v.manifest, 'authorized'), false);
+  assert.equal(Object.hasOwn(v.manifest, 'grants'), false);
+});
+
+test('contract v0.2: canonical demo installs through PluginHub and projects declarations + seal', () => {
+  const dataDir = tmpdir('plugin-contract-v02-');
+  const hub = new PluginHub({ dataDir, sourceDir: REPO_MODULES });
+  const installed = hub.install('demo-echo');
+
+  assert.equal(installed.ok, true, JSON.stringify(installed));
+  assert.equal(installed.module.contractVersion, '0.2');
+  assert.equal(installed.module.sandbox, 'jailed');
+  assert.deepEqual(installed.module.permissions, ['read:*']);
+  assert.deepEqual(installed.module.tools, ['echo.speak']);
+  assert.deepEqual(installed.module.views, ['Card']);
+  assert.deepEqual(installed.module.events, ['plugin.demo-echo.spoke']);
+  assert.deepEqual(installed.module.automations, []);
+  assert.equal(installed.module.integrity.sealed, true);
+  assert.match(installed.module.integrity.digest, /^[a-f0-9]{64}$/);
+});
+
+test('contract v0.2: /v2/plugins has exactly one object-mount owner', () => {
+  const mounts = loadMounts();
+  for (const method of ['GET', 'POST', 'DELETE']) {
+    const pathname = method === 'DELETE' ? '/v2/plugins/demo-echo' : '/v2/plugins';
+    const owners = mounts.filter((mount) => match(mount, method, pathname));
+    assert.equal(
+      owners.length,
+      1,
+      `${method} ${pathname} must have exactly one owner, got: ${owners.map((m) => m.file + ':' + m.name).join(', ')}`,
+    );
+    assert.equal(owners[0].file, '35-plugins.js');
+    assert.equal(owners[0].name, 'v2-plugins');
   }
+  assert.equal(mounts.some((mount) => mount.name === 'plugin-contract'), false);
 });

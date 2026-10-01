@@ -228,24 +228,26 @@ SHOULD. The engine provides a development-mode lint mode that warns (but does no
 
 ### 19.5 MCP/plugin hub as install surface
 
-The plugin hub (`src/gateway/plugins.js`, `mounts/35-plugins.js`) is the install surface for extensions. Modules live under `modules/<id>/` with a `plugin.json` manifest. Installing copies the directory into `data/modules/<id>/`. The hub supports:
+The plugin hub (`src/gateway/plugins.js`, `mounts/35-plugins.js`) is the canonical Plugin Contract v0.2 install surface. Modules live under `modules/<id>/` with a `plugin.json` manifest. New installs become SHA-256-sealed snapshots under `data/modules/<id>/`; the staged copy and normalized staged manifest must match the admitted source before activation.
 
 | Operation | Endpoint | Audit event |
 |---|---|---|
 | Install | `POST /v2/plugins` | `plugin_installed` |
-| Reject | (validation failure) | `plugin_rejected` |
+| Reject install | validation/integrity failure | `plugin_rejected` |
 | Enable | `POST /v2/plugins/:id/enable` | `plugin_enabled` |
+| Refuse enable | missing required secret | `plugin_enable_refused` |
+| Refuse tampered package | enable-time digest mismatch | `plugin_integrity_mismatch` |
 | Disable | `POST /v2/plugins/:id/disable` | `plugin_disabled` |
 | Uninstall | `DELETE /v2/plugins/:id` | `plugin_uninstalled` |
-| MCP register | `POST /v2/plugins/:id/mcp` | `mcp_registered` |
-| MCP reject | (validation failure) | `mcp_rejected` |
-| MCP unregister | `DELETE /v2/plugins/:id/mcp` | `mcp_unregistered` |
+| MCP register | `POST /v2/mcp` | `mcp_registered` |
+| MCP reject | validation failure | `mcp_rejected` |
+| MCP unregister | `DELETE /v2/mcp/:name` | `mcp_unregistered` |
 
-The `plugin.json` manifest schema (from `plugins.js` `validateManifest`, line 48) allows fields: `id, name, version, entry, description, capabilities, secrets, mcp`. The `capabilities` array is the extension's declared capability set — this is what the composition engine's filter checks against.
+The v0.2 `plugin.json` validator accepts the W4 fields plus the declarative v0.1 surface: `contractVersion, id, name, version, entry, description, capabilities, permissions, tools, views, events, automations, sandbox, secrets, mcp`. Declarations are visibility/policy inputs; they do not grant authority. Explicit `contractVersion: "0.1"` remains compatibility input to the same canonical validator.
 
-MUST. The hub's enabled/disabled state is audited (the 71 audit types include `plugin_enabled`, `plugin_disabled`, `plugin_installed`, `plugin_uninstalled`, `plugin_rejected`, `plugins_forbidden`, `mcp_registered`, `mcp_rejected`, `mcp_uninstalled`). The hub panel MUST display the audit trail for every install/enable/disable/uninstall action.
+MUST. Install, reject, enable/refuse, disable, uninstall, MCP lifecycle and secret-configuration decisions are audited. The Hub panel must render the canonical audit trail rather than inventing client-side state.
 
-SHOULD. The hub panel provides an "enabled/disabled" toggle per extension, with the state persisted in `data/modules/<id>/state.json`. The state is NOT the same as the manifest — it is a separate file so that enabling/disabling does not modify the install artifact.
+SHOULD. The hub panel provides an enabled/disabled toggle per extension. Mutable enablement and integrity metadata are persisted in `data/plugins.json`; the installed package bytes remain under `data/modules/<id>/` and are not modified by toggling state.
 
 MAY. The hub supports skill discovery (markdown docs with frontmatter, `trigger` capped at 57 chars — the platform skill convention from `plugins.js` line 26). Skills are listed in the Hub panel but do not auto-execute.
 
