@@ -15,7 +15,7 @@ const { ProviderRegistry, SEED, FREE_LANES } = require('../src/gateway/providers
 
 const EXPECTED_SET = [
   'dialagram', 'ollama-cloud', 'openrouter', 'opencode-zen',
-  'opencode-go', 'anthropic', 'openai',
+  'opencode-go', 'anthropic', 'openai', 'meta-model-api',
 ];
 
 // Any plausible key material — asserted absent in every response body.
@@ -76,6 +76,9 @@ test('registry seeds the real provider set with kinds + model lists', () => {
   assert.ok(dial.models.includes('qwen-3.7-max') && dial.models.includes('deepseek-v4'));
   assert.equal(reg.get('ollama-cloud').kind, 'aggregator');
   assert.equal(reg.get('openai').kind, 'direct');
+  assert.equal(reg.get('meta-model-api').kind, 'direct');
+  assert.ok(reg.get('meta-model-api').models.includes('muse-spark-1.3'));
+  assert.ok(reg.get('meta-model-api').models.includes('muse-spark-1.3-contributor'));
   assert.ok(reg.get('ollama-cloud').models.includes('glm-5.3-flash'));
   assert.ok(reg.get('openrouter').models.includes('minimax/minimax-m3:free'));
   assert.ok(reg.get('opencode-zen').models.includes('laguna-s-2.1-free'));
@@ -300,5 +303,5 @@ test('registry exposes gw.providers for mounts; singleton caches per gateway', (
   const a = getRegistry(gw);
   const b = getRegistry(gw);
   assert.equal(a, b);
-  assert.ok(Array.isArray(SEED) && SEED.length === 7);
+  assert.ok(Array.isArray(SEED) && SEED.length === 8);
 });
