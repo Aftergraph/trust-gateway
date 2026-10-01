@@ -84,3 +84,29 @@ test('live-canary review assurance never grants execution to candidate settlemen
   assert.equal(out.decision, 'DENY');
   assert.equal(out.reason, 'economic_live_settlement_not_canonical');
 });
+
+
+test('verified immutable evidence pack never grants execution to candidate settlement', () => {
+  const out = evaluateEconomicLiveSettlement({
+    mode: 'execute',
+    lifecycle: 'candidate',
+    externalEffects: 0,
+    evidencePackVerification: {
+      schema: 'aftergraph.economic-evidence-pack-verification/v1',
+      valid: true,
+      state: 'VERIFIED_IMMUTABLE_EVIDENCE_PACK',
+      evidencePackVerified: true,
+      readyForLiveCanaryReview: true,
+      executionAuthority: false,
+      liveValueEnabled: false,
+      maxLiveValue: 0,
+      final: false,
+      promotionAuthority: false,
+      externalEffects: 0,
+      reasons: []
+    }
+  });
+  assert.equal(out.allowed, false);
+  assert.equal(out.decision, 'DENY');
+  assert.equal(out.reason, 'economic_live_settlement_not_canonical');
+});
