@@ -5,16 +5,17 @@ const { createHash } = require('node:crypto');
 const HASH=/^sha256:[a-f0-9]{64}$/;
 const SOURCE_CLASSES=new Set(['registry','custody','representation']);
 
-function canonicalJson(value) {
-  if (Array.isArray(value)) return '[' + value.map(canonicalJson).join(',') + ']';
-  if (value && typeof value === 'object') {
-    return '{' + Object.keys(value).sort().map(k => JSON.stringify(k) + ':' + canonicalJson(value[k])).join(',') + '}';
-  }
-  return JSON.stringify(value);
-}
-
-function digest(value) {
-  return 'sha256:' + createHash('sha256').update(canonicalJson(value)).digest('hex');
+function rotationAuthorizationDigest(payload) {
+  const parts=[
+    payload.domain,payload.purpose,payload.sourceClass,payload.sourceId,
+    payload.priorTrustRootId,payload.newTrustRootId,
+    payload.priorPublicKeyFingerprint,payload.newPublicKeyFingerprint,
+    String(payload.priorGeneration),String(payload.newGeneration),
+    String(payload.priorMinAttestationGeneration),String(payload.newMinAttestationGeneration),
+    payload.authorityLeaseId,payload.approvalProofIds.join(','),
+    payload.rotationNonce,payload.reason,String(payload.expiresAt)
+  ];
+  return 'sha256:' + createHash('sha256').update(parts.join('\\x00')).digest('hex');
 }
 
 async function authorizeEconomicTrustRootRotation(input = {}, verifiers = {}) {
@@ -96,7 +97,7 @@ async function authorizeEconomicTrustRootRotation(input = {}, verifiers = {}) {
     decision:'AUTHORIZED_PREPARE_ONLY',
     authorized:true,
     trustRootMutationAuthorized:true,
-    authorizationDigest:digest(payload),
+    authorizationDigest:rotationAuthorizationDigest(payload),
     payload,
     approvalsVerified:true,
     authorityVerified:true,
