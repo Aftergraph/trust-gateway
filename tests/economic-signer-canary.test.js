@@ -2,14 +2,14 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { generateKeyPairSync, createPublicKey, createHash, sign } = require('node:crypto');
+const { generateKeyPairSync, createHash, sign } = require('node:crypto');
 const {
   prepareEconomicSignerCanary,
   validateEconomicSignerCanaryReceipt
 } = require('../src/gateway/economic-signer-canary');
 
 function fingerprint(publicKey) {
-  const der = createPublicKey(publicKey).export({ type: 'spki', format: 'der' });
+  const der = publicKey.export({ type: 'spki', format: 'der' });
   return 'sha256:' + createHash('sha256').update(der).digest('hex');
 }
 
