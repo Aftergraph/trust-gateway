@@ -31,6 +31,7 @@ function fixture() {
     keyHandle: request.payload.keyHandle,
     publicKeyFingerprint: request.payload.publicKeyFingerprint,
     algorithm: 'Ed25519',
+    publicKeyPem: publicKey.export({ type: 'spki', format: 'pem' }).toString(),
     signatureBase64: sig.toString('base64'),
     signingMaterialExposed: false,
     transactionPayloadSigned: false,
