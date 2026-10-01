@@ -212,3 +212,61 @@ test('broker route fails closed when disabled, unauthorized, or governance is ab
     assert.deepEqual(JSON.parse(res.body), { error: 'governed_egress_required' });
   });
 });
+
+
+test('budget exhaustion blocks Dialagram before handle issuance or egress', async () => {
+  await withEnv({
+    TG_DECISION_DIALAGRAM_BROKER: '1',
+    TG_DECISION_DIALAGRAM_ADAPTER_ID: 'decision-dialagram',
+    TG_DECISION_DIALAGRAM_SECRET_NAME: 'api-key',
+    TG_DECISION_DIALAGRAM_PRINCIPAL_ID: 'service:decision-runtime',
+    TG_DECISION_DIALAGRAM_MISSION_ID: 'service:decision-plane',
+    TG_DECISION_DIALAGRAM_AUTHORITY_REF: 'authority:decision-provider-egress',
+  }, async () => {
+    const calls = [];
+    const audits = [];
+    const gw = {
+      now: () => Date.now(),
+      _audit(event) { audits.push(event); },
+      budgets: {
+        consume(bot) {
+          calls.push(['budget', bot]);
+          return { ok: false, reason: 'budget_exhausted' };
+        },
+      },
+      adapterCredentialLifecycle: {
+        issueHandle() {
+          calls.push(['issue']);
+          throw new Error('must_not_issue');
+        },
+        revokeHandle() {},
+      },
+      governedEgressBroker: {
+        requireAdapterBinding: true,
+        async admit() {
+          calls.push(['admit']);
+          throw new Error('must_not_admit');
+        },
+        async dispatch() {
+          calls.push(['dispatch']);
+          throw new Error('must_not_dispatch');
+        },
+      },
+    };
+
+    const res = response();
+    await mount.handle(gw, request(providerBody()), res, {
+      bot: { name: 'decision-runtime', role: 'worker', capabilities: ['decision.provider.invoke'] },
+      tenantId: 'main',
+    });
+
+    assert.equal(res.status, 402);
+    assert.deepEqual(JSON.parse(res.body), { error: 'budget_exhausted' });
+    assert.deepEqual(calls, [['budget', 'decision-runtime']]);
+    assert.ok(audits.some((event) =>
+      event.type === 'budget_denied' &&
+      event.bot === 'decision-runtime' &&
+      event.tool === 'decision.provider.dialagram'
+    ));
+  });
+});
