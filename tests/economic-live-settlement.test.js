@@ -61,3 +61,26 @@ test('experimental custody/spend-style lifecycle is ineligible', () => {
   assert.equal(out.allowed, false);
   assert.equal(out.reason, 'economic_lifecycle_not_eligible');
 });
+
+
+test('live-canary review assurance never grants execution to candidate settlement', () => {
+  const out = evaluateEconomicLiveSettlement({
+    mode: 'execute',
+    lifecycle: 'candidate',
+    externalEffects: 0,
+    assurance: {
+      schema: 'aftergraph.economic-live-canary-assurance/v1',
+      state: 'READY_FOR_LIVE_CANARY_REVIEW',
+      readyForLiveCanaryReview: true,
+      executionAuthority: false,
+      liveValueEnabled: false,
+      maxLiveValue: 0,
+      final: false,
+      promotionAuthority: false,
+      externalEffects: 0
+    }
+  });
+  assert.equal(out.allowed, false);
+  assert.equal(out.decision, 'DENY');
+  assert.equal(out.reason, 'economic_live_settlement_not_canonical');
+});
