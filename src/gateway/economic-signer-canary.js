@@ -83,6 +83,9 @@ function validateEconomicSignerCanaryReceipt(request, receipt = {}, now = Date.n
   if (receipt.algorithm !== 'Ed25519') {
     return { valid: false, reason: 'SIGNER_CANARY_ALGORITHM_INVALID' };
   }
+  if (typeof receipt.publicKeyPem !== 'string' || !receipt.publicKeyPem.includes('BEGIN PUBLIC KEY')) {
+    return { valid: false, reason: 'SIGNER_CANARY_PUBLIC_KEY_MISSING' };
+  }
   if (receipt.signingMaterialExposed !== false || receipt.transactionPayloadSigned !== false || receipt.canBroadcast !== false) {
     return { valid: false, reason: 'SIGNER_CANARY_BOUNDARY_VIOLATION' };
   }
