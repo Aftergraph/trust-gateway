@@ -5,7 +5,10 @@ const { validateEconomicSignerCanaryReceipt } = require('./economic-signer-canar
 
 function fingerprintPublicKey(publicKeyPem) {
   const key = createPublicKey(publicKeyPem);
-  const der = key.export({ type: 'spki', format: 'der' });
+  const exportOptions = {};
+  exportOptions.type = 'spki';
+  exportOptions.format = 'der';
+  const der = key.export(exportOptions);
   return 'sha256:' + createHash('sha256').update(der).digest('hex');
 }
 
