@@ -4,6 +4,7 @@ const { send } = require('../server');
 const {
   buildDialagramEgressRequest,
   publicProviderResult,
+  validateDialagramRequest,
 } = require('../decision-provider-broker');
 
 const MAX_BODY = 256 * 1024;
@@ -125,6 +126,33 @@ module.exports = {
       return send(res, error?.code === 'body_too_large' ? 413 : 400, {
         error: error?.code === 'body_too_large' ? 'body_too_large' : 'invalid_json',
       });
+    }
+
+    try {
+      validateDialagramRequest(body);
+    } catch (error) {
+      const code = safeErrorCode(error);
+      gw._audit({
+        type: 'decision_provider_rejected',
+        provider: 'dialagram',
+        bot: ctx.bot?.name || null,
+        tenant: ctx.tenantId || null,
+        error: code,
+        authorityGranted: false,
+      });
+      return send(res, 400, { error: code });
+    }
+
+    if (gw.budgets && typeof gw.budgets.consume === 'function') {
+      const budget = gw.budgets.consume(ctx.bot.name);
+      if (!budget?.ok) {
+        gw._audit({
+          type: 'budget_denied',
+          bot: ctx.bot.name,
+          tool: 'decision.provider.dialagram',
+        });
+        return send(res, 402, { error: 'budget_exhausted' });
+      }
     }
 
     let handle = null;
