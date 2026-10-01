@@ -924,3 +924,8 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 
 | 361 | `tool_action_admission` | mounts/162-tool-fabric-actions.js (HomeOS/ToolFabric: operator-only action admission request; records correlation identifiers, tool/capability, decision and reason code; never credential material and never grants authority itself) |
 | 362 | `economic_live_settlement_admission_check` | mounts/162-economic-live-settlement.js (Economic Graph Frontier: operator-only admission preflight; records requested mode/lifecycle and fail-closed decision; never grants live settlement authority, carries credentials, or executes value transfer) |
+| 363 | `decision_provider_forbidden` | mounts/46-decision-providers.js (Decision Provider Broker: caller lacks decision.provider.invoke/operator authority; records provider, bot, tenant only) |
+| 364 | `decision_provider_blocked` | mounts/46-decision-providers.js (Decision Provider Broker: brokerage disabled, incompletely configured, or governed egress unavailable; no prompt or credential material) |
+| 365 | `decision_provider_brokered` | mounts/46-decision-providers.js (Decision Provider Broker: governed Dialagram egress completed; records provider, model, status, bot, tenant, broker request id, authorityGranted:false) |
+| 366 | `decision_provider_rejected` | mounts/46-decision-providers.js (Decision Provider Broker: validation/admission/dispatch rejected fail-closed; records safe error code only) |
+| 367 | `decision_provider_handle_revoke_failed` | mounts/46-decision-providers.js (Decision Provider Broker: ephemeral handle cleanup failed; records provider, tenant and safe error code, never handle or secret) |
