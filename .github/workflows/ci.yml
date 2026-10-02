@@ -28,7 +28,7 @@ jobs:
         with:
           node-version: 24
       - name: Install python deps for AIE-boot tests
-        run: pip install --quiet pyjwt
+        run: pip install --quiet --require-hashes -r .github/requirements/ci.txt
       - run: npm test
         env:
           AIE_RUNTIME_PATH: ${{ github.workspace }}/aie
