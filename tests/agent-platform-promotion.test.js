@@ -46,3 +46,49 @@ test('human-review policy cannot be bypassed by ACCEPT evidence', () => {
   assert.equal(result.eligible, false);
   assert.equal(result.decision, 'HUMAN_REVIEW');
 });
+
+
+test('promotion preflight binds execution provenance when policy requires it', () => {
+  const evidenceHash = 'd'.repeat(64);
+  const result = evaluatePromotionRequest({
+    ...accepted,
+    decision: { ...accepted.decision, evidenceHash },
+    requireExecutionProvenance: true,
+    executionProvenance: {
+      routingDecisionHash: '1'.repeat(64),
+      branchId: 'branch-a',
+      branchHash: '2'.repeat(64),
+      lineageHash: '3'.repeat(64),
+      workId: 'work-1',
+      worksEvidenceHash: evidenceHash,
+      sentinelEvidenceId: 'sge_' + '4'.repeat(64)
+    }
+  });
+  assert.equal(result.eligible, true);
+  assert.equal(result.decision, 'ELIGIBLE');
+});
+
+test('promotion preflight fails closed on missing or mismatched execution provenance', () => {
+  const missing = evaluatePromotionRequest({
+    ...accepted,
+    requireExecutionProvenance: true
+  });
+  assert.equal(missing.eligible, false);
+  assert.ok(missing.reasons.includes('execution_provenance_required'));
+
+  const mismatch = evaluatePromotionRequest({
+    ...accepted,
+    requireExecutionProvenance: true,
+    executionProvenance: {
+      routingDecisionHash: '1'.repeat(64),
+      branchId: 'branch-a',
+      branchHash: '2'.repeat(64),
+      lineageHash: '3'.repeat(64),
+      workId: 'work-1',
+      worksEvidenceHash: 'f'.repeat(64),
+      sentinelEvidenceId: 'sge_' + '4'.repeat(64)
+    }
+  });
+  assert.equal(mismatch.eligible, false);
+  assert.ok(mismatch.reasons.includes('works_evidence_hash_mismatch'));
+});
