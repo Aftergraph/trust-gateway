@@ -625,6 +625,30 @@ class Gateway extends EventEmitter {
       return send(res, 400, { error: 'invalid_request' });
     }
 
+    const caps = Array.isArray(bot.capabilities) ? bot.capabilities : [];
+    const allowed = caps.includes('*') || caps.includes('platform.admit:computer');
+    if (!allowed) {
+      const deniedEntry = this._audit({
+        type: 'action_decision',
+        bot: bot.name,
+        tool: 'platform.computer.' + capability,
+        class: 'platform_admission',
+        decision: 'deny',
+        reason: 'platform admission capability missing',
+        argsLength: 0,
+        action_id: actionId,
+        mission_id: missionId,
+        phase: 'admission',
+      });
+      // Materialize the same deterministic PDR identity for the sealed deny,
+      // but never return or reuse it as an allowed admission.
+      admissionDecisionIdForEntry(deniedEntry);
+      return send(res, 403, {
+        decision: 'deny',
+        reason: 'platform admission capability missing',
+      });
+    }
+
     const identity = this.platformIdentityResolver(req, this);
     if (!identity || identity.status !== 200) {
       return send(res, Number(identity && identity.status) || 503, {
@@ -655,15 +679,13 @@ class Gateway extends EventEmitter {
     }
 
     const tool = 'platform.computer.' + capability;
-    const caps = Array.isArray(bot.capabilities) ? bot.capabilities : [];
-    const allowed = caps.includes('*') || caps.includes('platform.admit:computer');
     const decisionEntry = this._audit({
       type: 'action_decision',
       bot: bot.name,
       tool,
       class: 'platform_admission',
-      decision: allowed ? 'allow' : 'deny',
-      reason: allowed ? 'platform admission capability granted' : 'platform admission capability missing',
+      decision: 'allow',
+      reason: 'platform admission capability granted',
       argsLength: 0,
       action_id: actionId,
       mission_id: missionId,
@@ -671,13 +693,6 @@ class Gateway extends EventEmitter {
       phase: 'admission',
     });
     const admissionDecisionId = admissionDecisionIdForEntry(decisionEntry);
-
-    if (!allowed) {
-      return send(res, 403, {
-        decision: 'deny',
-        reason: 'platform admission capability missing',
-      });
-    }
 
     return send(res, 200, {
       schema: 'platform-admission-context/1.0',
