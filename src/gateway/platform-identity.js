@@ -140,8 +140,10 @@ function ensurePrincipalBinding({ tenantId, identityRef, principalType }) {
 
 
 function resolveDelegatedPlatformIdentity(gw, subject) {
+  const keys = subject && typeof subject === 'object' ? Object.keys(subject).sort() : [];
   if (
     !subject ||
+    JSON.stringify(keys) !== JSON.stringify(['schema', 'subjectRef', 'subjectType', 'tenantRef']) ||
     subject.schema !== 'lume.platform-subject/1' ||
     !/^(owner|t_[a-f0-9]{32})$/u.test(String(subject.tenantRef || '')) ||
     !/^access-sub-sha256:[a-f0-9]{64}$/u.test(String(subject.subjectRef || '')) ||
