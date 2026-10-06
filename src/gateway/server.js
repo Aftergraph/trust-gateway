@@ -82,6 +82,7 @@ class Gateway extends EventEmitter {
     adapterRuntime = null, // composed adapter runtime; explicit dependencies remain supported
     platformAuthorize = authorizeV21Action,
     platformIdentityResolver = resolvePlatformIdentity,
+    platformAuthorityResolver = resolveAuthority,
   } = {}) {
     super();
     this.bots = bots;
@@ -111,6 +112,7 @@ class Gateway extends EventEmitter {
     this.adapterContextResolver = adapterContextResolver ?? composedAdapterRuntime.adapterContextResolver ?? null;
     this.platformAuthorize = platformAuthorize;
     this.platformIdentityResolver = platformIdentityResolver;
+    this.platformAuthorityResolver = platformAuthorityResolver;
     this.budgets = budgets ?? null; // v2 Slice 2: opt-in; null => feature off => zero behavior change
     this.now = now;
     this.mounts = mountFiles ? loadMounts() : (Array.isArray(mounts) ? mounts.slice() : []);
@@ -633,7 +635,7 @@ class Gateway extends EventEmitter {
 
     let authority;
     try {
-      authority = await resolveAuthority({
+      authority = await this.platformAuthorityResolver({
         principal_id: current.principal_id,
         mission_id: missionId,
         capability,
