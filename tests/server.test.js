@@ -315,6 +315,7 @@ test('platform admission fails closed without platform service capability', asyn
 
 test('platform admission uses delegated Lume subject projection instead of runtime service identity', async () => {
   let runtimeIdentityCalled = false;
+  let ensured = null;
   const delegated = {
     schema: 'platform-identity-projection/1.0',
     organization_id: 'org_11111111111111111111111111111111',
@@ -339,6 +340,15 @@ test('platform admission uses delegated Lume subject projection instead of runti
     platformDelegatedIdentityResolver: (_gw, observed) => {
       assert.deepEqual(observed, subject);
       return { status: 200, body: delegated };
+    },
+    platformAuthorityEnsurer: async (input) => {
+      ensured = input;
+      return {
+        schema: 'aie.platform-authority/1.0',
+        authority_lease_id: 'auth_44444444444444444444444444444444',
+        principal_id: delegated.principal_id,
+        mission_id: 'mission:lume',
+      };
     },
     platformAuthorityResolver: async (input) => ({
       schema: 'aie.authority-resolution/1.0',
@@ -365,4 +375,51 @@ test('platform admission uses delegated Lume subject projection instead of runti
   assert.equal(r.getBody().principal_id, delegated.principal_id);
   assert.equal(r.getBody().tenant_id, delegated.tenant_id);
   assert.equal(runtimeIdentityCalled, false);
+  assert.deepEqual(ensured, {
+    principal_id: delegated.principal_id,
+    tenant_id: delegated.tenant_id,
+    identity_ref: 'lume:' + subject.subjectRef,
+    idempotency_key: 'act_55555555555555555555555555555555',
+  });
+});
+
+
+test('non-delegated platform admission never provisions a new AIE authority', async () => {
+  let ensured = false;
+  const gw = new Gateway({
+    bots: {
+      runtime: { token: 'tok-runtime-service', role: 'worker', capabilities: ['platform.admit:computer'] },
+    },
+    platformIdentityResolver: () => ({
+      status: 200,
+      body: {
+        schema: 'platform-identity-projection/1.0',
+        organization_id: 'org_11111111111111111111111111111111',
+        tenant_id: 'ten_22222222222222222222222222222222',
+        principal_id: 'prn_33333333333333333333333333333333',
+        principal_type: 'agent',
+      },
+    }),
+    platformAuthorityEnsurer: async () => { ensured = true; throw new Error('must not provision'); },
+    platformAuthorityResolver: async (input) => ({
+      schema: 'aie.authority-resolution/1.0',
+      authority_lease_id: 'auth_44444444444444444444444444444444',
+      principal_id: input.principal_id,
+      mission_id: input.mission_id,
+    }),
+  });
+  const r = mockReqRes(
+    'POST',
+    '/v2/platform/admissions',
+    JSON.stringify({
+      action_id: 'act_55555555555555555555555555555555',
+      mission_id: 'mission:lume',
+      capability: 'computer',
+      resource: 'lume://computer/cs_1',
+    }),
+    'tok-runtime-service',
+  );
+  await gw.handle(r.req, r.res);
+  assert.equal(r.getStatus(), 200);
+  assert.equal(ensured, false);
 });

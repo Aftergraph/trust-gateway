@@ -58,4 +58,43 @@ async function resolveAuthority(input, { env = process.env, fetchImpl = fetch } 
   return body;
 }
 
-module.exports = { resolveAuthority, AIEAuthorityResolverError, cfgFromEnv };
+
+async function ensurePlatformAuthority(input, { env = process.env, fetchImpl = fetch } = {}) {
+  const { baseUrl, token } = cfgFromEnv(env);
+  let response;
+  try {
+    response = await fetchImpl(baseUrl + '/v1/platform-authority/ensure', {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json',
+        authorization: 'Bearer ' + token,
+      },
+      body: JSON.stringify({
+        principal_id: input.principal_id,
+        tenant_id: input.tenant_id,
+        identity_ref: input.identity_ref,
+        idempotency_key: input.idempotency_key,
+      }),
+    });
+  } catch {
+    throw new AIEAuthorityResolverError('AIE_AUTHORITY_UNAVAILABLE', 'AIE platform authority unavailable');
+  }
+  let body;
+  try { body = await response.json(); }
+  catch { throw new AIEAuthorityResolverError('AIE_AUTHORITY_INVALID', 'AIE platform authority returned invalid JSON'); }
+  if (!response.ok) {
+    const code = response.status === 409 ? 'AIE_AUTHORITY_CONFLICT' : 'AIE_AUTHORITY_UNAVAILABLE';
+    throw new AIEAuthorityResolverError(code, 'AIE platform authority ensure failed');
+  }
+  if (
+    body?.schema !== 'aie.platform-authority/1.0' ||
+    !AUTHORITY_ID.test(body.authority_lease_id || '') ||
+    body.principal_id !== input.principal_id
+  ) {
+    throw new AIEAuthorityResolverError('AIE_AUTHORITY_INVALID', 'AIE platform authority binding mismatch');
+  }
+  return body;
+}
+
+module.exports = { resolveAuthority, ensurePlatformAuthority, AIEAuthorityResolverError, cfgFromEnv };
