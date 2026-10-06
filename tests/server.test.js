@@ -209,3 +209,105 @@ test('write-ahead: decision audited before dispatch', async () => {
   const execSeq = seqs.find(([t]) => t === 'action_executed')[1];
   assert.ok(decisionSeq < execSeq);
 });
+
+test('platform admission resolves identity + AIE authority and mints sealed pre-dispatch PDR without execution', async () => {
+  let dispatched = false;
+  const gw = new Gateway({
+    bots: {
+      runtime: { token: 'tok-runtime', role: 'worker', capabilities: ['platform.admit:computer'] },
+    },
+    dispatch: async () => { dispatched = true; return { ok: true }; },
+    platformIdentityResolver: () => ({
+      status: 200,
+      body: {
+        schema: 'platform-identity-projection/1.0',
+        organization_id: 'org_11111111111111111111111111111111',
+        tenant_id: 'ten_22222222222222222222222222222222',
+        principal_id: 'prn_33333333333333333333333333333333',
+        principal_type: 'agent',
+      },
+    }),
+    platformAuthorityResolver: async (input) => {
+      assert.equal(input.principal_id, 'prn_33333333333333333333333333333333');
+      assert.equal(input.mission_id, 'mission:lume');
+      assert.equal(input.capability, 'computer');
+      assert.equal(input.resource, 'lume://computer/cs_1');
+      return {
+        schema: 'aie.authority-resolution/1.0',
+        authority_lease_id: 'auth_44444444444444444444444444444444',
+        principal_id: input.principal_id,
+        mission_id: input.mission_id,
+      };
+    },
+  });
+
+  const r = mockReqRes(
+    'POST',
+    '/v2/platform/admissions',
+    JSON.stringify({
+      action_id: 'act_55555555555555555555555555555555',
+      mission_id: 'mission:lume',
+      capability: 'computer',
+      resource: 'lume://computer/cs_1',
+    }),
+    'tok-runtime',
+  );
+  await gw.handle(r.req, r.res);
+
+  assert.equal(r.getStatus(), 200);
+  const body = r.getBody();
+  assert.equal(body.schema, 'platform-admission-context/1.0');
+  assert.equal(body.organization_id, 'org_11111111111111111111111111111111');
+  assert.equal(body.tenant_id, 'ten_22222222222222222222222222222222');
+  assert.equal(body.principal_id, 'prn_33333333333333333333333333333333');
+  assert.equal(body.authority_lease_id, 'auth_44444444444444444444444444444444');
+  assert.match(body.admission_decision_id, /^pdr_[a-f0-9]{32}$/);
+  assert.equal(dispatched, false);
+  const decision = gw.chain.entries.find((entry) =>
+    entry.payload.type === 'action_decision' && entry.payload.phase === 'admission');
+  assert.ok(decision);
+  assert.equal(decision.payload.decision, 'allow');
+});
+
+test('platform admission fails closed without platform service capability', async () => {
+  let authorityCalled = false;
+  const gw = new Gateway({
+    bots: {
+      runtime: { token: 'tok-runtime-denied', role: 'worker', capabilities: [] },
+    },
+    platformIdentityResolver: () => ({
+      status: 200,
+      body: {
+        schema: 'platform-identity-projection/1.0',
+        organization_id: 'org_11111111111111111111111111111111',
+        tenant_id: 'ten_22222222222222222222222222222222',
+        principal_id: 'prn_33333333333333333333333333333333',
+        principal_type: 'agent',
+      },
+    }),
+    platformAuthorityResolver: async () => {
+      authorityCalled = true;
+      return {
+        schema: 'aie.authority-resolution/1.0',
+        authority_lease_id: 'auth_44444444444444444444444444444444',
+        principal_id: 'prn_33333333333333333333333333333333',
+        mission_id: 'mission:lume',
+      };
+    },
+  });
+  const r = mockReqRes(
+    'POST',
+    '/v2/platform/admissions',
+    JSON.stringify({
+      action_id: 'act_55555555555555555555555555555555',
+      mission_id: 'mission:lume',
+      capability: 'computer',
+      resource: 'lume://computer/cs_1',
+    }),
+    'tok-runtime-denied',
+  );
+  await gw.handle(r.req, r.res);
+  assert.equal(r.getStatus(), 403);
+  assert.equal(r.getBody().decision, 'deny');
+  assert.equal(authorityCalled, false);
+});
