@@ -311,3 +311,58 @@ test('platform admission fails closed without platform service capability', asyn
   assert.equal(r.getBody().decision, 'deny');
   assert.equal(authorityCalled, false);
 });
+
+
+test('platform admission uses delegated Lume subject projection instead of runtime service identity', async () => {
+  let runtimeIdentityCalled = false;
+  const delegated = {
+    schema: 'platform-identity-projection/1.0',
+    organization_id: 'org_11111111111111111111111111111111',
+    tenant_id: 'ten_22222222222222222222222222222222',
+    principal_id: 'prn_33333333333333333333333333333333',
+    principal_type: 'human',
+  };
+  const subject = {
+    schema: 'lume.platform-subject/1',
+    tenantRef: 't_' + '1'.repeat(32),
+    subjectRef: 'access-sub-sha256:' + '2'.repeat(64),
+    subjectType: 'human',
+  };
+  const gw = new Gateway({
+    bots: {
+      runtime: { token: 'tok-runtime-subject', role: 'worker', capabilities: ['platform.admit:computer'] },
+    },
+    platformIdentityResolver: () => {
+      runtimeIdentityCalled = true;
+      return { status: 500, body: { error: 'must_not_use_runtime_identity' } };
+    },
+    platformDelegatedIdentityResolver: (_gw, observed) => {
+      assert.deepEqual(observed, subject);
+      return { status: 200, body: delegated };
+    },
+    platformAuthorityResolver: async (input) => ({
+      schema: 'aie.authority-resolution/1.0',
+      authority_lease_id: 'auth_44444444444444444444444444444444',
+      principal_id: input.principal_id,
+      mission_id: input.mission_id,
+    }),
+  });
+
+  const r = mockReqRes(
+    'POST',
+    '/v2/platform/admissions',
+    JSON.stringify({
+      action_id: 'act_55555555555555555555555555555555',
+      mission_id: 'mission:lume',
+      capability: 'computer',
+      resource: 'lume://computer/cs_1',
+      subject,
+    }),
+    'tok-runtime-subject',
+  );
+  await gw.handle(r.req, r.res);
+  assert.equal(r.getStatus(), 200);
+  assert.equal(r.getBody().principal_id, delegated.principal_id);
+  assert.equal(r.getBody().tenant_id, delegated.tenant_id);
+  assert.equal(runtimeIdentityCalled, false);
+});

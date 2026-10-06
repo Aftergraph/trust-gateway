@@ -18,7 +18,7 @@ const { BudgetStore } = require('./budgets');
 const { revalidate: aie_revalidate } = require('./aie-client'); // legacy TG → AIE execution-time revalidation
 const { authorizeV21Action } = require('./platform-execution');
 const { resolveAuthority } = require('./aie-authority-client');
-const { resolvePlatformIdentity } = require('./platform-identity');
+const { resolvePlatformIdentity, resolveDelegatedPlatformIdentity } = require('./platform-identity');
 const disk = require('./disk-audit');
 const { TelemetryRing, DEFAULT_FILE: DEFAULT_TELEMETRY_FILE } = require('./telemetry');
 const { loadMounts, match } = require('./http-mounts');
@@ -82,6 +82,7 @@ class Gateway extends EventEmitter {
     adapterRuntime = null, // composed adapter runtime; explicit dependencies remain supported
     platformAuthorize = authorizeV21Action,
     platformIdentityResolver = resolvePlatformIdentity,
+    platformDelegatedIdentityResolver = resolveDelegatedPlatformIdentity,
     platformAuthorityResolver = resolveAuthority,
   } = {}) {
     super();
@@ -112,6 +113,7 @@ class Gateway extends EventEmitter {
     this.adapterContextResolver = adapterContextResolver ?? composedAdapterRuntime.adapterContextResolver ?? null;
     this.platformAuthorize = platformAuthorize;
     this.platformIdentityResolver = platformIdentityResolver;
+    this.platformDelegatedIdentityResolver = platformDelegatedIdentityResolver;
     this.platformAuthorityResolver = platformAuthorityResolver;
     this.budgets = budgets ?? null; // v2 Slice 2: opt-in; null => feature off => zero behavior change
     this.now = now;
@@ -649,7 +651,9 @@ class Gateway extends EventEmitter {
       });
     }
 
-    const identity = this.platformIdentityResolver(req, this);
+    const identity = body.subject !== undefined
+      ? this.platformDelegatedIdentityResolver(this, body.subject)
+      : this.platformIdentityResolver(req, this);
     if (!identity || identity.status !== 200) {
       return send(res, Number(identity && identity.status) || 503, {
         error: identity && identity.body && identity.body.error || 'platform_identity_unavailable',
