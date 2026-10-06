@@ -17,6 +17,7 @@ const { MemoryStore, getMemoryStore } = require('./memory');
 const { BudgetStore } = require('./budgets');
 const { revalidate: aie_revalidate } = require('./aie-client'); // legacy TG → AIE execution-time revalidation
 const { authorizeV21Action } = require('./platform-execution');
+const { resolveAuthority } = require('./aie-authority-client');
 const { resolvePlatformIdentity } = require('./platform-identity');
 const disk = require('./disk-audit');
 const { TelemetryRing, DEFAULT_FILE: DEFAULT_TELEMETRY_FILE } = require('./telemetry');
@@ -490,6 +491,9 @@ class Gateway extends EventEmitter {
     const rr = this._enforceRouteLimit(bot, req.method, path);
     if (rr) return send(res, 429, rr);
 
+    if (req.method === 'POST' && path === '/v2/platform/admissions') {
+      return this._postPlatformAdmission(req, res, bot);
+    }
     if (req.method === 'POST' && path === '/v1/actions') {
       return this._postAction(req, res, bot);
     }
@@ -601,6 +605,89 @@ class Gateway extends EventEmitter {
       if (rel === 'index.html' && dir === this.staticDir) return send(res, 200, null, { html: this.dashboardHtml() }); // v1 fallback
       send(res, 404, { error: 'not_found' });
     }
+  }
+
+  async _postPlatformAdmission(req, res, bot) {
+    let body;
+    try {
+      body = JSON.parse(await readBody(req));
+    } catch {
+      return send(res, 400, { error: 'invalid_json' });
+    }
+
+    const missionId = typeof body.mission_id === 'string' ? body.mission_id.trim() : '';
+    const capability = typeof body.capability === 'string' ? body.capability.trim() : '';
+    const resource = typeof body.resource === 'string' ? body.resource.trim() : '';
+    const actionId = typeof body.action_id === 'string' ? body.action_id.trim() : '';
+    if (!missionId || !capability || !resource || !/^act_[a-f0-9]{32}$/u.test(actionId)) {
+      return send(res, 400, { error: 'invalid_request' });
+    }
+
+    const identity = this.platformIdentityResolver(req, this);
+    if (!identity || identity.status !== 200) {
+      return send(res, Number(identity && identity.status) || 503, {
+        error: identity && identity.body && identity.body.error || 'platform_identity_unavailable',
+      });
+    }
+    const current = identity.body;
+
+    let authority;
+    try {
+      authority = await resolveAuthority({
+        principal_id: current.principal_id,
+        mission_id: missionId,
+        capability,
+        resource,
+      });
+    } catch (e) {
+      const code = e && e.code ? e.code : 'AIE_AUTHORITY_UNAVAILABLE';
+      const status = code === 'AIE_AUTHORITY_NOT_FOUND' ? 403 : 503;
+      this._audit({
+        type: 'platform_admission.authority_denied',
+        bot: bot.name,
+        mission_id: missionId,
+        principal_id: current.principal_id,
+        code,
+      });
+      return send(res, status, { error: code.toLowerCase() });
+    }
+
+    const tool = 'platform.computer.' + capability;
+    const cls = classify(tool);
+    const verdict = decide({ tool, cls, bot });
+    const decisionEntry = this._audit({
+      type: 'action_decision',
+      bot: bot.name,
+      tool,
+      class: cls,
+      decision: verdict.decision,
+      reason: verdict.reason,
+      argsLength: 0,
+      action_id: actionId,
+      mission_id: missionId,
+      authority_lease_id: authority.authority_lease_id,
+      phase: 'admission',
+    });
+    const admissionDecisionId = admissionDecisionIdForEntry(decisionEntry);
+
+    if (verdict.decision !== 'allow') {
+      return send(res, verdict.decision === 'needs_approval' ? 409 : 403, {
+        decision: verdict.decision,
+        reason: verdict.reason,
+      });
+    }
+
+    return send(res, 200, {
+      schema: 'platform-admission-context/1.0',
+      decision: 'allow',
+      organization_id: current.organization_id,
+      tenant_id: current.tenant_id,
+      principal_id: current.principal_id,
+      mission_id: missionId,
+      authority_lease_id: authority.authority_lease_id,
+      admission_decision_id: admissionDecisionId,
+      action_id: actionId,
+    });
   }
 
   async _postAction(req, res, bot) {
