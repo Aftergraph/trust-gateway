@@ -228,3 +228,43 @@ test('/v2/platform/identity keeps serving the last-known org binding when the or
     require('../src/gateway/db').closeDb();
   }
 });
+
+
+test('delegated Lume subject maps durably to canonical tenant/principal and rejects caller-supplied canonical ids', () => {
+  freshDb();
+  process.env.TG_PLATFORM_ORG_ID = ORG_A;
+  resetModules();
+  const api = loadPlatformIdentity();
+  const gw = makeGateway();
+  const subject = {
+    schema: 'lume.platform-subject/1',
+    tenantRef: 't_' + '1'.repeat(32),
+    subjectRef: 'access-sub-sha256:' + '2'.repeat(64),
+    subjectType: 'human',
+  };
+
+  const first = api.resolveDelegatedPlatformIdentity(gw, subject);
+  assert.equal(first.status, 200);
+  assert.equal(first.body.organization_id, ORG_A);
+  canonicalId('ten', first.body.tenant_id);
+  canonicalId('prn', first.body.principal_id);
+  assert.equal(first.body.principal_type, 'human');
+
+  const again = api.resolveDelegatedPlatformIdentity(gw, subject);
+  assert.deepEqual(again, first);
+
+  const otherTenant = api.resolveDelegatedPlatformIdentity(gw, {
+    ...subject,
+    tenantRef: 't_' + '3'.repeat(32),
+  });
+  assert.equal(otherTenant.status, 200);
+  assert.notEqual(otherTenant.body.tenant_id, first.body.tenant_id);
+  assert.notEqual(otherTenant.body.principal_id, first.body.principal_id);
+
+  const smuggled = api.resolveDelegatedPlatformIdentity(gw, {
+    ...subject,
+    principal_id: 'prn_' + 'f'.repeat(32),
+  });
+  assert.equal(smuggled.status, 400);
+  assert.equal(smuggled.body.error, 'platform_subject_invalid');
+});
