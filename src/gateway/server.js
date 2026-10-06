@@ -17,7 +17,7 @@ const { MemoryStore, getMemoryStore } = require('./memory');
 const { BudgetStore } = require('./budgets');
 const { revalidate: aie_revalidate } = require('./aie-client'); // legacy TG → AIE execution-time revalidation
 const { authorizeV21Action } = require('./platform-execution');
-const { resolveAuthority } = require('./aie-authority-client');
+const { resolveAuthority, ensurePlatformAuthority } = require('./aie-authority-client');
 const { resolvePlatformIdentity, resolveDelegatedPlatformIdentity } = require('./platform-identity');
 const disk = require('./disk-audit');
 const { TelemetryRing, DEFAULT_FILE: DEFAULT_TELEMETRY_FILE } = require('./telemetry');
@@ -84,6 +84,7 @@ class Gateway extends EventEmitter {
     platformIdentityResolver = resolvePlatformIdentity,
     platformDelegatedIdentityResolver = resolveDelegatedPlatformIdentity,
     platformAuthorityResolver = resolveAuthority,
+    platformAuthorityEnsurer = ensurePlatformAuthority,
   } = {}) {
     super();
     this.bots = bots;
@@ -115,6 +116,7 @@ class Gateway extends EventEmitter {
     this.platformIdentityResolver = platformIdentityResolver;
     this.platformDelegatedIdentityResolver = platformDelegatedIdentityResolver;
     this.platformAuthorityResolver = platformAuthorityResolver;
+    this.platformAuthorityEnsurer = platformAuthorityEnsurer;
     this.budgets = budgets ?? null; // v2 Slice 2: opt-in; null => feature off => zero behavior change
     this.now = now;
     this.mounts = mountFiles ? loadMounts() : (Array.isArray(mounts) ? mounts.slice() : []);
@@ -660,6 +662,29 @@ class Gateway extends EventEmitter {
       });
     }
     const current = identity.body;
+
+    if (body.subject !== undefined) {
+      try {
+        await this.platformAuthorityEnsurer({
+          principal_id: current.principal_id,
+          tenant_id: current.tenant_id,
+          identity_ref: 'lume:' + String(body.subject.subjectRef),
+          idempotency_key: actionId,
+        });
+      } catch (e) {
+        const code = e && e.code ? e.code : 'AIE_AUTHORITY_UNAVAILABLE';
+        this._audit({
+          type: 'platform_admission.authority_provision_failed',
+          bot: bot.name,
+          mission_id: missionId,
+          principal_id: current.principal_id,
+          code,
+        });
+        return send(res, code === 'AIE_AUTHORITY_CONFLICT' ? 409 : 503, {
+          error: code.toLowerCase(),
+        });
+      }
+    }
 
     let authority;
     try {
