@@ -655,15 +655,15 @@ class Gateway extends EventEmitter {
     }
 
     const tool = 'platform.computer.' + capability;
-    const cls = classify(tool);
-    const verdict = decide({ tool, cls, bot });
+    const caps = Array.isArray(bot.capabilities) ? bot.capabilities : [];
+    const allowed = caps.includes('*') || caps.includes('platform.admit:computer');
     const decisionEntry = this._audit({
       type: 'action_decision',
       bot: bot.name,
       tool,
-      class: cls,
-      decision: verdict.decision,
-      reason: verdict.reason,
+      class: 'platform_admission',
+      decision: allowed ? 'allow' : 'deny',
+      reason: allowed ? 'platform admission capability granted' : 'platform admission capability missing',
       argsLength: 0,
       action_id: actionId,
       mission_id: missionId,
@@ -672,10 +672,10 @@ class Gateway extends EventEmitter {
     });
     const admissionDecisionId = admissionDecisionIdForEntry(decisionEntry);
 
-    if (verdict.decision !== 'allow') {
-      return send(res, verdict.decision === 'needs_approval' ? 409 : 403, {
-        decision: verdict.decision,
-        reason: verdict.reason,
+    if (!allowed) {
+      return send(res, 403, {
+        decision: 'deny',
+        reason: 'platform admission capability missing',
       });
     }
 
