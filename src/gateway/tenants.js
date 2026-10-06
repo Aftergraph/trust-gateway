@@ -122,6 +122,19 @@ class TenantStore {
     return { ok: true, record: { ...t, disabled: !!flag } };
   }
 
+  /** Ensure an exact, already-sanitized tenant id exists. Idempotent + race-safe. */
+  ensureId(id, name = id) {
+    if (!isValidTenantId(id)) throw new Error('tenants: invalid exact tenant id');
+    const existing = this.get(id);
+    if (existing) return existing;
+    tx(() => {
+      this._dbmod.db
+        .prepare(`INSERT OR IGNORE INTO ${TABLE}(id, name, created_at, disabled) VALUES(?, ?, ?, 0)`)
+        .run(id, String(name || id), this.now());
+    });
+    return this.get(id);
+  }
+
   /** Default tenant: auto-created exactly once, never disabled by this path. */
   ensureMain() {
     const existing = this.get('main');
