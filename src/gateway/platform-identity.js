@@ -8,7 +8,7 @@
 
 const crypto = require('node:crypto');
 const dbmod = require('./db');
-const { isValidTenantId } = require('./tenants');
+const { isValidTenantId, getTenantStore } = require('./tenants');
 const { resolveTenant } = require('./tenant-resolve');
 
 const ORG_ID_RE = /^org_[a-f0-9]{32}$/;
@@ -138,6 +138,51 @@ function ensurePrincipalBinding({ tenantId, identityRef, principalType }) {
   });
 }
 
+
+function resolveDelegatedPlatformIdentity(gw, subject) {
+  if (
+    !subject ||
+    subject.schema !== 'lume.platform-subject/1' ||
+    !/^(owner|t_[a-f0-9]{32})$/u.test(String(subject.tenantRef || '')) ||
+    !/^access-sub-sha256:[a-f0-9]{64}$/u.test(String(subject.subjectRef || '')) ||
+    subject.subjectType !== 'human'
+  ) {
+    return { status: 400, body: { error: 'platform_subject_invalid' } };
+  }
+
+  try {
+    const tenantKey = String(subject.tenantRef);
+    const localTenantId = 'lume-' + crypto.createHash('sha256').update(tenantKey).digest('hex').slice(0, 16);
+    const tenants = getTenantStore(gw);
+    const localTenant = tenants.ensureId(localTenantId, 'Lume delegated tenant');
+    if (!localTenant || localTenant.disabled) {
+      return { status: 403, body: { error: 'platform_subject_tenant_disabled' } };
+    }
+
+    const tenantBinding = ensureTenantBinding({
+      localTenantId,
+      organizationId: process.env.TG_PLATFORM_ORG_ID,
+    });
+    const principal = ensurePrincipalBinding({
+      tenantId: tenantBinding.tenant_id,
+      identityRef: 'lume:' + String(subject.subjectRef),
+      principalType: subject.subjectType,
+    });
+    return {
+      status: 200,
+      body: {
+        schema: 'platform-identity-projection/1.0',
+        organization_id: tenantBinding.organization_id,
+        tenant_id: tenantBinding.tenant_id,
+        principal_id: principal.principal_id,
+        principal_type: principal.principal_type,
+      },
+    };
+  } catch {
+    return { status: 503, body: { error: 'platform_identity_unavailable' } };
+  }
+}
+
 function resolvePlatformIdentity(req, gw) {
   const bot = gw._auth(req);
   req.bot = bot;
@@ -188,4 +233,5 @@ module.exports = {
   ensureTenantBinding,
   ensurePrincipalBinding,
   resolvePlatformIdentity,
+  resolveDelegatedPlatformIdentity,
 };
