@@ -270,6 +270,7 @@ test('platform admission resolves identity + AIE authority and mints sealed pre-
 });
 
 test('platform admission fails closed without platform service capability', async () => {
+  let authorityCalled = false;
   const gw = new Gateway({
     bots: {
       runtime: { token: 'tok-runtime-denied', role: 'worker', capabilities: [] },
@@ -284,12 +285,15 @@ test('platform admission fails closed without platform service capability', asyn
         principal_type: 'agent',
       },
     }),
-    platformAuthorityResolver: async () => ({
-      schema: 'aie.authority-resolution/1.0',
-      authority_lease_id: 'auth_44444444444444444444444444444444',
-      principal_id: 'prn_33333333333333333333333333333333',
-      mission_id: 'mission:lume',
-    }),
+    platformAuthorityResolver: async () => {
+      authorityCalled = true;
+      return {
+        schema: 'aie.authority-resolution/1.0',
+        authority_lease_id: 'auth_44444444444444444444444444444444',
+        principal_id: 'prn_33333333333333333333333333333333',
+        mission_id: 'mission:lume',
+      };
+    },
   });
   const r = mockReqRes(
     'POST',
@@ -305,4 +309,5 @@ test('platform admission fails closed without platform service capability', asyn
   await gw.handle(r.req, r.res);
   assert.equal(r.getStatus(), 403);
   assert.equal(r.getBody().decision, 'deny');
+  assert.equal(authorityCalled, false);
 });
