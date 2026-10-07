@@ -129,7 +129,10 @@ function renderCardDocument(doc) {
     body.appendChild(table);
   } else if (doc.type === 'form') {
     const form = el('form', 'tg-card-form');
-    const action = doc.action || '/v1/actions';
+    // A card document is model/bot output: only allow a same-origin path as the
+    // form target, never javascript:, data: or another origin.
+    const raw = typeof doc.action === 'string' ? doc.action : '';
+    const action = /^\/(?![\/\\])[^\s]*$/.test(raw) ? raw : '/v1/actions';
     form.action = action;
     form.method = 'POST';
     (doc.fields || []).forEach((field) => {
