@@ -217,7 +217,7 @@ class Gateway extends EventEmitter {
 
   _auth(req) {
     const h = req.headers['authorization'] || '';
-    const m = /^Bearer\s+(.+)$/i.exec(h);
+    const m = /^Bearer\s+(\S.*)$/i.exec(h);
     if (!m) return null;
     const token = m[1];
     // FS-A1 slice 2: tenant-scoped token 'tnt_<tenantId>_<rosterToken>' —

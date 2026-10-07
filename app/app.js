@@ -11,7 +11,8 @@
   let whoami = null;  // identity name from GET /v2/whoami (phase 3)
   let myCaps = [];    // capabilities of whoami (phase 3 composition input)
   let myScopes = {};  // G6: capability-scoped API surface (phase 4)
-  const sessionId = 'web-' + Math.random().toString(36).slice(2, 10);
+  const sessionId = 'web-' + (crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '').slice(0, 16)
+    : Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => b.toString(16).padStart(2, '0')).join(''));
 
   function authed() { return token && token.length > 0; }
   function saveToken() { localStorage.setItem('tg_token', token); }

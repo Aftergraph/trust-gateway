@@ -9,8 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: read
+  contents: read
 
 concurrency:
   group: tg-p2-live-governed-git-egress
@@ -18,6 +17,9 @@ concurrency:
 
 jobs:
   proof:
+    permissions:
+      contents: write
+      pull-requests: read
     name: AIE → TG governed remote Git → Sentinel
     runs-on: ubuntu-latest
     timeout-minutes: 20
