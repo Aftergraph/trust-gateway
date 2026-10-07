@@ -158,9 +158,9 @@ function htmlToText(html) {
   let s = html;
   // Drop <script>/<style>/<noscript> blocks first so their text content
   // never bleeds into the output (this is the user-facing security win).
-  s = s.replace(/<script\b[^>]*>[\s\S]*?<\/script\b[^>]*>/gi, ' ');
-  s = s.replace(/<style\b[^>]*>[\s\S]*?<\/style\b[^>]*>/gi, ' ');
-  s = s.replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript\b[^>]*>/gi, ' ');
+  s = s.replace(/<script\b[^>]*>[\s\S]*?<\/script(?=[\s/>])[^>]*>/gi, ' ');
+  s = s.replace(/<style\b[^>]*>[\s\S]*?<\/style(?=[\s/>])[^>]*>/gi, ' ');
+  s = s.replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript(?=[\s/>])[^>]*>/gi, ' ');
 
   // Extract <title>…</title> separately.
   const titleMatch = /<title\b[^>]*>([\s\S]*?)<\/title\s*>/i.exec(s);
