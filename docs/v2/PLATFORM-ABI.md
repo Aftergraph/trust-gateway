@@ -49,7 +49,7 @@ audience: build agents + humans extending the platform
 | W1 llm-brain | v2/llm | src/gateway/llm-brain.js, mounts/22-chat-llm.js, tests/llm-brain.test.js |
 | W2 groups | v2/groups | src/gateway/groups.js, mounts/25-groups.js, tests/groups.test.js |
 | W3 builder+profiles | v2/builder | src/gateway/agent-store.js, mounts/31-agents.js, tests/builder.test.js |
-| W4 plugin/mcp/skills hub | v2/plugins | src/gateway/plugins.js, mounts/35-plugins.js, modules/**, tests/plugins.test.js |
+| W4 plugin/mcp/skills hub | v2/plugins | src/gateway/plugins.js, mounts/35-plugins.js, modules/**, tests/plugins.test.js, tests/plugins-contract.test.js, docs/PLUGIN-CONTRACT-v0.2.md |
 | W5 artifacts+computer | v2/artifacts | src/gateway/artifacts.js, src/gateway/computer.js, mounts/40-artifacts.js, mounts/42-computer.js, tests/artifacts.test.js, tests/computer.test.js |
 | W6 providers/models | v2/providers | src/gateway/providers.js, mounts/45-providers.js, tests/providers.test.js |
 | W7 CLI/TUI | v2/cli | bin/tg.js, src/cli/**, tests/cli.test.js |
