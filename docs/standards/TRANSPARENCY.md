@@ -219,7 +219,7 @@ below is missing one.
   Auth is handled in-handler.
 - **Audit events:** `computer_session_created`, `computer_frame`,
   `computer_frame_denied`, `computer_control_denied`, `computer_state_changed`,
-  `computer_inspection`, `control_taken`, `control_released`, `auth_rejected`.
+  `computer_inspection`, `computer_file_read`, `control_taken`, `control_released`, `auth_rejected`.
 - **Storage:** `data/computer.json` (atomic, 0600; `TG_COMPUTER_FILE` env override).
 - **Inspect:** `GET /v2/computer/:id` returns session + frames + chain
   verification for that session.
@@ -346,6 +346,7 @@ plugins.js) across all files under `src/gateway/`.
 | 15 | `computer_frame_denied` | mounts/42-computer.js |
 | 16 | `computer_session_created` | mounts/42-computer.js |
 | 17 | `computer_inspection` | mounts/42-computer.js |
+| 301 | `computer_file_read` | mounts/42-computer.js (operator-only bounded read; audit stores path SHA-256 + metadata, never contents) |
 | 18 | `computer_state_changed` | mounts/42-computer.js |
 | 19 | `control_released` | mounts/42-computer.js |
 | 20 | `control_taken` | mounts/42-computer.js |
