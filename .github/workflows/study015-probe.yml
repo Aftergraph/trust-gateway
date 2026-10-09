@@ -1,0 +1,38 @@
+name: STUDY-015 Component Probe
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - name: Run local implementation probe
+        run: |
+          set -euo pipefail
+          node scripts/study015-probe.js > study015-probe.json
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const cp=require('node:child_process');
+          const r=JSON.parse(fs.readFileSync('study015-probe.json','utf8'));
+          const head=cp.execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
+          if(r.schema!=='study015.probe/1.0'||r.component!=='trust-gateway'||r.source_head!==head||r.network_used!==false||!Object.values(r.mechanisms).every(Boolean)) process.exit(1);
+          console.log('STUDY015_TG_PROBE=PASS');
+          NODE
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: study015-probe-trust-gateway-${{ github.event.pull_request.head.sha || github.sha }}
+          path: study015-probe.json
+          if-no-files-found: error
+          retention-days: 14
