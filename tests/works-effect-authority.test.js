@@ -41,7 +41,7 @@ test('revoked, expired, unreachable and uncorrelated AIE deny effect-time admiss
 });
 test('replay, changed scope and model-supplied grants fail before invoking AIE',()=>{
  const changes=[
-  x=>{x.actionId='bad'},x=>{x.effectDigest='bad'},x=>{x.tenantId='other'},
+  x=>{x.actionId='bad'},x=>{x.effectDigest='bad'},x=>{x.tenantId=''},
   x=>{x.amount=0},x=>{x.amount=Number.MAX_SAFE_INTEGER},
   x=>{x.approved=true},x=>{x.canDispatchEffect=true},
   x=>{x.authorityLeaseId='auth_bad'},x=>{x.worksExecutionId=''},
@@ -50,5 +50,19 @@ test('replay, changed scope and model-supplied grants fail before invoking AIE',
   const value=fixture();mutate(value);let calls=0;
   assert.equal(check(value,{liveRevalidate:()=>{calls++;return {ok:true}}}).allowed,false);
   assert.equal(calls,0);
+ }
+});
+
+test('well-formed but changed effect identity reaches AIE and is rejected by persisted fingerprint',()=>{
+ for(const change of [
+  x=>{x.tenantId='ten_'+'f'.repeat(32)},
+  x=>{x.effectDigest='sha256:'+'f'.repeat(64)},
+  x=>{x.amount=4},
+ ]){
+  const x=fixture();change(x);let calls=0;
+  const result=check(x,{liveRevalidate:()=>{calls++;return {ok:false,code:'AIE-AUTH-004'}}});
+  assert.equal(result.allowed,false);
+  assert.equal(result.canDispatchEffect,false);
+  assert.equal(calls,1);
  }
 });
