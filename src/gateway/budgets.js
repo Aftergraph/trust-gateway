@@ -7,7 +7,7 @@ const validActionId = value => typeof value === 'string' &&
   value.length > 0 && value.length <= 256;
 const withinBudget = (spent, reserved, ceiling) =>
   validAmount(spent) && validAmount(reserved) && validAmount(ceiling) &&
-  Number.isFinite(spent + reserved) && spent + reserved <= ceiling + 1e-9;
+  Number.isFinite(spent + reserved) && spent + reserved <= ceiling;
 
 class BudgetLedger {
   /**
