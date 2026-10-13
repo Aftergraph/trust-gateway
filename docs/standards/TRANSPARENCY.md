@@ -930,3 +930,4 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 366 | `decision_provider_rejected` | mounts/46-decision-providers.js (Decision Provider Broker: validation/admission/dispatch rejected fail-closed; records safe error code only) |
 | 367 | `decision_provider_handle_revoke_failed` | mounts/46-decision-providers.js (Decision Provider Broker: ephemeral handle cleanup failed; records provider, tenant and safe error code, never handle or secret) |
 | 368 | `works_dispatch_revalidation` | mounts/163-works-dispatch-authority.js (operator-only, persisted AIE action-time dispatch acceptance check; records action ID and decision, never credentials or execution authority) |
+| 369 | `works_effect_revalidation` | mounts/164-works-effect-authority.js (operator-only, live AIE check of exact effect-time action, independent of acceptance, returns no provider execution grant) |
