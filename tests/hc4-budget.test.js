@@ -104,3 +104,52 @@ test('HC4-02: persisted ledger state across instances', () => {
     assert.equal(ledger2.reserve('persist-test', 25), false, 'idempotent across instances');
   } finally { cleanup(h); }
 });
+test('HC4 security: reject negative, non-finite, and malformed reservations', () => {
+  const h = mkLedger(20);
+  try {
+    for (const amount of [-5, NaN, Infinity, -Infinity, '5', null, undefined]) {
+      assert.equal(h.ledger.reserve('unsafe-' + String(amount), amount), false);
+    }
+    assert.equal(h.ledger.reserve('', 1), false);
+    assert.equal(h.ledger.reserve('legit', 15), true);
+    assert.equal(h.ledger.reservedUsd, 15);
+    assert.equal(h.ledger.reserve('overspend', 5.01), false);
+    assert.equal(h.ledger.available, 5);
+  } finally { cleanup(h); }
+});
+
+test('HC4 security: settlement cannot exceed ceiling or corrupt existing reserve', () => {
+  const h = mkLedger(20);
+  try {
+    assert.equal(h.ledger.reserve('one', 12), true);
+    assert.equal(h.ledger.reserve('two', 5), true);
+    const before = JSON.stringify(h.ledger.summary);
+    for (const cost of [17, -2, NaN, Infinity, '9']) {
+      assert.equal(h.ledger.settle('one', cost), false);
+      assert.equal(JSON.stringify(h.ledger.summary), before);
+    }
+    assert.equal(h.ledger.settle('one', 14), true);
+    assert.equal(h.ledger.reservedUsd, 19);
+    assert.equal(h.ledger.commit('one'), true);
+    assert.equal(h.ledger.spentUsd, 14);
+    assert.equal(h.ledger.reserve('three', 2), false);
+  } finally { cleanup(h); }
+});
+
+test('HC4 security: invalid and impossible persisted budget state fails closed', () => {
+  const h = mkLedger(30);
+  try {
+    assert.equal(h.ledger.reserve('x', 10), true);
+    const state = JSON.parse(fs.readFileSync(h.file, 'utf8'));
+    for (const corrupted of [
+      { ...state, reservedUsd: -10 },
+      { ...state, reservedUsd: 100 },
+      { ...state, reservations: { x: -10 } },
+      { ...state, settled: ['missing'] },
+    ]) {
+      fs.writeFileSync(h.file, JSON.stringify(corrupted));
+      assert.throws(() => new BudgetLedger({ budgetUsd: 30, file: h.file }),
+        /budgetLedger: (invalid|corrupt|reservation)/);
+    }
+  } finally { cleanup(h); }
+});

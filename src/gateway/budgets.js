@@ -1,6 +1,14 @@
 'use strict';
 const fs = require('node:fs');
 
+const validAmount = value => typeof value === 'number' &&
+  Number.isFinite(value) && value >= 0 && value <= Number.MAX_SAFE_INTEGER;
+const validActionId = value => typeof value === 'string' &&
+  value.length > 0 && value.length <= 256;
+const withinBudget = (spent, reserved, ceiling) =>
+  validAmount(spent) && validAmount(reserved) && validAmount(ceiling) &&
+  Number.isFinite(spent + reserved) && spent + reserved <= ceiling;
+
 class BudgetLedger {
   /**
    * Frozen-semantic budget ledger with reservation semantics.
@@ -8,7 +16,8 @@ class BudgetLedger {
    * Monotonic spending; replay-safe via actionId idempotency.
    */
   constructor({ budgetUsd, file, now }) {
-    this.budgetUsd = budgetUsd || 0;
+    if (!validAmount(budgetUsd ?? 0)) throw new Error('budgetLedger: invalid budget ceiling');
+    this.budgetUsd = budgetUsd ?? 0;
     this.spentUsd = 0;
     this.reservedUsd = 0;
     this.committed = new Map(); // actionId -> final cost (settled/committed)
@@ -28,13 +37,36 @@ class BudgetLedger {
     } catch (err) {
       throw new Error('budgetLedger: refusing to load corrupt file (fail closed)');
     }
-    this.budgetUsd = data.budgetUsd || 0;
-    this.spentUsd = data.spentUsd || 0;
-    this.reservedUsd = data.reservedUsd || 0;
-    this.committed = new Map(Object.entries(data.committed || {}));
-    this.reservations = new Map(Object.entries(data.reservations || {}));
-    this.settled = new Set(data.settled || []);
-    this.actionHistory = data.actionHistory || [];
+    if (!data || typeof data !== 'object' ||
+        !validAmount(data.budgetUsd) || !validAmount(data.spentUsd) ||
+        !validAmount(data.reservedUsd) ||
+        !withinBudget(data.spentUsd, data.reservedUsd, data.budgetUsd) ||
+        !data.committed || typeof data.committed !== 'object' || Array.isArray(data.committed) ||
+        !data.reservations || typeof data.reservations !== 'object' || Array.isArray(data.reservations) ||
+        !Array.isArray(data.settled) || !Array.isArray(data.actionHistory)) {
+      throw new Error('budgetLedger: invalid persisted budget state');
+    }
+    const committed = Object.entries(data.committed);
+    const reservations = Object.entries(data.reservations);
+    if ([...committed, ...reservations].some(([id, cost]) =>
+         !validActionId(id) || !validAmount(cost)) ||
+        reservations.some(([id]) => committed.some(([other]) => id === other)) ||
+        !data.settled.every(validActionId) ||
+        data.settled.some(id => !Object.hasOwn(data.reservations, id))) {
+      throw new Error('budgetLedger: corrupt reservation entries');
+    }
+    const reservationTotal = reservations.reduce((sum, [, cost]) => sum + cost, 0);
+    if (!Number.isFinite(reservationTotal) ||
+        Math.abs(reservationTotal - data.reservedUsd) > 1e-8) {
+      throw new Error('budgetLedger: reservation balance mismatch');
+    }
+    this.budgetUsd = data.budgetUsd;
+    this.spentUsd = data.spentUsd;
+    this.reservedUsd = data.reservedUsd;
+    this.committed = new Map(committed);
+    this.reservations = new Map(reservations);
+    this.settled = new Set(data.settled);
+    this.actionHistory = data.actionHistory;
   }
 
   _save() {
@@ -60,11 +92,13 @@ class BudgetLedger {
 
   /** Reserve budget for action; returns true if successful. */
   reserve(actionId, cost) {
+    if (!validActionId(actionId) || !validAmount(cost) ||
+        !withinBudget(this.spentUsd, this.reservedUsd, this.budgetUsd)) return false;
     if (this.committed.has(actionId) || (this.reservations && this.reservations.has(actionId))) {
       return false; // idempotent: already reserved or committed
     }
-    if (this.spentUsd + this.reservedUsd + cost > this.budgetUsd) {
-      return false; // budget exceeded
+    if (!withinBudget(this.spentUsd, this.reservedUsd + cost, this.budgetUsd)) {
+      return false; // budget exceeded or arithmetic invalid
     }
     this.reservedUsd += cost;
     this.reservations.set(actionId, cost);
@@ -75,7 +109,8 @@ class BudgetLedger {
 
   /** Commit reserved budget to spent; returns true if successful. */
   commit(actionId) {
-    if (!this.reservations.has(actionId)) {
+    if (!validActionId(actionId) || !this.reservations.has(actionId) ||
+        !withinBudget(this.spentUsd, this.reservedUsd, this.budgetUsd)) {
       return false; // idempotent: never reserved
     }
     const cost = this.reservations.get(actionId);
@@ -90,10 +125,15 @@ class BudgetLedger {
 
   /** Settle final cost after execution; returns true if successful. */
   settle(actionId, cost) {
-    if (!this.reservations.has(actionId) || this.settled.has(actionId)) {
+    if (!validActionId(actionId) || !validAmount(cost) ||
+        !this.reservations.has(actionId) || this.settled.has(actionId) ||
+        !withinBudget(this.spentUsd, this.reservedUsd, this.budgetUsd)) {
       return false; // idempotent: settle once after reserve
     }
     const reserved = this.reservations.get(actionId);
+    if (!validAmount(reserved) ||
+        !withinBudget(this.spentUsd, this.reservedUsd + (cost - reserved), this.budgetUsd))
+      return false; // never settle past the ceiling, or alter state on denial
     this.reservations.set(actionId, cost);
     this.reservedUsd += (cost - reserved); // adjust to final cost (may be negative = refund)
     this.settled.add(actionId);
@@ -104,7 +144,7 @@ class BudgetLedger {
 
   /** Refund budget if action failed; returns true if successful. */
   refund(actionId) {
-    if (!this.reservations.has(actionId)) {
+    if (!validActionId(actionId) || !this.reservations.has(actionId)) {
       return false; // idempotent: never reserved
     }
     const cost = this.reservations.get(actionId);
