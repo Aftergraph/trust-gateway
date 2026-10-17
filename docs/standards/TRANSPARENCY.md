@@ -929,3 +929,4 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 365 | `decision_provider_brokered` | mounts/46-decision-providers.js (Decision Provider Broker: governed Dialagram egress completed; records provider, model, status, bot, tenant, broker request id, authorityGranted:false) |
 | 366 | `decision_provider_rejected` | mounts/46-decision-providers.js (Decision Provider Broker: validation/admission/dispatch rejected fail-closed; records safe error code only) |
 | 367 | `decision_provider_handle_revoke_failed` | mounts/46-decision-providers.js (Decision Provider Broker: ephemeral handle cleanup failed; records provider, tenant and safe error code, never handle or secret) |
+| 368 | `works_dispatch_revalidation` | mounts/163-works-dispatch-authority.js (operator-only, persisted AIE action-time dispatch acceptance check; records action ID and decision, never credentials or execution authority) |
