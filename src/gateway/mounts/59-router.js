@@ -5,59 +5,41 @@
 const { send } = require('../server');
 const { getRegistry } = require('../providers-singleton');
 const path = require('node:path');
-const { randomUUID } = require('node:crypto');
 const { RouterTelemetry } = require('../router-telemetry');
+const {
+  POLICY_FIELDS,
+  EXECUTION_MODES,
+  DATA_CLASSES,
+  parsePolicyRouteRequest,
+  selectPolicyRoute,
+  createRouteReceipt,
+} = require('../model-route-policy');
 
-// ── Verified Auto Phase 0: advisory policy fields (backward compatible) ──
-// New fields only narrow eligibility, never widen it. Restrictive data
-// policy fails closed: confidential/restricted cannot be proven eligible
-// without provider terms + processing metadata (not yet in the registry),
-// so they are denied explicitly rather than silently treated as public.
+function hasOwn(obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj, key);
+}
 
-const EXECUTION_MODES = new Set(['auto', 'verified']);
-const DATA_CLASSES = new Set(['public', 'internal', 'confidential', 'restricted']);
+function presentPolicyFields(body) {
+  return [...POLICY_FIELDS].filter((key) => hasOwn(body, key));
+}
 
-const isNonNegativeNumber = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0;
-
-function parsePolicy(body) {
-  const policy = {};
-  if (body.execution_mode !== undefined) {
-    if (!EXECUTION_MODES.has(body.execution_mode)) {
-      return { error: 'invalid_execution_mode' };
-    }
-    policy.execution_mode = body.execution_mode;
+function prevalidateCompatibilityFields(body) {
+  if (hasOwn(body, 'execution_mode') &&
+      (typeof body.execution_mode !== 'string' || !EXECUTION_MODES.has(body.execution_mode))) {
+    return 'invalid_execution_mode';
   }
-  if (body.data_class !== undefined) {
-    if (!DATA_CLASSES.has(body.data_class)) {
-      return { error: 'invalid_data_class' };
-    }
-    policy.data_class = body.data_class;
+  if (hasOwn(body, 'data_class') &&
+      (typeof body.data_class !== 'string' || !DATA_CLASSES.has(body.data_class))) {
+    return 'invalid_data_class';
   }
-  if (body.provider_training_allowed !== undefined) {
-    if (typeof body.provider_training_allowed !== 'boolean') {
-      return { error: 'invalid_provider_training_allowed' };
-    }
-    policy.provider_training_allowed = body.provider_training_allowed;
+  if (hasOwn(body, 'provider_training_allowed') && typeof body.provider_training_allowed !== 'boolean') {
+    return 'invalid_provider_training_allowed';
   }
-  if (body.max_cost_usd !== undefined) {
-    if (!isNonNegativeNumber(body.max_cost_usd)) {
-      return { error: 'invalid_max_cost_usd' };
-    }
-    policy.max_cost_usd = body.max_cost_usd;
+  if (hasOwn(body, 'max_cost_usd') &&
+      (typeof body.max_cost_usd !== 'number' || !Number.isFinite(body.max_cost_usd) || body.max_cost_usd < 0)) {
+    return 'invalid_max_cost_usd';
   }
-  if (body.verification !== undefined) {
-    if (typeof body.verification !== 'string' || body.verification.length === 0 || body.verification.length > 64) {
-      return { error: 'invalid_verification' };
-    }
-    policy.verification = body.verification;
-  }
-  if (body.execution_context_id !== undefined) {
-    if (typeof body.execution_context_id !== 'string' || body.execution_context_id.length === 0 || body.execution_context_id.length > 128) {
-      return { error: 'invalid_execution_context_id' };
-    }
-    policy.execution_context_id = body.execution_context_id;
-  }
-  return { policy };
+  return null;
 }
 
 module.exports = {
@@ -85,7 +67,6 @@ module.exports = {
     }
     const telemetry = gw._routerTelemetry;
 
-    // ── POST /v2/router/outcome — telemetry recording (v0.2) ──
     if (ctx.url.pathname.endsWith('/outcome')) {
       const { provider, model, ok, latency_ms } = body;
       if (!provider || !model) return send(res, 400, { error: 'provider_and_model_required' });
@@ -95,28 +76,86 @@ module.exports = {
       return send(res, 200, { ok: true, recorded: ev, health: telemetry.health() });
     }
 
-    const capability = String(body.capability || '').slice(0, 64);
-    const budgetTier = String(body.budget_tier || 'standard').slice(0, 32);
+    const compatibilityError = prevalidateCompatibilityFields(body);
+    if (compatibilityError) return send(res, 400, { error: compatibilityError });
 
-    // Verified Auto policy: malformed restrictive fields fail closed.
-    const { policy, error: policyError } = parsePolicy(body);
-    if (policyError) return send(res, 400, { error: policyError });
+    const policyFields = presentPolicyFields(body);
 
-    // Restrictive data classes fail closed until provider terms +
-    // processing metadata can prove an eligible route.
-    if (policy.data_class === 'confidential' || policy.data_class === 'restricted') {
-      gw._audit({ type: 'model_route_denied', reason: 'route_policy_denied', dataClass: policy.data_class });
+    // Phase-0 compatibility: execution_mode by itself used to be accepted.
+    // Keep that narrow call shape working, but synthesize the safest explicit
+    // v0.2 envelope so it cannot widen provider eligibility.
+    let policyBody = body;
+    if (policyFields.length === 1 && policyFields[0] === 'execution_mode') {
+      policyBody = {
+        ...body,
+        data_class: 'public',
+        provider_training_allowed: false,
+      };
+    }
+
+    // Phase-0 compatibility: a restrictive data class by itself used to be
+    // denied explicitly. Preserve that exact error shape; a complete v0.2
+    // policy may route restricted data to a no-provider-training model.
+    if (policyFields.length === 1 && policyFields[0] === 'data_class' &&
+        (body.data_class === 'confidential' || body.data_class === 'restricted')) {
+      gw._audit({ type: 'model_route_denied', reason: 'route_policy_denied', dataClass: body.data_class });
       return send(res, 403, {
         error: 'route_policy_denied',
-        reason: 'confidential_restricted_require_proven_private_processing',
+        reason: 'complete_policy_envelope_required_for_restrictive_data',
       });
     }
 
-    // Build routing constraints
+    const policyRequest = parsePolicyRouteRequest(policyBody);
+    if (!policyRequest.ok) {
+      return send(res, policyRequest.status, { error: policyRequest.error });
+    }
+
+    const capability = String(body.capability || '').slice(0, 64);
+    const reg = getRegistry(gw);
+
+    if (policyRequest.policyAware) {
+      const routingRequest = {
+        ...policyRequest.value,
+        capability,
+        budget_tier: String(body.budget_tier || 'standard').slice(0, 32),
+      };
+      const selected = selectPolicyRoute({
+        registryModels: reg.models(),
+        request: routingRequest,
+        telemetry,
+      });
+      if (selected.error) return send(res, 409, { error: selected.error });
+
+      const receipt = createRouteReceipt({
+        request: routingRequest,
+        selected: selected.primary,
+        reasonCodes: selected.reasonCodes,
+      });
+
+      gw._audit({
+        type: 'model_route_policy',
+        routeId: receipt.route_id,
+        executionMode: routingRequest.execution_mode,
+        dataClass: routingRequest.data_class,
+        trainingAllowed: routingRequest.provider_training_allowed,
+        primaryProvider: selected.primary.provider,
+        primaryModel: selected.primary.model,
+        fallbackCount: selected.fallbacks.length,
+        reasonCodes: receipt.selection.reason_codes,
+      });
+
+      return send(res, 200, {
+        model: selected.primary.model,
+        provider: selected.primary.provider,
+        fallbacks: selected.fallbacks,
+        receipt,
+      });
+    }
+
+    const budgetTier = String(body.budget_tier || 'standard').slice(0, 32);
     const preferFree = budgetTier === 'free' || budgetTier === 'economy';
     const maxLanes = budgetTier === 'premium' ? 10 : 5;
 
-    const reg = getRegistry(gw);
     let plan;
     try {
       plan = reg.plan({ task: capability || 'general', preferFree, maxLanes });
@@ -124,54 +163,21 @@ module.exports = {
       return send(res, 500, { error: 'routing_failed', detail: String(e.message) });
     }
 
-    // Build response with primary and fallbacks
     const fallbacks = telemetry.reorderFallbacks(
       plan.fallbacks.slice(0, 3).map(({ model, provider }) => ({ model, provider })),
     );
-    const executionMode = policy.execution_mode || 'auto';
-    const reasonCodes = ['capability_match', 'budget_match'];
-    if (fallbacks.length > 0 || plan.primary) reasonCodes.push('provider_healthy');
-    if (policy.max_cost_usd !== undefined) reasonCodes.push('cost_ceiling_recorded_unenforced');
-    if (policy.provider_training_allowed !== undefined) {
-      reasonCodes.push('training_policy_unevaluated_no_terms_metadata');
-    }
-    const receipt = {
-      schema: 'model-route/1.0',
-      route_id: `rte_${randomUUID().replace(/-/g, '')}`,
-      provider: plan.primary.provider,
-      model: plan.primary.model,
-      capability: capability || 'general',
-      execution_mode: executionMode,
-      verification_required: executionMode === 'verified',
-      reason_codes: reasonCodes,
-      issued_at: new Date().toISOString(),
-    };
-    if (policy.data_class !== undefined) receipt.data_class = policy.data_class;
-    if (policy.provider_training_allowed !== undefined) {
-      receipt.provider_training_allowed = policy.provider_training_allowed;
-    }
-    if (policy.max_cost_usd !== undefined) receipt.max_cost_usd = policy.max_cost_usd;
-    if (policy.verification !== undefined) receipt.verification = policy.verification;
-    if (policy.execution_context_id !== undefined) {
-      receipt.execution_context_id = policy.execution_context_id;
-    }
     const result = {
       model: plan.primary.model,
       provider: plan.primary.provider,
       fallbacks,
-      receipt,
     };
 
-    // Audit routing decision (no capability text to avoid secrets)
     gw._audit({
       type: 'model_route',
       capabilityTag: capability || 'general',
       budgetTier,
       primaryProvider: result.provider,
       fallbackCount: result.fallbacks.length,
-      executionMode,
-      verificationRequired: receipt.verification_required,
-      routeId: receipt.route_id,
     });
 
     return send(res, 200, result);
