@@ -6,7 +6,8 @@
   "scripts": {
     "test": "node --test tests/*.test.js",
     "demo": "node demo/live-demo.js",
-    "start": "node src/gateway/server.js"
+    "start": "node src/gateway/server.js",
+    "start:computer-mcp": "node bin/computer-mcp.js"
   },
   "engines": { "node": ">=20" }
 }
