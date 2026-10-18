@@ -15,7 +15,7 @@ const path = require('node:path');
 
 const { Gateway, send } = require('../src/gateway/server');
 const {
-  PluginHub, validateManifest, parseSkillFrontmatter, validateMcpDef, TRIGGER_MAX,
+  PluginHub, validateManifest, parseSkillFrontmatter, validateMcpDef, hashModuleTree, TRIGGER_MAX,
 } = require('../src/gateway/plugins');
 
 const REPO_MODULES = path.join(__dirname, '..', 'modules');
@@ -199,6 +199,9 @@ test('hub: install copies module into data/modules/ and audits plugin_installed'
   const r = hub.install('demo-echo');
   assert.equal(r.ok, true);
   assert.equal(r.module.enabled, false);
+  assert.equal(r.module.integrity.sealed, true);
+  assert.match(r.module.integrity.digest, /^[a-f0-9]{64}$/);
+  assert.equal(r.module.integrity.algorithm, 'sha256');
   assert.ok(fs.existsSync(path.join(dir, 'modules', 'demo-echo', 'index.js')));
   assert.ok(fs.existsSync(path.join(dir, 'modules', 'demo-echo', 'plugin.json')));
   assert.deepEqual(
@@ -246,6 +249,64 @@ test('hub: uninstall removes the running copy and audits plugin_uninstalled', ()
   assert.equal(hub.uninstall('demo-echo').status, 404);
   assert.ok(audits.some((a) => a.type === 'plugin_uninstalled'));
 });
+
+test('hub: required secrets fail closed before enable and succeed after configuration', () => {
+  const src = tmpdir('w4-required-src-');
+  const mod = path.join(src, 'demo-echo');
+  fs.cpSync(path.join(REPO_MODULES, 'demo-echo'), mod, { recursive: true });
+  const manifestPath = path.join(mod, 'plugin.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  manifest.secrets = [{ name: 'API_KEY', required: true }];
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+
+  const { hub, audits } = makeHub({ sourceDir: src });
+  assert.equal(hub.install('demo-echo').ok, true);
+  const refused = hub.enable('demo-echo');
+  assert.equal(refused.status, 409);
+  assert.equal(refused.error, 'required_secrets_missing');
+  assert.deepEqual(refused.missing, ['API_KEY']);
+  assert.equal(hub.view('demo-echo').enabled, false);
+  assert.ok(audits.some((a) => a.type === 'plugin_enable_refused' && a.reason === 'required_secrets_missing'));
+
+  assert.equal(hub.setSecret('demo-echo', 'API_KEY', 'configured').ok, true);
+  assert.equal(hub.enable('demo-echo').module.enabled, true);
+});
+
+test('hub: tampering with installed package blocks enable on digest mismatch', () => {
+  const { hub, audits, dir } = makeHub();
+  const installed = hub.install('demo-echo');
+  assert.equal(installed.ok, true);
+  const entry = path.join(dir, 'modules', 'demo-echo', 'index.js');
+  fs.appendFileSync(entry, '\n// tampered after install\n');
+
+  const refused = hub.enable('demo-echo');
+  assert.equal(refused.status, 409);
+  assert.equal(refused.error, 'plugin_integrity_mismatch');
+  assert.equal(hub.view('demo-echo').enabled, false);
+  assert.ok(audits.some((a) => a.type === 'plugin_integrity_mismatch'));
+});
+
+test('hub: package seal is deterministic and rejects symlinked package content', { skip: process.platform === 'win32' }, () => {
+  const src = tmpdir('w4-seal-src-');
+  const mod = path.join(src, 'demo-echo');
+  fs.cpSync(path.join(REPO_MODULES, 'demo-echo'), mod, { recursive: true });
+  const first = hashModuleTree(mod);
+  const second = hashModuleTree(mod);
+  assert.equal(first.ok, true);
+  assert.equal(second.ok, true);
+  assert.equal(first.integrity.digest, second.integrity.digest);
+
+  fs.symlinkSync('index.js', path.join(mod, 'alias.js'));
+  const sealed = hashModuleTree(mod);
+  assert.equal(sealed.ok, false);
+  assert.ok(sealed.errors.some((e) => e.startsWith('symlink_forbidden:')));
+
+  const { hub } = makeHub({ sourceDir: src });
+  const rejected = hub.install('demo-echo');
+  assert.equal(rejected.status, 400);
+  assert.ok(rejected.errors.some((e) => e.startsWith('symlink_forbidden:')));
+});
+
 
 // ── 5. secrets hygiene ────────────────────────────────────────────
 

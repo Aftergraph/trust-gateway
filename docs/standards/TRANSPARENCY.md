@@ -188,18 +188,27 @@ below is missing one.
 - **Storage:** `data/agents.json` (atomic, 0600; `TG_DATA_DIR` env override).
 - **Inspect:** `GET /v2/agents`, `GET /v2/profiles/:who` (operator sees any).
 
-### `plugins.js` + mount `35-plugins.js` — plugin/MCP/skills hub, secrets
+### `plugins.js` + mount `35-plugins.js` — Plugin Contract v0.2 / MCP / skills hub
+- **Ownership:** `35-plugins.js` is the single object-mount owner for
+  `/v2/plugins`; the shadowed duplicate v0.1 mount was removed.
 - **Endpoints:** `GET|POST /v2/plugins`, `GET /v2/plugins/:id`,
-  `POST /v2/plugins/:id/enable|disable`, `DELETE /v2/plugins/:id`, plus
-  `/v2/skills`, `/v2/mcp` sub-surfaces (bearer; writes RBAC-gated,
+  `POST /v2/plugins/:id/enable|disable`, `DELETE /v2/plugins/:id`,
+  plugin secret configuration under `/v2/plugins/:id/secrets/:name`, plus
+  `/v2/skills` and `/v2/mcp` (bearer; writes RBAC-gated,
   `plugins_forbidden` on violation).
 - **Audit events:** `plugin_installed`, `plugin_rejected`, `plugin_enabled`,
-  `plugin_disabled`, `plugin_uninstalled`, `mcp_registered`, `mcp_rejected`,
+  `plugin_enable_refused`, `plugin_integrity_mismatch`, `plugin_disabled`,
+  `plugin_uninstalled`, `mcp_registered`, `mcp_rejected`,
   `mcp_unregistered`, `secret_configured`, `secret_removed`.
+- **Integrity:** new installs are deterministic SHA-256 sealed snapshots;
+  symlinks/special files are refused and enable re-verifies the installed
+  digest before activation.
 - **Storage:** `data/plugins.json` (state, atomic 0600; `TG_PLUGINS_DATA_DIR`
-  env override) and `data/modules/<id>/` (installed copies; source dir
-  `modules/`).
-- **Inspect:** `GET /v2/plugins`; secrets show name+length only — never values.
+  env override) and `data/modules/<id>/` (installed snapshots; source dir
+  `modules/`). Legacy pre-v0.2 records may report `integrity.sealed=false`.
+- **Inspect:** `GET /v2/plugins`; secret API projections show name+length only.
+  The compatibility state store still contains configured plugin secret values;
+  v0.2 does not claim a SecretsVault/credential-handle migration.
 
 ### `artifacts.js` + mount `40-artifacts.js` — workforce artifacts
 - **Endpoints:** `POST|GET /v2/artifacts`, `GET|PUT /v2/artifacts/:id`,
@@ -880,11 +889,12 @@ emits), `tests/standards.test.js` fails — update both in the same commit.
 | 296 | `knowledge_cited` | mounts/18-knowledge.js (P2: {source_id, ref_type, ref_id} — citation recorded) |
 | 297 | `knowledge_removed` | mounts/18-knowledge.js (P2: {source_id} — source deleted) |
 | 298 | `knowledge_delete_forbidden` | mounts/18-knowledge.js (P2: {source_id, bot} — non-operator attempted delete) |
-| 261 | `plugin_forbidden` | mounts/35-plugins.js (W4: {bot, method, path} — non-operator plugin write) |
-| 262 | `plugin_permission_rejected` | mounts/35-plugins.js (W4: declared permission rejected at runtime) |
-| 263 | `plugin_delete_forbidden` | mounts/35-plugins.js (W4: uninstall denied by policy) |
 | 264 | `model_route` | mounts/59-router.js (HC4/router: {capability, model, provider} — routing decision) |
 | 300 | `model_route_denied` | mounts/59-router.js (Verified Auto Phase 0: {reason, dataClass} — confidential/restricted route denied fail-closed) |
+| 301 | `plugin_enable_refused` | plugins.js (Plugin Contract v0.2: {id, reason, missing[]} — enable blocked before activation when required declared secrets are absent; secret values never included) |
+| 302 | `plugin_integrity_mismatch` | plugins.js (Plugin Contract v0.2: {id, expected, observed} — sealed installed package changed before enable; SHA-256 digests only, no file contents) |
+
+> Plugin Contract v0.2 retired the unreachable v0.1-only event names `plugin_forbidden`, `plugin_permission_rejected`, and `plugin_delete_forbidden` together with the shadowed `58-plugins.js` mount. Canonical write denials use `plugins_forbidden`.
 | 265 | `needyou_created` | mounts/08-need-you.js (W0.5: {id, tenantId, type, subject} — new NeedsYouItem created) |
 | 266 | `needyou_resolved` | mounts/08-need-you.js (W0.5: {id, resolvedBy} — NeedsYouItem resolved) |
 | 267 | `approval_notify_sent` | approval-notify.js (W6: approval notification dispatched) |

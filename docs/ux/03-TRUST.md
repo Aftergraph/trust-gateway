@@ -451,7 +451,7 @@ The audit chain (hash-chained, append-only — `hash-chain.js`/`sql-chain.js`) r
 **Trust types:** `trust_scan`
 **Provider types:** `provider_probe`, `provider_plan`, `provider_live_probed`, `provider_live_access_denied`
 **Adapter types:** `adapter_registered`, `adapter_updated`, `adapter_tested`, `adapter_secret_set`, `adapter_deleted`
-**Plugin/MCP types:** `plugin_installed`, `plugin_rejected`, `plugin_uninstalled`, `plugins_forbidden`, `mcp_registered`, `mcp_rejected`, `mcp_unregistered`
+**Plugin/MCP types:** `plugin_installed`, `plugin_rejected`, `plugin_enabled`, `plugin_enable_refused`, `plugin_integrity_mismatch`, `plugin_disabled`, `plugin_uninstalled`, `plugins_forbidden`, `mcp_registered`, `mcp_rejected`, `mcp_unregistered`, `secret_configured`, `secret_removed`
 **Room types:** `room_created`, `room_deleted`, `room_message`, `room_handoff`, `room_limit_hit`
 **Voice types:** `voice_tts`, `voice_stt`
 **Harness types:** `harness_build`, `harness_result`, `worktree_snapshot`, `worktree_remove`

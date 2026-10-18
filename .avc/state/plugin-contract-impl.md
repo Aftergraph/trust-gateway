@@ -1,34 +1,18 @@
-# Plugin Contract v0.1 Implementation
+# Plugin Contract implementation state
 
-## Status
-- Implementation complete
-- All tests passing (9/9)
+## Current status
+- Canonical contract: **v0.2**
+- Canonical runtime: `src/gateway/plugins.js` + `src/gateway/mounts/35-plugins.js`
+- The former v0.1 `58-plugins.js` mount was removed after route-shadowing was proven.
+- Declarative v0.1 manifests remain compatibility input to the v0.2 validator.
+- v0.2 adds sealed package snapshots, enable-time integrity verification and required-secret preconditions.
+- Verification source: `tests/plugins.test.js` + `tests/plugins-contract.test.js`; CI status is authoritative.
 
-## Files Created
-1. `docs/PLUGIN-CONTRACT-v0.1.md` - Contract specification
-2. `src/gateway/mounts/58-plugins.js` - Mount for plugin endpoints
-3. `tests/plugins-contract.test.js` - Test suite
+## Historical note
+The previous state file reported “Implementation complete / 9/9” for v0.1.
+That result was insufficient: HTTP tests could hit the earlier
+`35-plugins.js` route while the later `58-plugins.js` owner remained
+shadowed. Do not use the old 9/9 result as evidence of route ownership.
 
-## Contract Summary
-- Manifest schema defines: id, name, version, entry, permissions, tools, views, events, automations, sandbox
-- Permission model: declared permissions are informational; TG/AIE policy enforces actual access
-- UI primitives: Card, Table, Form, Chart, Timeline, Approval, Progress, Artifact
-- Event bus: subscribe/publish governed by TG
-- Sandbox: must be "jailed" - no direct filesystem/network access
-
-## Endpoints
-- GET /v2/plugins - List all plugins
-- POST /v2/plugins/register - Register new plugin
-- GET /v2/plugins/:id - View plugin details
-- DELETE /v2/plugins/:id - Uninstall plugin
-
-## Test Results
-- validateManifest: accepts valid v0.1 manifest
-- validateManifest: rejects invalid manifests
-- permission model: declared permissions do not grant access
-- permission model: TG/AIE policy enforces write operations
-- UI declarations: only valid primitives allowed
-- events: declaration allows subscription
-- CRUD lifecycle: list, install, view, uninstall
-- permission enforcement: worker cannot install, operator can
-- fail-closed: invalid manifest rejected
+## Current contract
+See `docs/PLUGIN-CONTRACT-v0.2.md`.

@@ -19,6 +19,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 
 const SLUG_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 const SECRET_NAME_RE = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
@@ -29,13 +30,74 @@ const DESC_MAX = 200;
 const SECRET_VALUE_MAX = 8192;
 const MANIFEST_MAX = 64 * 1024;
 const SKILL_FILE_MAX = 64 * 1024;
+const PACKAGE_FILE_MAX = 2 * 1024 * 1024;
+const PACKAGE_BYTES_MAX = 16 * 1024 * 1024;
+const PACKAGE_FILES_MAX = 1024;
 const STATE_VERSION = 1;
+const CONTRACT_VERSION = '0.2';
+const PLUGIN_VIEWS = new Set(['Card', 'Table', 'Form', 'Chart', 'Timeline', 'Approval', 'Progress', 'Artifact']);
 
 const DEFAULT_SOURCE_DIR = path.join(__dirname, '..', '..', 'modules');
 const DEFAULT_DATA_DIR = path.join(__dirname, '..', '..', 'data');
 
 function isPlainObject(v) {
   return v !== null && typeof v === 'object' && !Array.isArray(v);
+}
+
+function hashModuleTree(rootDir) {
+  const rootStat = fs.lstatSync(rootDir);
+  if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) {
+    return { ok: false, errors: ['package_root_must_be_real_directory'] };
+  }
+
+  const files = [];
+  let totalBytes = 0;
+  const walk = (dir) => {
+    const entries = fs.readdirSync(dir, { withFileTypes: true })
+      .sort((a, b) => a.name.localeCompare(b.name));
+    for (const ent of entries) {
+      const full = path.join(dir, ent.name);
+      const rel = path.relative(rootDir, full).split(path.sep).join('/');
+      const st = fs.lstatSync(full);
+      if (st.isSymbolicLink()) return { error: 'symlink_forbidden:' + rel };
+      if (st.isDirectory()) {
+        const nested = walk(full);
+        if (nested) return nested;
+        continue;
+      }
+      if (!st.isFile()) return { error: 'special_file_forbidden:' + rel };
+      if (st.size > PACKAGE_FILE_MAX) return { error: 'file_too_large:' + rel };
+      totalBytes += st.size;
+      if (totalBytes > PACKAGE_BYTES_MAX) return { error: 'package_too_large' };
+      files.push({ full, rel, size: st.size });
+      if (files.length > PACKAGE_FILES_MAX) return { error: 'too_many_files' };
+    }
+    return null;
+  };
+
+  const walked = walk(rootDir);
+  if (walked) return { ok: false, errors: [walked.error] };
+
+  const h = crypto.createHash('sha256');
+  for (const file of files.sort((a, b) => a.rel.localeCompare(b.rel))) {
+    h.update(String(Buffer.byteLength(file.rel)), 'utf8');
+    h.update(':', 'utf8');
+    h.update(file.rel, 'utf8');
+    h.update('\0', 'utf8');
+    h.update(String(file.size), 'utf8');
+    h.update('\0', 'utf8');
+    h.update(fs.readFileSync(file.full));
+    h.update('\0', 'utf8');
+  }
+  return {
+    ok: true,
+    integrity: {
+      algorithm: 'sha256',
+      digest: h.digest('hex'),
+      fileCount: files.length,
+      totalBytes,
+    },
+  };
 }
 
 // ── manifest validation ───────────────────────────────────────────
@@ -45,7 +107,11 @@ function validateManifest(raw, { dirName } = {}) {
   if (!isPlainObject(raw)) {
     return { ok: false, errors: ['manifest must be a JSON object'] };
   }
-  const allowed = new Set(['id', 'name', 'version', 'entry', 'description', 'capabilities', 'secrets', 'mcp']);
+  const allowed = new Set([
+    'contractVersion', 'id', 'name', 'version', 'entry', 'description',
+    'capabilities', 'permissions', 'tools', 'views', 'events', 'automations',
+    'sandbox', 'secrets', 'mcp',
+  ]);
   for (const k of Object.keys(raw)) {
     if (!allowed.has(k)) errors.push(`unknown_field:${k}`);
   }
@@ -66,6 +132,21 @@ function validateManifest(raw, { dirName } = {}) {
   if (raw.description !== undefined && (typeof raw.description !== 'string' || raw.description.length > DESC_MAX)) {
     errors.push(`description must be a string ≤${DESC_MAX} chars`);
   }
+  if (raw.contractVersion !== undefined && !['0.1', CONTRACT_VERSION].includes(raw.contractVersion)) {
+    errors.push(`contractVersion must be 0.1|${CONTRACT_VERSION}`);
+  }
+  if (raw.sandbox !== undefined && raw.sandbox !== 'jailed') {
+    errors.push('sandbox must be "jailed"');
+  }
+
+  const normalizeStringList = (field, value) => {
+    if (value === undefined) return [];
+    if (!Array.isArray(value) || value.some((item) => typeof item !== 'string' || item.trim() === '' || item.length > 128)) {
+      errors.push(`${field} must be an array of non-empty strings ≤128 chars`);
+      return [];
+    }
+    return [...new Set(value.map((item) => item.trim()))];
+  };
 
   let capabilities = [];
   if (raw.capabilities !== undefined) {
@@ -73,6 +154,44 @@ function validateManifest(raw, { dirName } = {}) {
       errors.push('capabilities must be an array of non-empty strings');
     } else {
       capabilities = raw.capabilities.slice();
+    }
+  }
+
+  const permissions = normalizeStringList('permissions', raw.permissions);
+  const tools = normalizeStringList('tools', raw.tools);
+  const events = normalizeStringList('events', raw.events);
+
+  let views = [];
+  if (raw.views !== undefined) {
+    if (!Array.isArray(raw.views) || raw.views.some((view) => typeof view !== 'string')) {
+      errors.push('views must be an array of view primitive names');
+    } else {
+      for (const view of raw.views) {
+        if (!PLUGIN_VIEWS.has(view)) errors.push(`unknown_view:${view}`);
+        else if (!views.includes(view)) views.push(view);
+      }
+    }
+  }
+
+  let automations = [];
+  if (raw.automations !== undefined) {
+    if (!Array.isArray(raw.automations)) {
+      errors.push('automations must be an array');
+    } else {
+      for (const automation of raw.automations) {
+        if (!isPlainObject(automation)
+            || typeof automation.trigger !== 'string' || automation.trigger.trim() === ''
+            || typeof automation.action !== 'string' || automation.action.trim() === '') {
+          errors.push('automations must contain {trigger, action} strings');
+          continue;
+        }
+        automations.push({
+          ...(typeof automation.id === 'string' && automation.id ? { id: automation.id } : {}),
+          trigger: automation.trigger.trim(),
+          ...(typeof automation.condition === 'string' && automation.condition ? { condition: automation.condition } : {}),
+          action: automation.action.trim(),
+        });
+      }
     }
   }
 
@@ -109,12 +228,19 @@ function validateManifest(raw, { dirName } = {}) {
   return {
     ok: true,
     manifest: {
+      contractVersion: raw.contractVersion || CONTRACT_VERSION,
       id,
       name: name.trim(),
       version,
       entry,
       description: raw.description || '',
       capabilities,
+      permissions,
+      tools,
+      views,
+      events,
+      automations,
+      sandbox: raw.sandbox || 'jailed',
       secrets,
       mcp,
     },
@@ -276,8 +402,22 @@ class PluginHub {
     }
     const srcDir = j.path;
     const manifestFile = path.join(srcDir, 'plugin.json');
-    if (!fs.existsSync(srcDir) || !fs.statSync(srcDir).isDirectory() || !fs.existsSync(manifestFile)) {
+    if (!fs.existsSync(srcDir) || !fs.existsSync(manifestFile)) {
       return this._reject(sourceId, ['source_missing']);
+    }
+    let srcStat;
+    let manifestStat;
+    try {
+      srcStat = fs.lstatSync(srcDir);
+      manifestStat = fs.lstatSync(manifestFile);
+    } catch {
+      return this._reject(sourceId, ['source_missing']);
+    }
+    if (srcStat.isSymbolicLink() || !srcStat.isDirectory()) {
+      return this._reject(sourceId, ['source_must_be_real_directory']);
+    }
+    if (manifestStat.isSymbolicLink() || !manifestStat.isFile()) {
+      return this._reject(sourceId, ['manifest_must_be_real_file']);
     }
     let raw;
     try {
@@ -289,21 +429,70 @@ class PluginHub {
     }
     const v = validateManifest(raw, { dirName: sourceId });
     if (!v.ok) return this._reject(sourceId, v.errors);
-    if (!fs.existsSync(path.join(srcDir, v.manifest.entry))) {
+    const entryFile = path.join(srcDir, v.manifest.entry);
+    if (!fs.existsSync(entryFile)) {
       return this._reject(sourceId, ['entry_missing:' + v.manifest.entry]);
     }
+    const entryStat = fs.lstatSync(entryFile);
+    if (entryStat.isSymbolicLink() || !entryStat.isFile()) {
+      return this._reject(sourceId, ['entry_must_be_real_file:' + v.manifest.entry]);
+    }
+
+    const sourceSeal = hashModuleTree(srcDir);
+    if (!sourceSeal.ok) return this._reject(sourceId, sourceSeal.errors);
 
     fs.mkdirSync(this.modulesDir, { recursive: true });
     const dest = path.join(this.modulesDir, sourceId);
-    fs.cpSync(srcDir, dest, { recursive: true });
+    if (fs.existsSync(dest)) {
+      return this._reject(sourceId, ['install_destination_exists']);
+    }
+    const staging = dest + '.tmp-' + process.pid + '-' + crypto.randomBytes(6).toString('hex');
+    try {
+      fs.cpSync(srcDir, staging, { recursive: true, dereference: false, errorOnExist: true, force: false });
+      const copiedSeal = hashModuleTree(staging);
+      if (!copiedSeal.ok || copiedSeal.integrity.digest !== sourceSeal.integrity.digest) {
+        return this._reject(sourceId, copiedSeal.ok ? ['install_copy_digest_mismatch'] : copiedSeal.errors);
+      }
+
+      // Re-parse the staged manifest after the content seal. This closes the
+      // parse→hash/copy TOCTOU window: the manifest we persist must describe
+      // the exact bytes that became the installed snapshot.
+      let stagedManifest;
+      try {
+        stagedManifest = JSON.parse(fs.readFileSync(path.join(staging, 'plugin.json'), 'utf8'));
+      } catch {
+        return this._reject(sourceId, ['install_manifest_unparseable']);
+      }
+      const stagedValidation = validateManifest(stagedManifest, { dirName: sourceId });
+      if (!stagedValidation.ok
+          || JSON.stringify(stagedValidation.manifest) !== JSON.stringify(v.manifest)) {
+        return this._reject(sourceId, ['install_manifest_changed_during_copy']);
+      }
+
+      fs.renameSync(staging, dest);
+    } catch {
+      return this._reject(sourceId, ['install_copy_failed']);
+    } finally {
+      if (fs.existsSync(staging)) {
+        try { fs.rmSync(staging, { recursive: true, force: true }); } catch { /* best effort */ }
+      }
+    }
+
     this.state.modules[sourceId] = {
       manifest: v.manifest,
       enabled: false,
       installedAt: this.now(),
       dir: dest,
+      integrity: sourceSeal.integrity,
     };
     this._save();
-    this.audit({ type: 'plugin_installed', id: sourceId, name: v.manifest.name, version: v.manifest.version });
+    this.audit({
+      type: 'plugin_installed',
+      id: sourceId,
+      name: v.manifest.name,
+      version: v.manifest.version,
+      packageDigest: sourceSeal.integrity.digest,
+    });
     return { ok: true, status: 201, module: this.view(sourceId) };
   }
 
@@ -335,6 +524,36 @@ class PluginHub {
   _settle(id, enabled) {
     const rec = this.state.modules[id];
     if (!rec) return { ok: false, status: 404, error: 'not_found' };
+
+    if (enabled) {
+      const bag = this.state.secrets[id] || {};
+      const missing = rec.manifest.secrets
+        .filter((secret) => secret.required && !(typeof bag[secret.name] === 'string' && bag[secret.name].length > 0))
+        .map((secret) => secret.name);
+      if (missing.length) {
+        this.audit({ type: 'plugin_enable_refused', id, reason: 'required_secrets_missing', missing });
+        return { ok: false, status: 409, error: 'required_secrets_missing', missing };
+      }
+
+      if (rec.integrity && rec.integrity.algorithm === 'sha256') {
+        let current;
+        try {
+          current = hashModuleTree(rec.dir);
+        } catch {
+          current = { ok: false, errors: ['integrity_read_failed'] };
+        }
+        if (!current.ok || current.integrity.digest !== rec.integrity.digest) {
+          this.audit({
+            type: 'plugin_integrity_mismatch',
+            id,
+            expected: rec.integrity.digest,
+            observed: current.ok ? current.integrity.digest : null,
+          });
+          return { ok: false, status: 409, error: 'plugin_integrity_mismatch' };
+        }
+      }
+    }
+
     rec.enabled = enabled;
     this._save();
     this.audit({
@@ -342,6 +561,7 @@ class PluginHub {
       id,
       version: rec.manifest.version,
       name: rec.manifest.name,
+      packageDigest: rec.integrity?.digest || null,
     });
     return { ok: true, status: 200, module: this.view(id) };
   }
@@ -399,9 +619,17 @@ class PluginHub {
       name: rec.manifest.name,
       version: rec.manifest.version,
       description: rec.manifest.description,
+      contractVersion: rec.manifest.contractVersion || '0.1',
       capabilities: rec.manifest.capabilities.slice(),
+      permissions: (rec.manifest.permissions || []).slice(),
+      tools: (rec.manifest.tools || []).slice(),
+      views: (rec.manifest.views || []).slice(),
+      events: (rec.manifest.events || []).slice(),
+      automations: (rec.manifest.automations || []).map((automation) => ({ ...automation })),
+      sandbox: rec.manifest.sandbox || 'jailed',
       enabled: rec.enabled === true,
       installedAt: rec.installedAt,
+      integrity: rec.integrity ? { ...rec.integrity, sealed: true } : { sealed: false },
       secrets: rec.manifest.secrets.map((d) => ({
         name: d.name,
         required: d.required,
@@ -505,6 +733,9 @@ module.exports = {
   validateManifest,
   parseSkillFrontmatter,
   validateMcpDef,
+  hashModuleTree,
+  CONTRACT_VERSION,
+  PLUGIN_VIEWS,
   TRIGGER_MAX,
   SLUG_RE,
 };

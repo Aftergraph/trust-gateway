@@ -49,6 +49,28 @@ test('hub panel renders the three sections', () => {
   assert.match(js, /register/);
 });
 
+test('hub panel surfaces Plugin Contract v0.2 integrity, declarations and secret controls', () => {
+  const js = fs.readFileSync(PANEL, 'utf8');
+  assert.match(js, /contractVersion/);
+  assert.match(js, /integrity/);
+  assert.match(js, /legacy unsealed/);
+  assert.match(js, /permissions/);
+  assert.match(js, /automations/);
+  assert.match(js, /required_secrets_missing/);
+  assert.match(js, /plugin_integrity_mismatch/);
+  assert.match(js, /\/secrets\//);
+  assert.match(js, /valueIn\.type\s*=\s*['"]password['"]/);
+  assert.match(js, /valueIn\.value\s*=\s*['"]['"]/);
+});
+
+test('hub audit trail includes v0.2 refusal and integrity events', () => {
+  const js = fs.readFileSync(PANEL, 'utf8');
+  assert.match(js, /plugin_enable_refused/);
+  assert.match(js, /plugin_integrity_mismatch/);
+  assert.match(js, /secret_configured/);
+  assert.match(js, /secret_removed/);
+});
+
 test('live HTTP: gateway serves /panels/hub.js', async () => {
   const gw = new Gateway({
     bots: { a: { token: 'tok-a', role: 'operator', capabilities: ['*'] } },
