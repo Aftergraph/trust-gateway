@@ -1,7 +1,7 @@
 # Trust Gateway — deployable container
 # Zero-dependency Node.js runtime; node:22-alpine base.
 # node:22-alpine, pinned by digest (OpenSSF Scorecard PinnedDependencies)
-FROM node:22-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914
+FROM node:22-alpine@sha256:0e1754758c2df4cfa3e68d59e2e1b7374bb7fd9ea6328eaaacf15cc934af8202
 
 WORKDIR /app
 
